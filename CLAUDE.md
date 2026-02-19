@@ -179,3 +179,55 @@ Start with simplest approach, iterate.
 - PM methodology (standups, initiatives, etc.)
 
 Focus on: **spawn workers, see them, talk to partner, approve plans.**
+
+---
+
+## End-of-Session Checklist
+
+**Before finishing a session, Claude MUST:**
+
+1. **Update CHANGELOG.md** — Add entry for today's work
+2. **Update TODO.md** — Mark completed items, add new ones discovered
+3. **Run `python3 tools/usage_report.py`** — Regenerates USAGE.md with token counts
+4. **Git commit** — `git add -A && git commit -m "description" && git push`
+
+This ensures documentation stays current and usage is tracked.
+
+---
+
+## CRITICAL: Date Tracking — Use Local Date, NOT Spark UTC
+
+**The Spark server runs in UTC. This can be 7-8 hours ahead of Pacific time.**
+
+When writing dates in CHANGELOG.md, TODO.md, or any documentation:
+- **Use the date from the system prompt** (Mac's local clock)
+- **Do NOT infer from Spark timestamps** — they're UTC
+
+**Rule:** Before writing ANY date, check the system prompt for current local date.
+
+Date format: `February 18, 2026` or `2026-02-18` (match existing format in file)
+
+---
+
+## Tracking Files
+
+| File | Purpose | Update When |
+|------|---------|-------------|
+| `CHANGELOG.md` | Daily progress log | After completing work |
+| `TODO.md` | Current tasks, decisions | Tasks change |
+| `USAGE.md` | Token usage per session | End of session (auto-generated) |
+
+---
+
+## Commands
+
+```bash
+# Update usage report
+python3 tools/usage_report.py
+
+# Git workflow
+git add -A && git commit -m "description" && git push
+
+# Check Spark services (if needed)
+systemctl status ollama opensearch
+```
