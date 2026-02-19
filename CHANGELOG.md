@@ -1,5 +1,36 @@
 # Orchestrator Changelog
 
+## 2026-02-19
+
+### Backend Core Implemented (Phase 2)
+
+- **Created `api/requirements.txt`** — Flask 3.0, Flask-CORS, Flask-SocketIO, PyYAML
+- **Created `api/tmux_manager.py`** — tmux subprocess wrapper with:
+  - `ensure_session()` — Creates orchestrator session with partner window
+  - `list_windows()` — Lists all windows with index/name/pid
+  - `spawn_worker()` — Creates new window, starts Claude Code
+  - `kill_worker()` — Kills a worker window
+  - `send_keys()` — Sends text input (literal mode + Enter)
+  - `capture_output()` — Captures pane output
+  - `get_pane_pid()` — Gets shell PID for a window
+- **Created `api/server.py`** — Flask API with endpoints:
+  - `GET /api/health` — Health check + session status
+  - `GET /api/processes` — List all workers
+  - `POST /api/processes` — Spawn new worker
+  - `DELETE /api/processes/<name>` — Kill worker (partner protected)
+  - `POST /api/processes/<name>/send` — Send input to worker
+  - `GET /api/processes/<name>/output` — Capture worker output
+- **All 11 verification tests passed**
+
+**Infrastructure notes discovered:**
+- Port 5000: Family Vault API (`~/family-vault/api_server.py`)
+- Port 5001: Orchestrator API (this project)
+- Port 8080: Open WebUI
+- Port 11434: Ollama
+- Port 9200: OpenSearch
+
+---
+
 ## 2026-02-18
 
 ### Project Initialized
@@ -41,4 +72,4 @@
 
 ---
 
-*Last updated: February 18, 2026*
+*Last updated: February 19, 2026*

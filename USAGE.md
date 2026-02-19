@@ -9,8 +9,17 @@ Token usage per session for Orchestrator project.
 
 ---
 
-*No sessions recorded yet. Run `python3 tools/usage_report.py` to generate.*
+## 2026-02-19
+
+| Session | Description | Msgs | Output | Input | Cache Read |
+|---------|-------------|------|--------|-------|------------|
+| `51f7bdc4` | [Request interrupted by user for tool us... | 39 | 281 | 694 | 2.7M |
+| `e263196d` | get up to speed. Let's first check the s... | 37 | 127 | 582 | 2.0M |
+
+**Daily Total:** 408 output, 1.3K input, 4.8M cache
 
 ---
 
-*Last updated: February 18, 2026*
+**All-Time Total:** 408 output | 1.3K input | 4.8M cache
+
+*Last updated: February 19, 2026*

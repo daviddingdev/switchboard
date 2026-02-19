@@ -29,12 +29,6 @@ claude
 
 ## In Progress
 
-### Phase 2: Flask API + tmux Manager
-- [ ] Create `api/server.py` — Flask skeleton with CORS
-- [ ] Create `api/tmux_manager.py` — spawn/kill/list/send wrappers
-- [ ] Create `api/requirements.txt` — Flask, Flask-SocketIO, PyYAML
-- [ ] Test: spawn a worker, send command, capture output
-
 ### Phase 3: React Frontend
 - [ ] Initialize Vite + React in `web/`
 - [ ] Create layout (chat left, sidebar right)
@@ -54,6 +48,12 @@ claude
 ---
 
 ## Completed
+
+### Phase 2: Backend Core (Feb 19, 2026)
+- [x] `api/requirements.txt` — Flask 3.0, Flask-CORS, Flask-SocketIO, PyYAML
+- [x] `api/tmux_manager.py` — tmux wrapper (spawn, kill, list, send, capture)
+- [x] `api/server.py` — Flask API with all endpoints
+- [x] All 11 verification tests passed
 
 ### Phase 1: Setup (Feb 17-18, 2026)
 - [x] Infrastructure hardened (UPS, auto-boot, Tailscale)
@@ -88,4 +88,4 @@ claude
 
 ---
 
-*Last updated: February 18, 2026*
+*Last updated: February 19, 2026*
