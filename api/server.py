@@ -12,6 +12,23 @@ app = Flask(__name__)
 CORS(app)
 
 
+@app.route('/')
+def index():
+    """Root endpoint with API info."""
+    return {
+        "name": "Orchestrator API",
+        "version": "0.1.0",
+        "endpoints": [
+            "GET /api/health",
+            "GET /api/processes",
+            "POST /api/processes",
+            "DELETE /api/processes/<name>",
+            "POST /api/processes/<name>/send",
+            "GET /api/processes/<name>/output"
+        ]
+    }
+
+
 @app.route('/api/health')
 def health():
     """Health check endpoint."""
