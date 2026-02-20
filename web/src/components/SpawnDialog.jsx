@@ -4,9 +4,9 @@ import { spawnProcess } from '../api'
 // Known project directories - click to auto-fill
 const PROJECTS = [
   { name: 'family-vault', directory: '~/family-vault', description: 'Document search for family business' },
-  { name: 'research', directory: '~/research', description: 'Paper discovery pipeline' },
-  { name: 'hbs-cases', directory: '~/hbs-cases', description: 'Case study practice' },
-  { name: 'services', directory: '~/services', description: 'Service scripts' },
+  { name: 'research-pipeline', directory: '~/services/research-pipeline', description: 'Paper discovery pipeline' },
+  { name: 'vault', directory: '~/vault', description: 'Document inbox/staging' },
+  { name: 'learning', directory: '~/learning', description: 'Learning projects' },
 ]
 
 const styles = {
