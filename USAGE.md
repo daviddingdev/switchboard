@@ -9,17 +9,25 @@ Token usage per session for Orchestrator project.
 
 ---
 
+## 2026-02-20
+
+| Session | Description | Msgs | Output | Input | Cache Read |
+|---------|-------------|------|--------|-------|------------|
+| `51f7bdc4` | [Request interrupted by user for tool us... | 91 | 2.4K | 1.5K | 7.8M |
+| `f0172719` | [Request interrupted by user for tool us... | 25 | 61 | 310 | 1.1M |
+
+**Daily Total:** 2.4K output, 1.8K input, 8.8M cache
+
 ## 2026-02-19
 
 | Session | Description | Msgs | Output | Input | Cache Read |
 |---------|-------------|------|--------|-------|------------|
-| `51f7bdc4` | [Request interrupted by user for tool us... | 39 | 281 | 694 | 2.7M |
 | `e263196d` | get up to speed. Let's first check the s... | 37 | 127 | 582 | 2.0M |
 
-**Daily Total:** 408 output, 1.3K input, 4.8M cache
+**Daily Total:** 127 output, 582 input, 2.0M cache
 
 ---
 
-**All-Time Total:** 408 output | 1.3K input | 4.8M cache
+**All-Time Total:** 2.6K output | 2.4K input | 10.9M cache
 
-*Last updated: February 19, 2026*
+*Last updated: February 20, 2026*

@@ -1,5 +1,42 @@
 # Orchestrator Changelog
 
+## 2026-02-20
+
+### React Frontend Shell Implemented (Phase 3)
+
+- **Created `web/package.json`** — Vite 5, React 18
+- **Created `web/vite.config.js`** — Dev server on :3000 with proxy to API :5001
+- **Created `web/index.html`** — HTML entry point
+- **Created `web/src/main.jsx`** — React entry point
+- **Created `web/src/index.css`** — Dark theme (zinc colors)
+- **Created `web/src/api.js`** — API client functions:
+  - `fetchProcesses()` — GET /api/processes
+  - `spawnProcess()` — POST /api/processes
+  - `killProcess()` — DELETE /api/processes/<name>
+  - `sendToProcess()` — POST /api/processes/<name>/send
+  - `getOutput()` — GET /api/processes/<name>/output
+- **Created `web/src/App.jsx`** — Main layout:
+  - Header with Spawn button
+  - Content area (placeholder for chat)
+  - Sidebar with ProcessTree
+  - SpawnDialog modal
+- **Created `web/src/components/ProcessTree.jsx`**:
+  - Lists processes with status indicators
+  - Auto-refreshes every 2 seconds
+  - Kill button (partner protected)
+  - Loading/error states
+- **Created `web/src/components/SpawnDialog.jsx`**:
+  - Name input (required)
+  - Directory input (default ~)
+  - Spawn/Cancel buttons
+
+**All automated verification tests passed:**
+1. Dev server starts at :3000
+2. API proxy works (/api/processes via :3000)
+3. UI accessible from Mac via Tailscale
+
+---
+
 ## 2026-02-19
 
 ### Backend Core Implemented (Phase 2)
@@ -72,4 +109,4 @@
 
 ---
 
-*Last updated: February 19, 2026*
+*Last updated: February 20, 2026*

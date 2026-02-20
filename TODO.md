@@ -1,7 +1,7 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**MVP Build Phase — Flask API + tmux manager**
+**MVP Build Phase — Terminal Integration**
 
 Building the orchestrator UI that lets David:
 - Talk to a Partner (Claude Code) via chat
@@ -18,22 +18,18 @@ Building the orchestrator UI that lets David:
 ssh spark
 cd ~/orchestrator
 
-# Check what exists
-ls -la
+# Start Flask API (if not running)
+cd ~/orchestrator/api && python3 server.py &
 
-# Start Claude Code
-claude
+# Start Vite dev server
+cd ~/orchestrator/web && npm run dev
 ```
+
+**UI accessible at:** http://100.69.237.80:3000
 
 ---
 
 ## In Progress
-
-### Phase 3: React Frontend
-- [ ] Initialize Vite + React in `web/`
-- [ ] Create layout (chat left, sidebar right)
-- [ ] Process tree component
-- [ ] Wire to API
 
 ### Phase 4: Terminal Integration
 - [ ] xterm.js component
@@ -48,6 +44,16 @@ claude
 ---
 
 ## Completed
+
+### Phase 3: React Frontend (Feb 20, 2026)
+- [x] `web/package.json` — Vite 5, React 18
+- [x] `web/vite.config.js` — Dev server + API proxy
+- [x] Layout: header, content area, sidebar
+- [x] `ProcessTree.jsx` — List/kill workers with auto-refresh
+- [x] `SpawnDialog.jsx` — Modal to spawn new workers
+- [x] `api.js` — API client functions
+- [x] Dark theme (zinc colors)
+- [x] All 3 automated tests passed
 
 ### Phase 2: Backend Core (Feb 19, 2026)
 - [x] `api/requirements.txt` — Flask 3.0, Flask-CORS, Flask-SocketIO, PyYAML
@@ -88,4 +94,4 @@ claude
 
 ---
 
-*Last updated: February 19, 2026*
+*Last updated: February 20, 2026*
