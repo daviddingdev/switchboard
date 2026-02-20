@@ -101,8 +101,14 @@ def spawn_worker(name: str, directory: str) -> dict:
     # Start Claude Code
     _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "claude", "Enter", check=False)
 
-    # Wait for Claude to start
-    time.sleep(1)
+    # Wait for Claude to start and show trust prompt
+    time.sleep(2)
+
+    # Auto-confirm trust prompt (select "1. Yes, I trust this folder")
+    # This is safe because user explicitly chose to spawn in this directory
+    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
+    time.sleep(0.2)
+    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
 
     # Get the pane PID
     pid = get_pane_pid(name)
