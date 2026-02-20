@@ -28,6 +28,11 @@ const styles = {
     marginBottom: '4px',
     borderRadius: '6px',
     background: 'var(--bg-tertiary)',
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+  },
+  itemSelected: {
+    background: 'var(--accent)',
   },
   itemInfo: {
     display: 'flex',
@@ -84,7 +89,7 @@ const styles = {
   },
 }
 
-export default function ProcessTree({ onRefresh }) {
+export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
   const [processes, setProcesses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -148,7 +153,14 @@ export default function ProcessTree({ onRefresh }) {
       ) : (
         <ul style={styles.list}>
           {processes.map(proc => (
-            <li key={proc.name} style={styles.item}>
+            <li
+              key={proc.name}
+              style={{
+                ...styles.item,
+                ...(selectedWorker === proc.name ? styles.itemSelected : {}),
+              }}
+              onClick={() => onSelect?.(proc.name)}
+            >
               <div style={styles.itemInfo}>
                 <div
                   style={{

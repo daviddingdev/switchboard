@@ -53,3 +53,22 @@ export async function getOutput(name, lines = 50) {
   }
   return res.json();
 }
+
+export async function fetchPlans() {
+  const res = await fetch(`${API_BASE}/plans`);
+  if (!res.ok) throw new Error(`Failed to fetch plans: ${res.status}`);
+  return res.json();
+}
+
+export async function updatePlan(id, status) {
+  const res = await fetch(`${API_BASE}/plans/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to update plan: ${res.status}`);
+  }
+  return res.json();
+}

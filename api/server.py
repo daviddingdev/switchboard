@@ -4,9 +4,15 @@ Flask API server for orchestrator.
 Provides HTTP endpoints for managing Claude Code worker sessions.
 """
 
+import os
+from pathlib import Path
+
+import yaml
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tmux_manager as tmux
+
+PLANS_DIR = Path(__file__).parent.parent / 'state' / 'plans'
 
 app = Flask(__name__)
 CORS(app)
@@ -24,7 +30,9 @@ def index():
             "POST /api/processes",
             "DELETE /api/processes/<name>",
             "POST /api/processes/<name>/send",
-            "GET /api/processes/<name>/output"
+            "GET /api/processes/<name>/output",
+            "GET /api/plans",
+            "PATCH /api/plans/<id>"
         ]
     }
 
@@ -99,6 +107,63 @@ def get_output(name):
     lines = request.args.get('lines', 100, type=int)
     output = tmux.capture_output(name, lines)
     return {"output": output}
+
+
+@app.route('/api/plans')
+def list_plans():
+    """List all plans from state/plans/ directory."""
+    plans = []
+    if PLANS_DIR.exists():
+        for plan_file in PLANS_DIR.glob('*.yaml'):
+            try:
+                with open(plan_file) as f:
+                    plan = yaml.safe_load(f)
+                    if plan:
+                        # Use filename (without .yaml) as id if not specified
+                        if 'id' not in plan:
+                            plan['id'] = plan_file.stem
+                        plans.append(plan)
+            except Exception as e:
+                # Skip invalid plan files
+                pass
+    # Sort by created_at descending (newest first), pending plans first
+    plans.sort(key=lambda p: (
+        0 if p.get('status') == 'pending' else 1,
+        p.get('created_at', ''),
+    ), reverse=False)
+    # Reverse so pending come first but within each status, newest first
+    pending = [p for p in plans if p.get('status') == 'pending']
+    others = [p for p in plans if p.get('status') != 'pending']
+    pending.sort(key=lambda p: p.get('created_at', ''), reverse=True)
+    others.sort(key=lambda p: p.get('created_at', ''), reverse=True)
+    return jsonify(pending + others)
+
+
+@app.route('/api/plans/<plan_id>', methods=['PATCH'])
+def update_plan(plan_id):
+    """Update a plan's status."""
+    data = request.json or {}
+    new_status = data.get('status')
+
+    if new_status not in ('approved', 'rejected'):
+        return {"error": "status must be 'approved' or 'rejected'"}, 400
+
+    plan_file = PLANS_DIR / f"{plan_id}.yaml"
+    if not plan_file.exists():
+        return {"error": "plan not found"}, 404
+
+    try:
+        with open(plan_file) as f:
+            plan = yaml.safe_load(f)
+
+        plan['status'] = new_status
+
+        with open(plan_file, 'w') as f:
+            yaml.dump(plan, f, default_flow_style=False)
+
+        return {"status": "updated", "plan": plan}
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 if __name__ == '__main__':

@@ -2,6 +2,50 @@
 
 ## 2026-02-20
 
+### Terminal Integration + Chat & Plans (Phases 4 & 5)
+
+- **Created `web/src/components/Terminal.jsx`**:
+  - Polls `/api/processes/<name>/output` every 500ms
+  - Auto-scrolls to bottom on new content
+  - Monospace font, dark terminal background
+  - Shows loading state and error messages
+- **Created `web/src/components/ChatArea.jsx`**:
+  - Main content area with partner terminal + plan list
+  - Loads plans from API, auto-refreshes every 2s
+  - Shows pending plans first, then recent resolved
+- **Created `web/src/components/PlanCard.jsx`**:
+  - Displays plan with title, worker, steps
+  - Status badges: pending (yellow), approved (green), rejected (red)
+  - Approve/Reject buttons for pending plans
+- **Created `web/src/components/ChatInput.jsx`**:
+  - Text input for sending messages to partner
+  - Enter to send, disabled state while sending
+- **Modified `web/src/components/ProcessTree.jsx`**:
+  - Added worker selection (click to select)
+  - Visual highlight for selected worker
+  - Passes `selectedWorker` and `onSelect` props
+- **Modified `web/src/App.jsx`**:
+  - Added `selectedWorker` state (defaults to 'partner')
+  - ChatArea in main content area
+  - Terminal in sidebar showing selected worker's output
+- **Modified `web/src/api.js`**:
+  - Added `fetchPlans()` — GET /api/plans
+  - Added `updatePlan(id, status)` — PATCH /api/plans/<id>
+- **Modified `api/server.py`**:
+  - Added `GET /api/plans` — Lists plans from `state/plans/*.yaml`
+  - Added `PATCH /api/plans/<id>` — Updates plan status
+  - Pending plans sorted first, then by created_at
+- **Created `state/plans/` directory** — Stores plan YAML files
+
+**All verification tests passed:**
+1. Terminal shows worker output (polling works)
+2. Worker selection highlights in ProcessTree
+3. Plans endpoint returns YAML files
+4. Plan approval updates file status
+5. Frontend builds successfully
+
+---
+
 ### React Frontend Shell Implemented (Phase 3)
 
 - **Created `web/package.json`** — Vite 5, React 18

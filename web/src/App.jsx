@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import ProcessTree from './components/ProcessTree'
 import SpawnDialog from './components/SpawnDialog'
+import ChatArea from './components/ChatArea'
+import Terminal from './components/Terminal'
 
 const styles = {
   container: {
@@ -38,14 +40,19 @@ const styles = {
   content: {
     flex: 1,
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'var(--text-secondary)',
-    fontSize: '14px',
+    flexDirection: 'column',
+    minHeight: 0,
   },
   sidebar: {
-    width: '280px',
+    width: '320px',
     borderLeft: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  sidebarTerminal: {
+    flex: 1,
+    padding: '0 16px 16px',
+    minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -54,6 +61,7 @@ const styles = {
 export default function App() {
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedWorker, setSelectedWorker] = useState('partner')
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
@@ -71,11 +79,19 @@ export default function App() {
 
       <main style={styles.main}>
         <div style={styles.content}>
-          Chat interface coming in Phase 5
+          <ChatArea />
         </div>
 
         <aside style={styles.sidebar}>
-          <ProcessTree key={refreshKey} onRefresh={() => setRefreshKey(k => k + 1)} />
+          <ProcessTree
+            key={refreshKey}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+            selectedWorker={selectedWorker}
+            onSelect={setSelectedWorker}
+          />
+          <div style={styles.sidebarTerminal}>
+            <Terminal workerName={selectedWorker} />
+          </div>
         </aside>
       </main>
 

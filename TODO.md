@@ -1,13 +1,13 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**MVP Build Phase — Terminal Integration**
+**MVP Testing & Polish**
 
-Building the orchestrator UI that lets David:
-- Talk to a Partner (Claude Code) via chat
-- Spawn/monitor worker sessions
-- Approve plans inline
-- See process tree
+Core MVP is functional:
+- Partner terminal visible in main area
+- Worker selection in sidebar with terminal view
+- Plan cards with approve/reject
+- Chat input to send messages to partner
 
 ---
 
@@ -31,19 +31,26 @@ cd ~/orchestrator/web && npm run dev
 
 ## In Progress
 
-### Phase 4: Terminal Integration
-- [ ] xterm.js component
-- [ ] WebSocket for terminal streaming
-- [ ] Connect to tmux output
-
-### Phase 5: Chat + Plans
-- [ ] Chat message components
-- [ ] Plan card with approve/reject
-- [ ] Plan detection from workers
+### Phase 6: Polish & Integration
+- [ ] Test end-to-end flow (spawn worker → see plan → approve)
+- [ ] Mobile responsive polish
+- [ ] WebSocket upgrade if polling too slow
+- [ ] Parse Claude output into chat bubbles (optional)
 
 ---
 
 ## Completed
+
+### Phases 4 & 5: Terminal + Chat/Plans (Feb 20, 2026)
+- [x] `Terminal.jsx` — Polls output every 500ms, auto-scroll
+- [x] `ChatArea.jsx` — Partner terminal + plan list
+- [x] `PlanCard.jsx` — Status badges, approve/reject buttons
+- [x] `ChatInput.jsx` — Send messages to partner
+- [x] `ProcessTree.jsx` — Worker selection + highlighting
+- [x] `App.jsx` — Sidebar terminal for selected worker
+- [x] `api.js` — Plan API functions
+- [x] `server.py` — GET/PATCH /api/plans endpoints
+- [x] `state/plans/` directory created
 
 ### Phase 3: React Frontend (Feb 20, 2026)
 - [x] `web/package.json` — Vite 5, React 18
@@ -91,6 +98,10 @@ cd ~/orchestrator/web && npm run dev
 | Feb 17 | Plans inline in chat | Reduces context switching |
 | Feb 17 | YAML state files | Human-readable, git-friendly |
 | Feb 17 | Polling before WebSocket | Start simple, upgrade if needed |
+
+---
+
+| Feb 20 | Polling terminal, not xterm.js | Simpler, works well enough for MVP |
 
 ---
 
