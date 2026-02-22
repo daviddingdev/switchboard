@@ -1,13 +1,13 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**MVP Testing & Polish**
+**Partner Autonomy & Worker Interaction**
 
-Core MVP is functional:
-- Partner terminal visible in main area
-- Worker selection in sidebar with terminal view
-- Plan cards with approve/reject
-- Chat input to send messages to partner
+Core MVP + partner orchestration complete:
+- Partner can spawn/kill workers via `orch` CLI
+- Partner can send tasks and monitor output
+- Auto-approve plans for routine tasks
+- All project CLAUDE.md files have SOUL.md header
 
 ---
 
@@ -23,6 +23,10 @@ cd ~/orchestrator/api && python3 server.py &
 
 # Start Vite dev server
 cd ~/orchestrator/web && npm run dev
+
+# Partner orchestration
+./scripts/orch list          # List workers
+./scripts/orch projects      # List known projects
 ```
 
 **UI accessible at:** http://100.69.237.80:3000
@@ -31,15 +35,21 @@ cd ~/orchestrator/web && npm run dev
 
 ## In Progress
 
-### Phase 6: Polish & Integration
-- [ ] Test end-to-end flow (spawn worker → see plan → approve)
-- [ ] Mobile responsive polish
-- [ ] WebSocket upgrade if polling too slow
-- [ ] Parse Claude output into chat bubbles (optional)
+### Phase 7: Non-Interactive Worker Tasks
+- [ ] Add `orch task` command for non-interactive execution (`claude -p`)
+- [ ] Auto-respond to permission prompts (send "2" for "Yes, don't ask again")
+- [ ] Worker completion detection (poll for idle prompt)
 
 ---
 
 ## Completed
+
+### Partner Orchestration + SOUL Integration (Feb 22, 2026)
+- [x] `scripts/orch` — CLI helper for partner automation
+- [x] `state/projects.yaml` — Project registry
+- [x] `POST /api/plans` — Create plans with auto_approve
+- [x] CLAUDE.md — SOUL header + Partner Orchestration section
+- [x] All project CLAUDE.md files updated with SOUL header
 
 ### Phases 4 & 5: Terminal + Chat/Plans (Feb 20, 2026)
 - [x] `Terminal.jsx` — Polls output every 500ms, auto-scroll
@@ -102,7 +112,10 @@ cd ~/orchestrator/web && npm run dev
 ---
 
 | Feb 20 | Polling terminal, not xterm.js | Simpler, works well enough for MVP |
+| Feb 22 | CLI helper over API-only | Partner needs simple bash commands |
+| Feb 22 | SOUL.md as shared context | Reduces duplication across project CLAUDE.md files |
+| Feb 22 | Number prompts for permissions | Arrow keys don't work via tmux send-keys |
 
 ---
 
-*Last updated: February 20, 2026*
+*Last updated: February 22, 2026*

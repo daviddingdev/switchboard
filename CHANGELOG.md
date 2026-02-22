@@ -1,5 +1,42 @@
 # Orchestrator Changelog
 
+## 2026-02-22
+
+### Partner Orchestration + SOUL Integration
+
+- **Created `scripts/orch`** — CLI helper for partner automation:
+  - `orch spawn <name> <dir>` — Spawn worker in directory
+  - `orch kill <name>` — Kill worker
+  - `orch list` — List workers
+  - `orch send <name> <msg>` — Send message to worker
+  - `orch output <name>` — Get worker output
+  - `orch plan <id> <title> <worker> [--auto]` — Create plan
+  - `orch plans` — List plans
+  - `orch approve <id>` — Approve plan
+  - `orch projects` — List known projects
+- **Created `state/projects.yaml`** — Project registry with directories
+- **Modified `api/server.py`**:
+  - Added `POST /api/plans` — Create plans with auto_approve support
+  - Fixed datetime sorting bug in list_plans
+- **Updated `CLAUDE.md`**:
+  - Added SOUL.md/INFRASTRUCTURE.md header
+  - Added Partner Orchestration section with commands and workflows
+  - Added worker shutdown protocol
+- **Updated `~/SOUL.md` and `~/INFRASTRUCTURE.md`** — Shared context files
+- **Updated all project CLAUDE.md files** with SOUL header:
+  - `~/orchestrator/CLAUDE.md` ✓
+  - `~/family-vault/CLAUDE.md` ✓
+  - `~/services/research-pipeline/CLAUDE.md` ✓
+
+**Partner can now:**
+1. Spawn workers using `orch spawn`
+2. Send tasks using `orch send`
+3. Monitor output using `orch output`
+4. Create auto-approved plans for routine tasks
+5. Coordinate multi-project workflows
+
+---
+
 ## 2026-02-20
 
 ### Terminal Integration + Chat & Plans (Phases 4 & 5)
@@ -153,4 +190,4 @@
 
 ---
 
-*Last updated: February 20, 2026*
+*Last updated: February 22, 2026*

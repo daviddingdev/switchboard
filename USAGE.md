@@ -9,15 +9,26 @@ Token usage per session for Orchestrator project.
 
 ---
 
+## 2026-02-22
+
+| Session | Description | Msgs | Output | Input | Cache Read |
+|---------|-------------|------|--------|-------|------------|
+| `06cd0829` | Read these files first:
+- ~/SOUL.md
+- ~/... | 113 | 2.6K | 17.2K | 13.3M |
+| `d99e0449` | hello | 49 | 214 | 800 | 2.8M |
+
+**Daily Total:** 2.8K output, 18.0K input, 16.2M cache
+
 ## 2026-02-20
 
 | Session | Description | Msgs | Output | Input | Cache Read |
 |---------|-------------|------|--------|-------|------------|
 | `51f7bdc4` | [Request interrupted by user for tool us... | 91 | 2.4K | 1.5K | 7.8M |
-| `75f13339` | [Request interrupted by user for tool us... | 38 | 1.7K | 486 | 2.0M |
+| `75f13339` | [Request interrupted by user for tool us... | 83 | 3.6K | 1.5K | 8.6M |
 | `f0172719` | [Request interrupted by user for tool us... | 47 | 166 | 664 | 2.9M |
 
-**Daily Total:** 4.2K output, 2.6K input, 12.7M cache
+**Daily Total:** 6.2K output, 3.6K input, 19.3M cache
 
 ## 2026-02-19
 
@@ -29,6 +40,6 @@ Token usage per session for Orchestrator project.
 
 ---
 
-**All-Time Total:** 4.3K output | 3.2K input | 14.7M cache
+**All-Time Total:** 9.2K output | 22.2K input | 37.4M cache
 
-*Last updated: February 20, 2026*
+*Last updated: February 22, 2026*
