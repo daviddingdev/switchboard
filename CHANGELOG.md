@@ -2,6 +2,26 @@
 
 ## 2026-02-22
 
+### Rename Plans to Proposals + WORKER.md
+
+- **Renamed "plan" to "proposal"** — Avoids confusion with Claude Code's built-in plan mode
+  - `state/plans/` → `state/proposals/`
+  - `/api/plans` → `/api/proposals`
+  - `PlanCard.jsx` → `ProposalCard.jsx`
+  - `orch plan` → `orch propose`
+- **Created `~/WORKER.md`** — Instructions for workers on how to submit proposals
+  - Workers curl to `POST /api/proposals` with id, title, worker, steps
+  - Workers can verify proposals via `GET /api/proposals`
+  - Documents end-of-session cleanup tasks
+- **UI improvements**:
+  - Collapsible proposals section with pending count badge
+  - Delete button (×) for completed proposals
+  - Resizable sidebar (200-600px) with draggable divider
+  - Compact ProcessTree styling
+  - Better spacing and proportions
+
+---
+
 ### Partner Orchestration + SOUL Integration
 
 - **Created `scripts/orch`** — CLI helper for partner automation:

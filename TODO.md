@@ -1,13 +1,14 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**Partner Autonomy & Worker Interaction**
+**Worker Proposal System Complete**
 
-Core MVP + partner orchestration complete:
+Core MVP + worker proposal system complete:
 - Partner can spawn/kill workers via `orch` CLI
 - Partner can send tasks and monitor output
-- Auto-approve plans for routine tasks
-- All project CLAUDE.md files have SOUL.md header
+- Workers submit proposals via `POST /api/proposals`
+- ~/WORKER.md documents proposal API for workers
+- UI: collapsible proposals, resizable sidebar, delete completed
 
 ---
 
@@ -44,10 +45,16 @@ cd ~/orchestrator/web && npm run dev
 
 ## Completed
 
+### Proposals + WORKER.md (Feb 22, 2026)
+- [x] Renamed "plan" to "proposal" (avoids Claude Code plan mode confusion)
+- [x] Created `~/WORKER.md` — Instructions for workers
+- [x] UI: collapsible proposals, resizable sidebar, delete button
+- [x] All project CLAUDE.md files reference WORKER.md
+
 ### Partner Orchestration + SOUL Integration (Feb 22, 2026)
 - [x] `scripts/orch` — CLI helper for partner automation
 - [x] `state/projects.yaml` — Project registry
-- [x] `POST /api/plans` — Create plans with auto_approve
+- [x] `POST /api/proposals` — Create proposals with auto_approve
 - [x] CLAUDE.md — SOUL header + Partner Orchestration section
 - [x] All project CLAUDE.md files updated with SOUL header
 
