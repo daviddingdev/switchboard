@@ -1,0 +1,71 @@
+#!/bin/bash
+# Orchestrator CLI - partner automation helper
+# Usage: orch <command> [args]
+
+API="http://localhost:5001"
+
+case "$1" in
+  spawn)
+    # orch spawn <name> <directory>
+    curl -s -X POST "$API/api/processes" \
+      -H "Content-Type: application/json" \
+      -d "{\"name\": \"$2\", \"directory\": \"$3\"}" | jq .
+    ;;
+  kill)
+    # orch kill <name>
+    curl -s -X DELETE "$API/api/processes/$2" | jq .
+    ;;
+  list)
+    # orch list
+    curl -s "$API/api/processes" | jq -r '.[] | "\(.name)\t\(.pid)"'
+    ;;
+  send)
+    # orch send <name> "<message>"
+    curl -s -X POST "$API/api/processes/$2/send" \
+      -H "Content-Type: application/json" \
+      -d "{\"text\": \"$3\"}" | jq .
+    ;;
+  output)
+    # orch output <name> [lines]
+    LINES="${3:-100}"
+    curl -s "$API/api/processes/$2/output?lines=$LINES" | jq -r '.output'
+    ;;
+  plans)
+    # orch plans
+    curl -s "$API/api/plans" | jq -r '.[] | "\(.id)\t\(.status)\t\(.title)"'
+    ;;
+  plan)
+    # orch plan <id> <title> <worker> [--auto]
+    ID="$2"; TITLE="$3"; WORKER="$4"
+    AUTO="false"; [[ "$5" == "--auto" ]] && AUTO="true"
+    curl -s -X POST "$API/api/plans" \
+      -H "Content-Type: application/json" \
+      -d "{\"id\": \"$ID\", \"title\": \"$TITLE\", \"worker\": \"$WORKER\", \"auto_approve\": $AUTO}" | jq .
+    ;;
+  approve)
+    # orch approve <id>
+    curl -s -X PATCH "$API/api/plans/$2" \
+      -H "Content-Type: application/json" \
+      -d '{"status": "approved"}' | jq .
+    ;;
+  projects)
+    # orch projects
+    cat ~/orchestrator/state/projects.yaml
+    ;;
+  *)
+    echo "Orchestrator CLI"
+    echo ""
+    echo "Usage: orch <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  spawn <name> <dir>     Spawn worker in directory"
+    echo "  kill <name>            Kill worker"
+    echo "  list                   List workers"
+    echo "  send <name> <msg>      Send message to worker"
+    echo "  output <name> [lines]  Get worker output"
+    echo "  plans                  List plans"
+    echo "  plan <id> <title> <worker> [--auto]  Create plan"
+    echo "  approve <id>           Approve plan"
+    echo "  projects               List known projects"
+    ;;
+esac

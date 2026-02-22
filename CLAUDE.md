@@ -1,5 +1,7 @@
 # Orchestrator
 
+> **Before starting:** Read `~/SOUL.md` (working style) and `~/INFRASTRUCTURE.md` (server details)
+
 Personal AI operating system for managing projects, workers, and context across Claude interfaces.
 
 ## Quick Context
@@ -169,6 +171,75 @@ tmux -L orchestrator new-window -t orchestrator -n family-vault
 3. **Plan detection**: Poll files, or have workers call an API?
 
 Start with simplest approach, iterate.
+
+## Partner Orchestration
+
+You are the orchestrator partner. Use the `orch` CLI to spawn and coordinate workers.
+
+### Commands
+
+```bash
+orch projects              # List known projects with directories
+orch spawn <name> <dir>    # Spawn Claude Code worker
+orch send <name> "<task>"  # Send task to worker
+orch output <name>         # Check worker output
+orch list                  # List all workers
+orch kill <name>           # Kill worker when done
+orch plan <id> <title> <worker> [--auto]  # Create plan
+orch plans                 # List plans
+orch approve <id>          # Approve plan
+```
+
+### Multi-Project Workflow
+
+1. `orch projects` to see available projects
+2. `orch spawn <name> <directory>` for each project
+3. `orch send <name> "<task description>"`
+4. Poll `orch output <name>` until worker completes (look for idle prompt)
+5. `orch kill <name>` when done
+6. Report summary to user
+
+### Example: Update All CLAUDE.md Files
+
+```bash
+# Spawn worker
+orch spawn family-vault ~/family-vault
+
+# Send task
+orch send family-vault "Add this header after the title:
+> **Before starting:** Read ~/SOUL.md and ~/INFRASTRUCTURE.md
+Then remove any duplicated infrastructure/date tracking content that's now in those shared files."
+
+# Monitor
+orch output family-vault
+
+# When done
+orch kill family-vault
+```
+
+### Auto-Approve Guidelines
+
+Use `--auto` for routine tasks:
+- Documentation updates
+- Code formatting
+- Adding standard headers
+
+Require manual approval for:
+- Deployments
+- External API changes
+- Data migrations
+
+### Shutting Down Workers
+
+Before killing a worker, ensure it completes end-of-session tasks:
+
+```bash
+orch send <name> "Complete end-of-session tasks per CLAUDE.md, then say DONE"
+# Wait for DONE in output
+orch kill <name>
+```
+
+This ensures workers update CHANGELOG, TODO, and commit before terminating.
 
 ## What NOT to Build (yet)
 

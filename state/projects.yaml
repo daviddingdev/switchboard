@@ -1,0 +1,20 @@
+projects:
+  - name: family-vault
+    directory: ~/family-vault
+    description: Document search for family business
+    has_claude_md: true
+
+  - name: research-pipeline
+    directory: ~/services/research-pipeline
+    description: Paper discovery pipeline
+    has_claude_md: false
+
+  - name: orchestrator
+    directory: ~/orchestrator
+    description: This project (partner home)
+    has_claude_md: true
+
+  - name: vault
+    directory: ~/vault
+    description: Document inbox/staging
+    has_claude_md: false

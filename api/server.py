@@ -5,6 +5,7 @@ Provides HTTP endpoints for managing Claude Code worker sessions.
 """
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -32,6 +33,7 @@ def index():
             "POST /api/processes/<name>/send",
             "GET /api/processes/<name>/output",
             "GET /api/plans",
+            "POST /api/plans",
             "PATCH /api/plans/<id>"
         ]
     }
@@ -122,21 +124,50 @@ def list_plans():
                         # Use filename (without .yaml) as id if not specified
                         if 'id' not in plan:
                             plan['id'] = plan_file.stem
+                        # Normalize created_at to string for consistent sorting
+                        if 'created_at' in plan and not isinstance(plan['created_at'], str):
+                            plan['created_at'] = str(plan['created_at'])
                         plans.append(plan)
             except Exception as e:
                 # Skip invalid plan files
                 pass
-    # Sort by created_at descending (newest first), pending plans first
-    plans.sort(key=lambda p: (
-        0 if p.get('status') == 'pending' else 1,
-        p.get('created_at', ''),
-    ), reverse=False)
-    # Reverse so pending come first but within each status, newest first
+    # Sort: pending first, then by created_at descending (newest first)
     pending = [p for p in plans if p.get('status') == 'pending']
     others = [p for p in plans if p.get('status') != 'pending']
     pending.sort(key=lambda p: p.get('created_at', ''), reverse=True)
     others.sort(key=lambda p: p.get('created_at', ''), reverse=True)
     return jsonify(pending + others)
+
+
+@app.route('/api/plans', methods=['POST'])
+def create_plan():
+    """Create a new plan."""
+    data = request.json or {}
+    plan_id = data.get('id')
+    title = data.get('title')
+    worker = data.get('worker', 'unknown')
+    steps = data.get('steps', [])
+    auto_approve = data.get('auto_approve', False)
+
+    if not plan_id or not title:
+        return {"error": "id and title required"}, 400
+
+    plan = {
+        'id': plan_id,
+        'title': title,
+        'worker': worker,
+        'steps': steps,
+        'status': 'approved' if auto_approve else 'pending',
+        'auto_approve': auto_approve,
+        'created_at': datetime.utcnow().isoformat() + 'Z'
+    }
+
+    PLANS_DIR.mkdir(parents=True, exist_ok=True)
+    plan_file = PLANS_DIR / f"{plan_id}.yaml"
+    with open(plan_file, 'w') as f:
+        yaml.dump(plan, f, default_flow_style=False)
+
+    return jsonify(plan), 201
 
 
 @app.route('/api/plans/<plan_id>', methods=['PATCH'])
