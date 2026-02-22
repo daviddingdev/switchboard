@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import Terminal from './Terminal'
 import ChatInput from './ChatInput'
-import PlanCard from './PlanCard'
-import { fetchPlans, updatePlan, sendToProcess } from '../api'
+import ProposalCard from './ProposalCard'
+import { fetchProposals, updateProposal, deleteProposal, sendToProcess } from '../api'
 
 const styles = {
   container: {
@@ -12,46 +12,47 @@ const styles = {
     minHeight: 0,
     overflow: 'hidden',
   },
-  planSection: {
+  proposalSection: {
     borderBottom: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
+    flexShrink: 0,
   },
-  planHeader: {
+  proposalHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '8px 12px',
+    padding: '6px 12px',
     cursor: 'pointer',
     userSelect: 'none',
   },
-  planHeaderLeft: {
+  proposalHeaderLeft: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
   },
-  planTitle: {
-    fontSize: '11px',
+  proposalTitle: {
+    fontSize: '10px',
     fontWeight: 600,
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
-  planCount: {
+  proposalCount: {
     background: '#854d0e',
     color: '#fef08a',
-    padding: '2px 6px',
-    borderRadius: '10px',
-    fontSize: '10px',
+    padding: '1px 5px',
+    borderRadius: '8px',
+    fontSize: '9px',
     fontWeight: 600,
   },
   expandIcon: {
-    fontSize: '10px',
+    fontSize: '8px',
     color: 'var(--text-secondary)',
     transition: 'transform 0.15s',
   },
-  planList: {
-    padding: '0 12px 12px',
-    maxHeight: '200px',
+  proposalList: {
+    padding: '0 12px 8px',
+    maxHeight: '150px',
     overflow: 'auto',
   },
   terminalWrapper: {
@@ -59,45 +60,50 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
-    padding: '12px',
+    padding: '8px 12px',
     paddingBottom: 0,
   },
   terminalLabel: {
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 600,
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '8px',
+    marginBottom: '6px',
+  },
+  noProposals: {
+    color: 'var(--text-secondary)',
+    fontSize: '11px',
+    padding: '4px 0',
   },
 }
 
 export default function ChatArea() {
-  const [plans, setPlans] = useState([])
+  const [proposals, setProposals] = useState([])
   const [updating, setUpdating] = useState(null)
   const [sending, setSending] = useState(false)
-  const [plansExpanded, setPlansExpanded] = useState(true)
+  const [proposalsExpanded, setProposalsExpanded] = useState(true)
 
-  const loadPlans = async () => {
+  const loadProposals = async () => {
     try {
-      const data = await fetchPlans()
-      setPlans(data)
+      const data = await fetchProposals()
+      setProposals(data)
     } catch (err) {
-      console.error('Failed to load plans:', err)
+      console.error('Failed to load proposals:', err)
     }
   }
 
   useEffect(() => {
-    loadPlans()
-    const interval = setInterval(loadPlans, 2000)
+    loadProposals()
+    const interval = setInterval(loadProposals, 2000)
     return () => clearInterval(interval)
   }, [])
 
   const handleApprove = async (id) => {
     setUpdating(id)
     try {
-      await updatePlan(id, 'approved')
-      await loadPlans()
+      await updateProposal(id, 'approved')
+      await loadProposals()
     } catch (err) {
       alert(`Failed to approve: ${err.message}`)
     } finally {
@@ -108,12 +114,21 @@ export default function ChatArea() {
   const handleReject = async (id) => {
     setUpdating(id)
     try {
-      await updatePlan(id, 'rejected')
-      await loadPlans()
+      await updateProposal(id, 'rejected')
+      await loadProposals()
     } catch (err) {
       alert(`Failed to reject: ${err.message}`)
     } finally {
       setUpdating(null)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteProposal(id)
+      await loadProposals()
+    } catch (err) {
+      alert(`Failed to delete: ${err.message}`)
     }
   }
 
@@ -128,49 +143,50 @@ export default function ChatArea() {
     }
   }
 
-  const pendingPlans = plans.filter(p => p.status === 'pending')
-  const otherPlans = plans.filter(p => p.status !== 'pending')
-  const pendingCount = pendingPlans.length
+  const pendingProposals = proposals.filter(p => p.status === 'pending')
+  const otherProposals = proposals.filter(p => p.status !== 'pending')
+  const pendingCount = pendingProposals.length
 
   return (
     <div style={styles.container}>
-      {plans.length > 0 && (
-        <div style={styles.planSection}>
-          <div style={styles.planHeader} onClick={() => setPlansExpanded(!plansExpanded)}>
-            <div style={styles.planHeaderLeft}>
-              <span style={styles.planTitle}>Plans</span>
-              {pendingCount > 0 && (
-                <span style={styles.planCount}>{pendingCount} pending</span>
-              )}
-            </div>
-            <span style={{
-              ...styles.expandIcon,
-              transform: plansExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            }}>▶</span>
+      <div style={styles.proposalSection}>
+        <div style={styles.proposalHeader} onClick={() => setProposalsExpanded(!proposalsExpanded)}>
+          <div style={styles.proposalHeaderLeft}>
+            <span style={styles.proposalTitle}>Proposals</span>
+            {pendingCount > 0 && (
+              <span style={styles.proposalCount}>{pendingCount}</span>
+            )}
           </div>
-
-          {plansExpanded && (
-            <div style={styles.planList}>
-              {pendingPlans.map(plan => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  disabled={updating === plan.id}
-                />
-              ))}
-              {otherPlans.slice(0, 3).map(plan => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  disabled
-                />
-              ))}
-            </div>
-          )}
+          <span style={{
+            ...styles.expandIcon,
+            transform: proposalsExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          }}>▶</span>
         </div>
-      )}
+
+        {proposalsExpanded && (
+          <div style={styles.proposalList}>
+            {proposals.length === 0 && (
+              <div style={styles.noProposals}>No proposals</div>
+            )}
+            {pendingProposals.map(proposal => (
+              <ProposalCard
+                key={proposal.id}
+                proposal={proposal}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                disabled={updating === proposal.id}
+              />
+            ))}
+            {otherProposals.slice(0, 5).map(proposal => (
+              <ProposalCard
+                key={proposal.id}
+                proposal={proposal}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={styles.terminalWrapper}>
         <div style={styles.terminalLabel}>Partner</div>

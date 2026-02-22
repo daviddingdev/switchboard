@@ -4,15 +4,15 @@ const styles = {
   card: {
     background: 'var(--bg-tertiary)',
     borderRadius: '6px',
-    marginBottom: '8px',
+    marginBottom: '6px',
     border: '1px solid var(--border)',
     overflow: 'hidden',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    padding: '10px 12px',
+    gap: '8px',
+    padding: '8px 10px',
     cursor: 'pointer',
     userSelect: 'none',
   },
@@ -20,9 +20,9 @@ const styles = {
     borderBottom: '1px solid var(--border)',
   },
   badge: {
-    padding: '2px 6px',
+    padding: '2px 5px',
     borderRadius: '3px',
-    fontSize: '10px',
+    fontSize: '9px',
     fontWeight: 600,
     textTransform: 'uppercase',
     flexShrink: 0,
@@ -41,31 +41,40 @@ const styles = {
   },
   title: {
     flex: 1,
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 500,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   worker: {
-    fontSize: '11px',
+    fontSize: '10px',
     color: 'var(--text-secondary)',
     flexShrink: 0,
   },
+  deleteBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    fontSize: '14px',
+    padding: '0 4px',
+    lineHeight: 1,
+    opacity: 0.6,
+  },
   expandIcon: {
-    fontSize: '10px',
+    fontSize: '8px',
     color: 'var(--text-secondary)',
     transition: 'transform 0.15s',
   },
   body: {
-    padding: '10px 12px',
+    padding: '8px 10px',
   },
   steps: {
-    margin: '0 0 10px 0',
-    paddingLeft: '18px',
-    fontSize: '12px',
+    margin: '0 0 8px 0',
+    paddingLeft: '16px',
+    fontSize: '11px',
     color: 'var(--text-secondary)',
-    lineHeight: 1.6,
+    lineHeight: 1.5,
   },
   actions: {
     display: 'flex',
@@ -76,8 +85,8 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    padding: '6px 12px',
-    fontSize: '12px',
+    padding: '5px 10px',
+    fontSize: '11px',
     fontWeight: 500,
   },
   rejectButton: {
@@ -85,8 +94,8 @@ const styles = {
     color: 'var(--danger)',
     border: '1px solid var(--danger)',
     borderRadius: '4px',
-    padding: '6px 12px',
-    fontSize: '12px',
+    padding: '5px 10px',
+    fontSize: '11px',
     fontWeight: 500,
   },
 }
@@ -102,10 +111,15 @@ function getBadgeStyle(status) {
   }
 }
 
-export default function PlanCard({ plan, onApprove, onReject, disabled = false }) {
-  const [expanded, setExpanded] = useState(plan.status === 'pending')
-  const hasSteps = plan.steps && plan.steps.length > 0
-  const isPending = plan.status === 'pending'
+export default function ProposalCard({ proposal, onApprove, onReject, onDelete, disabled = false }) {
+  const [expanded, setExpanded] = useState(proposal.status === 'pending')
+  const hasSteps = proposal.steps && proposal.steps.length > 0
+  const isPending = proposal.status === 'pending'
+
+  const handleDelete = (e) => {
+    e.stopPropagation()
+    onDelete?.(proposal.id)
+  }
 
   return (
     <div style={styles.card}>
@@ -116,9 +130,18 @@ export default function PlanCard({ plan, onApprove, onReject, disabled = false }
         }}
         onClick={() => setExpanded(!expanded)}
       >
-        <span style={getBadgeStyle(plan.status)}>{plan.status}</span>
-        <span style={styles.title}>{plan.title}</span>
-        <span style={styles.worker}>{plan.worker}</span>
+        <span style={getBadgeStyle(proposal.status)}>{proposal.status}</span>
+        <span style={styles.title}>{proposal.title}</span>
+        <span style={styles.worker}>{proposal.worker}</span>
+        {!isPending && onDelete && (
+          <button
+            style={styles.deleteBtn}
+            onClick={handleDelete}
+            title="Delete proposal"
+          >
+            ×
+          </button>
+        )}
         {(hasSteps || isPending) && (
           <span style={{
             ...styles.expandIcon,
@@ -131,7 +154,7 @@ export default function PlanCard({ plan, onApprove, onReject, disabled = false }
         <div style={styles.body}>
           {hasSteps && (
             <ol style={styles.steps}>
-              {plan.steps.map((step, i) => (
+              {proposal.steps.map((step, i) => (
                 <li key={i}>{step}</li>
               ))}
             </ol>
@@ -141,14 +164,14 @@ export default function PlanCard({ plan, onApprove, onReject, disabled = false }
             <div style={styles.actions}>
               <button
                 style={styles.approveButton}
-                onClick={(e) => { e.stopPropagation(); onApprove?.(plan.id) }}
+                onClick={(e) => { e.stopPropagation(); onApprove?.(proposal.id) }}
                 disabled={disabled}
               >
                 Approve
               </button>
               <button
                 style={styles.rejectButton}
-                onClick={(e) => { e.stopPropagation(); onReject?.(plan.id) }}
+                onClick={(e) => { e.stopPropagation(); onReject?.(proposal.id) }}
                 disabled={disabled}
               >
                 Reject

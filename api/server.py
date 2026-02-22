@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tmux_manager as tmux
 
-PLANS_DIR = Path(__file__).parent.parent / 'state' / 'plans'
+PROPOSALS_DIR = Path(__file__).parent.parent / 'state' / 'proposals'
 
 app = Flask(__name__)
 CORS(app)
@@ -32,9 +32,10 @@ def index():
             "DELETE /api/processes/<name>",
             "POST /api/processes/<name>/send",
             "GET /api/processes/<name>/output",
-            "GET /api/plans",
-            "POST /api/plans",
-            "PATCH /api/plans/<id>"
+            "GET /api/proposals",
+            "POST /api/proposals",
+            "PATCH /api/proposals/<id>",
+            "DELETE /api/proposals/<id>"
         ]
     }
 
@@ -111,49 +112,49 @@ def get_output(name):
     return {"output": output}
 
 
-@app.route('/api/plans')
-def list_plans():
-    """List all plans from state/plans/ directory."""
-    plans = []
-    if PLANS_DIR.exists():
-        for plan_file in PLANS_DIR.glob('*.yaml'):
+@app.route('/api/proposals')
+def list_proposals():
+    """List all proposals from state/proposals/ directory."""
+    proposals = []
+    if PROPOSALS_DIR.exists():
+        for proposal_file in PROPOSALS_DIR.glob('*.yaml'):
             try:
-                with open(plan_file) as f:
-                    plan = yaml.safe_load(f)
-                    if plan:
+                with open(proposal_file) as f:
+                    proposal = yaml.safe_load(f)
+                    if proposal:
                         # Use filename (without .yaml) as id if not specified
-                        if 'id' not in plan:
-                            plan['id'] = plan_file.stem
+                        if 'id' not in proposal:
+                            proposal['id'] = proposal_file.stem
                         # Normalize created_at to string for consistent sorting
-                        if 'created_at' in plan and not isinstance(plan['created_at'], str):
-                            plan['created_at'] = str(plan['created_at'])
-                        plans.append(plan)
+                        if 'created_at' in proposal and not isinstance(proposal['created_at'], str):
+                            proposal['created_at'] = str(proposal['created_at'])
+                        proposals.append(proposal)
             except Exception as e:
-                # Skip invalid plan files
+                # Skip invalid proposal files
                 pass
     # Sort: pending first, then by created_at descending (newest first)
-    pending = [p for p in plans if p.get('status') == 'pending']
-    others = [p for p in plans if p.get('status') != 'pending']
+    pending = [p for p in proposals if p.get('status') == 'pending']
+    others = [p for p in proposals if p.get('status') != 'pending']
     pending.sort(key=lambda p: p.get('created_at', ''), reverse=True)
     others.sort(key=lambda p: p.get('created_at', ''), reverse=True)
     return jsonify(pending + others)
 
 
-@app.route('/api/plans', methods=['POST'])
-def create_plan():
-    """Create a new plan."""
+@app.route('/api/proposals', methods=['POST'])
+def create_proposal():
+    """Create a new proposal."""
     data = request.json or {}
-    plan_id = data.get('id')
+    proposal_id = data.get('id')
     title = data.get('title')
     worker = data.get('worker', 'unknown')
     steps = data.get('steps', [])
     auto_approve = data.get('auto_approve', False)
 
-    if not plan_id or not title:
+    if not proposal_id or not title:
         return {"error": "id and title required"}, 400
 
-    plan = {
-        'id': plan_id,
+    proposal = {
+        'id': proposal_id,
         'title': title,
         'worker': worker,
         'steps': steps,
@@ -162,37 +163,51 @@ def create_plan():
         'created_at': datetime.utcnow().isoformat() + 'Z'
     }
 
-    PLANS_DIR.mkdir(parents=True, exist_ok=True)
-    plan_file = PLANS_DIR / f"{plan_id}.yaml"
-    with open(plan_file, 'w') as f:
-        yaml.dump(plan, f, default_flow_style=False)
+    PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
+    proposal_file = PROPOSALS_DIR / f"{proposal_id}.yaml"
+    with open(proposal_file, 'w') as f:
+        yaml.dump(proposal, f, default_flow_style=False)
 
-    return jsonify(plan), 201
+    return jsonify(proposal), 201
 
 
-@app.route('/api/plans/<plan_id>', methods=['PATCH'])
-def update_plan(plan_id):
-    """Update a plan's status."""
+@app.route('/api/proposals/<proposal_id>', methods=['PATCH'])
+def update_proposal(proposal_id):
+    """Update a proposal's status."""
     data = request.json or {}
     new_status = data.get('status')
 
     if new_status not in ('approved', 'rejected'):
         return {"error": "status must be 'approved' or 'rejected'"}, 400
 
-    plan_file = PLANS_DIR / f"{plan_id}.yaml"
-    if not plan_file.exists():
-        return {"error": "plan not found"}, 404
+    proposal_file = PROPOSALS_DIR / f"{proposal_id}.yaml"
+    if not proposal_file.exists():
+        return {"error": "proposal not found"}, 404
 
     try:
-        with open(plan_file) as f:
-            plan = yaml.safe_load(f)
+        with open(proposal_file) as f:
+            proposal = yaml.safe_load(f)
 
-        plan['status'] = new_status
+        proposal['status'] = new_status
 
-        with open(plan_file, 'w') as f:
-            yaml.dump(plan, f, default_flow_style=False)
+        with open(proposal_file, 'w') as f:
+            yaml.dump(proposal, f, default_flow_style=False)
 
-        return {"status": "updated", "plan": plan}
+        return {"status": "updated", "proposal": proposal}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route('/api/proposals/<proposal_id>', methods=['DELETE'])
+def delete_proposal(proposal_id):
+    """Delete a proposal."""
+    proposal_file = PROPOSALS_DIR / f"{proposal_id}.yaml"
+    if not proposal_file.exists():
+        return {"error": "proposal not found"}, 404
+
+    try:
+        proposal_file.unlink()
+        return {"status": "deleted"}
     except Exception as e:
         return {"error": str(e)}, 500
 

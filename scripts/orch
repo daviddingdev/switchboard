@@ -30,23 +30,29 @@ case "$1" in
     LINES="${3:-100}"
     curl -s "$API/api/processes/$2/output?lines=$LINES" | jq -r '.output'
     ;;
-  plans)
-    # orch plans
-    curl -s "$API/api/plans" | jq -r '.[] | "\(.id)\t\(.status)\t\(.title)"'
+  proposals)
+    # orch proposals
+    curl -s "$API/api/proposals" | jq -r '.[] | "\(.id)\t\(.status)\t\(.title)"'
     ;;
-  plan)
-    # orch plan <id> <title> <worker> [--auto]
+  propose)
+    # orch propose <id> <title> <worker> [--auto]
     ID="$2"; TITLE="$3"; WORKER="$4"
     AUTO="false"; [[ "$5" == "--auto" ]] && AUTO="true"
-    curl -s -X POST "$API/api/plans" \
+    curl -s -X POST "$API/api/proposals" \
       -H "Content-Type: application/json" \
       -d "{\"id\": \"$ID\", \"title\": \"$TITLE\", \"worker\": \"$WORKER\", \"auto_approve\": $AUTO}" | jq .
     ;;
   approve)
     # orch approve <id>
-    curl -s -X PATCH "$API/api/plans/$2" \
+    curl -s -X PATCH "$API/api/proposals/$2" \
       -H "Content-Type: application/json" \
       -d '{"status": "approved"}' | jq .
+    ;;
+  reject)
+    # orch reject <id>
+    curl -s -X PATCH "$API/api/proposals/$2" \
+      -H "Content-Type: application/json" \
+      -d '{"status": "rejected"}' | jq .
     ;;
   projects)
     # orch projects
@@ -57,15 +63,20 @@ case "$1" in
     echo ""
     echo "Usage: orch <command> [args]"
     echo ""
-    echo "Commands:"
+    echo "Workers:"
     echo "  spawn <name> <dir>     Spawn worker in directory"
     echo "  kill <name>            Kill worker"
     echo "  list                   List workers"
     echo "  send <name> <msg>      Send message to worker"
     echo "  output <name> [lines]  Get worker output"
-    echo "  plans                  List plans"
-    echo "  plan <id> <title> <worker> [--auto]  Create plan"
-    echo "  approve <id>           Approve plan"
+    echo ""
+    echo "Proposals:"
+    echo "  proposals              List proposals"
+    echo "  propose <id> <title> <worker> [--auto]  Create proposal"
+    echo "  approve <id>           Approve proposal"
+    echo "  reject <id>            Reject proposal"
+    echo ""
+    echo "Other:"
     echo "  projects               List known projects"
     ;;
 esac

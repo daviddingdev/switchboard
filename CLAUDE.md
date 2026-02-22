@@ -1,6 +1,6 @@
 # Orchestrator
 
-> **Before starting:** Read `~/SOUL.md` (working style) and `~/INFRASTRUCTURE.md` (server details)
+> **Before starting:** Read `~/SOUL.md`, `~/INFRASTRUCTURE.md`, and `~/WORKER.md`
 
 Personal AI operating system for managing projects, workers, and context across Claude interfaces.
 
@@ -17,7 +17,7 @@ A web UI + backend that lets David:
 1. Talk to a "partner" (Claude Code session) via chat interface
 2. Spawn worker sessions (Claude Code per project) that run in parallel
 3. See all workers + their spawned subprocesses in a process tree
-4. Review and approve plans that workers create
+4. Review and approve proposals that workers create
 5. Control everything from one interface — no more copy/paste between Claude interfaces
 
 ## Architecture
@@ -34,7 +34,7 @@ A web UI + backend that lets David:
 │                                                             │
 │  Flask API (:5001)                                          │
 │  ├── /api/processes     — list/spawn/kill workers          │
-│  ├── /api/plans         — list/approve/reject plans        │
+│  ├── /api/proposals     — list/approve/reject proposals    │
 │  ├── /ws/terminal/:id   — WebSocket for terminal streaming │
 │  └── Static files       — React app                        │
 │                                                             │
@@ -60,7 +60,7 @@ A web UI + backend that lets David:
 ## Key Design Decisions
 
 1. **Partner IS a Claude Code session** — not a separate abstraction. UI just wraps it as chat.
-2. **Workers self-report** — write STATUS.md or plan.yaml, partner reads them.
+2. **Workers self-report** — write STATUS.md or proposal.yaml, partner reads them.
 3. **Process tree, not project tree** — track what's running, including child processes.
 4. **Plans appear in chat** — inline approval, no separate tab.
 5. **Start simple** — raw terminal output first, polish into chat UI later.
@@ -86,7 +86,7 @@ A web UI + backend that lets David:
 │   └── mockups/           # UI mockups (React components)
 ├── state/
 │   ├── processes.yaml     # Active workers + children
-│   └── plans/             # Plan files from workers
+│   └── proposals/         # Proposal files from workers
 ├── api/
 │   ├── server.py          # Flask app
 │   ├── tmux_manager.py    # tmux wrapper functions
@@ -112,28 +112,28 @@ A web UI + backend that lets David:
 | 7 | Chat interface (partner input/output) | TODO |
 | 8 | Plan detection + approval buttons | TODO |
 
-## How Partner Understands Plans
+## How Partner Understands Proposals
 
-Workers write `plan.yaml` to their project directory:
+Workers create proposals using `orch propose` or by writing YAML to `state/proposals/`:
 
 ```yaml
-# ~/family-vault/plan.yaml
+# ~/orchestrator/state/proposals/deploy-mom.yaml
+id: deploy-mom
 title: Deploy to Mom
-created: 2026-02-17T14:30:00Z
+worker: family-vault
+status: pending
 steps:
   - Run final UI tests
   - Build production bundle
   - Deploy to Spark (port 5000)
   - Send mom the link
-estimate: 25 min
-risk: low
-notes: Deploying at 10am EST so mom is awake
+created_at: 2026-02-17T14:30:00Z
 ```
 
-Partner either:
-- Polls project directories for new plan.yaml files
-- Gets notified via API when worker writes one
-- Reads terminal output and parses (fallback)
+Partner can:
+- List proposals via `orch proposals`
+- Create proposals via `orch propose <id> <title> <worker>`
+- Approve/reject via UI or `orch approve/reject <id>`
 
 ## Related Projects
 
@@ -185,9 +185,9 @@ orch send <name> "<task>"  # Send task to worker
 orch output <name>         # Check worker output
 orch list                  # List all workers
 orch kill <name>           # Kill worker when done
-orch plan <id> <title> <worker> [--auto]  # Create plan
-orch plans                 # List plans
-orch approve <id>          # Approve plan
+orch propose <id> <title> <worker> [--auto]  # Create proposal
+orch proposals             # List proposals
+orch approve <id>          # Approve proposal
 ```
 
 ### Multi-Project Workflow
@@ -249,7 +249,7 @@ This ensures workers update CHANGELOG, TODO, and commit before terminating.
 - Phone PWA
 - PM methodology (standups, initiatives, etc.)
 
-Focus on: **spawn workers, see them, talk to partner, approve plans.**
+Focus on: **spawn workers, see them, talk to partner, approve proposals.**
 
 ---
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import ProcessTree from './components/ProcessTree'
 import SpawnDialog from './components/SpawnDialog'
 import ChatArea from './components/ChatArea'
@@ -14,22 +14,23 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '10px 16px',
+    padding: '8px 16px',
     borderBottom: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
+    flexShrink: 0,
   },
   title: {
     margin: 0,
-    fontSize: '16px',
+    fontSize: '15px',
     fontWeight: 600,
   },
   spawnButton: {
     background: 'var(--accent)',
     color: 'white',
     border: 'none',
-    borderRadius: '5px',
-    padding: '6px 12px',
-    fontSize: '13px',
+    borderRadius: '4px',
+    padding: '5px 10px',
+    fontSize: '12px',
     fontWeight: 500,
   },
   main: {
@@ -38,33 +39,43 @@ const styles = {
     overflow: 'hidden',
   },
   content: {
-    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
     minWidth: 0,
+    overflow: 'hidden',
+  },
+  divider: {
+    width: '4px',
+    background: 'var(--border)',
+    cursor: 'col-resize',
+    flexShrink: 0,
+    transition: 'background 0.15s',
+  },
+  dividerActive: {
+    background: 'var(--accent)',
   },
   sidebar: {
-    width: '360px',
-    borderLeft: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     background: 'var(--bg-secondary)',
+    minWidth: '200px',
+    maxWidth: '600px',
   },
   sidebarSection: {
     display: 'flex',
     flexDirection: 'column',
     flex: 1,
     minHeight: 0,
-    padding: '0 12px 12px',
+    padding: '0 10px 10px',
   },
   sidebarLabel: {
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 600,
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '8px',
+    marginBottom: '6px',
   },
 }
 
@@ -72,14 +83,43 @@ export default function App() {
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedWorker, setSelectedWorker] = useState('partner')
+  const [sidebarWidth, setSidebarWidth] = useState(400)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef(null)
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
   }
 
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault()
+    setIsDragging(true)
+    dragRef.current = {
+      startX: e.clientX,
+      startWidth: sidebarWidth,
+    }
+  }, [sidebarWidth])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !dragRef.current) return
+    const delta = dragRef.current.startX - e.clientX
+    const newWidth = Math.min(600, Math.max(200, dragRef.current.startWidth + delta))
+    setSidebarWidth(newWidth)
+  }, [isDragging])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+    dragRef.current = null
+  }, [])
+
   return (
-    <div style={styles.container}>
+    <div
+      style={styles.container}
+      onMouseMove={isDragging ? handleMouseMove : undefined}
+      onMouseUp={isDragging ? handleMouseUp : undefined}
+      onMouseLeave={isDragging ? handleMouseUp : undefined}
+    >
       <header style={styles.header}>
         <h1 style={styles.title}>Orchestrator</h1>
         <button style={styles.spawnButton} onClick={() => setShowSpawnDialog(true)}>
@@ -88,11 +128,19 @@ export default function App() {
       </header>
 
       <main style={styles.main}>
-        <div style={styles.content}>
+        <div style={{ ...styles.content, flex: 1 }}>
           <ChatArea />
         </div>
 
-        <aside style={styles.sidebar}>
+        <div
+          style={{
+            ...styles.divider,
+            ...(isDragging ? styles.dividerActive : {}),
+          }}
+          onMouseDown={handleMouseDown}
+        />
+
+        <aside style={{ ...styles.sidebar, width: sidebarWidth }}>
           <ProcessTree
             key={refreshKey}
             onRefresh={() => setRefreshKey(k => k + 1)}
@@ -101,7 +149,7 @@ export default function App() {
           />
           <div style={styles.sidebarSection}>
             <div style={styles.sidebarLabel}>
-              {selectedWorker === 'partner' ? 'Partner Output' : selectedWorker}
+              {selectedWorker === 'partner' ? 'Partner' : selectedWorker}
             </div>
             <Terminal workerName={selectedWorker} />
           </div>

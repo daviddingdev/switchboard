@@ -54,21 +54,32 @@ export async function getOutput(name, lines = 50) {
   return res.json();
 }
 
-export async function fetchPlans() {
-  const res = await fetch(`${API_BASE}/plans`);
-  if (!res.ok) throw new Error(`Failed to fetch plans: ${res.status}`);
+export async function fetchProposals() {
+  const res = await fetch(`${API_BASE}/proposals`);
+  if (!res.ok) throw new Error(`Failed to fetch proposals: ${res.status}`);
   return res.json();
 }
 
-export async function updatePlan(id, status) {
-  const res = await fetch(`${API_BASE}/plans/${encodeURIComponent(id)}`, {
+export async function updateProposal(id, status) {
+  const res = await fetch(`${API_BASE}/proposals/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status })
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Failed to update plan: ${res.status}`);
+    throw new Error(data.error || `Failed to update proposal: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteProposal(id) {
+  const res = await fetch(`${API_BASE}/proposals/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to delete proposal: ${res.status}`);
   }
   return res.json();
 }
