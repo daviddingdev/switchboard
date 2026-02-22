@@ -10,34 +10,45 @@ const styles = {
     borderRadius: '6px',
     overflow: 'hidden',
     minHeight: 0,
-  },
-  header: {
-    padding: '8px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: 'var(--text-secondary)',
-    borderBottom: '1px solid var(--border)',
-    background: 'var(--bg-tertiary)',
+    border: '1px solid #30363d',
   },
   output: {
     flex: 1,
-    padding: '12px',
-    fontFamily: 'ui-monospace, "SF Mono", Monaco, Consolas, monospace',
-    fontSize: '13px',
-    lineHeight: 1.5,
+    padding: '12px 14px',
+    fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Monaco, Consolas, monospace',
+    fontSize: '12px',
+    lineHeight: 1.6,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     overflow: 'auto',
-    color: '#c9d1d9',
+    color: '#e6edf3',
+    scrollbarWidth: 'thin',
+    scrollbarColor: '#30363d #0d1117',
   },
   empty: {
     flex: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--text-secondary)',
-    fontSize: '14px',
+    color: '#8b949e',
+    fontSize: '13px',
   },
+  loading: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#8b949e',
+    fontSize: '13px',
+  },
+}
+
+// Basic ANSI color support
+function parseAnsi(text) {
+  // Strip most ANSI codes but keep basic structure
+  return text
+    .replace(/\x1b\[[0-9;]*m/g, '') // Remove color codes
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // Remove other ANSI escapes
 }
 
 export default function Terminal({ workerName, fullHeight = false }) {
@@ -56,12 +67,11 @@ export default function Terminal({ workerName, fullHeight = false }) {
       try {
         const data = await getOutput(workerName, 200)
         if (mounted) {
-          // Check if user was at bottom before update
           if (outputRef.current) {
             const el = outputRef.current
             wasAtBottomRef.current = el.scrollHeight - el.scrollTop <= el.clientHeight + 50
           }
-          setOutput(data.output || '')
+          setOutput(parseAnsi(data.output || ''))
           setLoading(false)
         }
       } catch (err) {
@@ -81,26 +91,37 @@ export default function Terminal({ workerName, fullHeight = false }) {
     }
   }, [workerName])
 
-  // Auto-scroll to bottom when new content arrives (if user was at bottom)
   useEffect(() => {
     if (outputRef.current && wasAtBottomRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
   }, [output])
 
+  const containerStyle = {
+    ...styles.container,
+    ...(fullHeight && { height: '100%' }),
+  }
+
   if (!workerName) {
     return (
-      <div style={{ ...styles.container, ...(fullHeight && { height: '100%' }) }}>
+      <div style={containerStyle}>
         <div style={styles.empty}>Select a worker to view output</div>
       </div>
     )
   }
 
+  if (loading) {
+    return (
+      <div style={containerStyle}>
+        <div style={styles.loading}>Loading...</div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ ...styles.container, ...(fullHeight && { height: '100%' }) }}>
-      <div style={styles.header}>{workerName}</div>
+    <div style={containerStyle}>
       <div ref={outputRef} style={styles.output}>
-        {loading ? 'Loading...' : output || '(no output)'}
+        {output || '(no output)'}
       </div>
     </div>
   )

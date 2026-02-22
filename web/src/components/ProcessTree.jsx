@@ -3,17 +3,16 @@ import { fetchProcesses, killProcess } from '../api'
 
 const styles = {
   container: {
-    padding: '16px',
-    flex: 1,
-    overflow: 'auto',
+    padding: '12px',
+    borderBottom: '1px solid var(--border)',
   },
   header: {
-    fontSize: '12px',
+    fontSize: '11px',
     fontWeight: 600,
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '12px',
+    marginBottom: '8px',
   },
   list: {
     listStyle: 'none',
@@ -24,12 +23,12 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '8px 12px',
-    marginBottom: '4px',
-    borderRadius: '6px',
+    padding: '6px 10px',
+    marginBottom: '2px',
+    borderRadius: '4px',
     background: 'var(--bg-tertiary)',
     cursor: 'pointer',
-    transition: 'background 0.15s',
+    transition: 'background 0.1s',
   },
   itemSelected: {
     background: 'var(--accent)',
@@ -39,23 +38,18 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     overflow: 'hidden',
+    flex: 1,
+    minWidth: 0,
   },
   status: {
-    width: '8px',
-    height: '8px',
+    width: '6px',
+    height: '6px',
     borderRadius: '50%',
     flexShrink: 0,
   },
   name: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  directory: {
-    fontSize: '11px',
-    color: 'var(--text-secondary)',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -64,28 +58,29 @@ const styles = {
     background: 'transparent',
     color: 'var(--text-secondary)',
     border: '1px solid var(--border)',
-    borderRadius: '4px',
-    padding: '4px 8px',
-    fontSize: '12px',
+    borderRadius: '3px',
+    padding: '2px 6px',
+    fontSize: '11px',
     flexShrink: 0,
+    marginLeft: '8px',
   },
   loading: {
     color: 'var(--text-secondary)',
-    fontSize: '14px',
+    fontSize: '13px',
     textAlign: 'center',
-    padding: '20px',
+    padding: '12px',
   },
   error: {
     color: 'var(--danger)',
-    fontSize: '14px',
+    fontSize: '13px',
     textAlign: 'center',
-    padding: '20px',
+    padding: '12px',
   },
   empty: {
     color: 'var(--text-secondary)',
-    fontSize: '14px',
+    fontSize: '13px',
     textAlign: 'center',
-    padding: '20px',
+    padding: '12px',
   },
 }
 
@@ -113,7 +108,8 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
     return () => clearInterval(interval)
   }, [])
 
-  const handleKill = async (name) => {
+  const handleKill = async (e, name) => {
+    e.stopPropagation()
     if (killing) return
     setKilling(name)
     try {
@@ -130,7 +126,7 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
   if (loading) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>Processes</div>
+        <div style={styles.header}>Workers</div>
         <div style={styles.loading}>Loading...</div>
       </div>
     )
@@ -139,7 +135,7 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
   if (error) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>Processes</div>
+        <div style={styles.header}>Workers</div>
         <div style={styles.error}>{error}</div>
       </div>
     )
@@ -147,9 +143,9 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>Processes</div>
+      <div style={styles.header}>Workers ({processes.length})</div>
       {processes.length === 0 ? (
-        <div style={styles.empty}>No processes running</div>
+        <div style={styles.empty}>No workers running</div>
       ) : (
         <ul style={styles.list}>
           {processes.map(proc => (
@@ -165,21 +161,18 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
                 <div
                   style={{
                     ...styles.status,
-                    background: proc.running ? 'var(--success)' : 'var(--text-secondary)',
+                    background: proc.pid ? 'var(--success)' : 'var(--text-secondary)',
                   }}
                 />
-                <div>
-                  <div style={styles.name}>{proc.name}</div>
-                  <div style={styles.directory}>{proc.directory}</div>
-                </div>
+                <span style={styles.name}>{proc.name}</span>
               </div>
               {proc.name !== 'partner' && (
                 <button
                   style={styles.killButton}
-                  onClick={() => handleKill(proc.name)}
+                  onClick={(e) => handleKill(e, proc.name)}
                   disabled={killing === proc.name}
                 >
-                  {killing === proc.name ? '...' : 'Kill'}
+                  {killing === proc.name ? '...' : '×'}
                 </button>
               )}
             </li>

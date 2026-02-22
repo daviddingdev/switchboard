@@ -1,21 +1,28 @@
+import { useState } from 'react'
+
 const styles = {
   card: {
     background: 'var(--bg-tertiary)',
-    borderRadius: '8px',
-    padding: '16px',
-    marginBottom: '12px',
+    borderRadius: '6px',
+    marginBottom: '8px',
     border: '1px solid var(--border)',
+    overflow: 'hidden',
   },
   header: {
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
-    marginBottom: '12px',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 12px',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  headerExpanded: {
+    borderBottom: '1px solid var(--border)',
   },
   badge: {
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontSize: '11px',
+    padding: '2px 6px',
+    borderRadius: '3px',
+    fontSize: '10px',
     fontWeight: 600,
     textTransform: 'uppercase',
     flexShrink: 0,
@@ -32,49 +39,54 @@ const styles = {
     background: '#991b1b',
     color: '#fca5a5',
   },
-  titleRow: {
-    flex: 1,
-    minWidth: 0,
-  },
   title: {
-    margin: 0,
-    fontSize: '16px',
-    fontWeight: 600,
-    marginBottom: '4px',
+    flex: 1,
+    fontSize: '13px',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   worker: {
-    fontSize: '12px',
+    fontSize: '11px',
     color: 'var(--text-secondary)',
+    flexShrink: 0,
+  },
+  expandIcon: {
+    fontSize: '10px',
+    color: 'var(--text-secondary)',
+    transition: 'transform 0.15s',
+  },
+  body: {
+    padding: '10px 12px',
   },
   steps: {
-    margin: '0 0 16px 0',
-    paddingLeft: '20px',
-  },
-  step: {
-    marginBottom: '6px',
-    fontSize: '14px',
+    margin: '0 0 10px 0',
+    paddingLeft: '18px',
+    fontSize: '12px',
     color: 'var(--text-secondary)',
+    lineHeight: 1.6,
   },
   actions: {
     display: 'flex',
-    gap: '8px',
+    gap: '6px',
   },
   approveButton: {
     background: 'var(--success)',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    padding: '6px 12px',
+    fontSize: '12px',
     fontWeight: 500,
   },
   rejectButton: {
     background: 'transparent',
     color: 'var(--danger)',
     border: '1px solid var(--danger)',
-    borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    padding: '6px 12px',
+    fontSize: '12px',
     fontWeight: 500,
   },
 }
@@ -91,40 +103,58 @@ function getBadgeStyle(status) {
 }
 
 export default function PlanCard({ plan, onApprove, onReject, disabled = false }) {
+  const [expanded, setExpanded] = useState(plan.status === 'pending')
+  const hasSteps = plan.steps && plan.steps.length > 0
+  const isPending = plan.status === 'pending'
+
   return (
     <div style={styles.card}>
-      <div style={styles.header}>
+      <div
+        style={{
+          ...styles.header,
+          ...(expanded && (hasSteps || isPending) ? styles.headerExpanded : {}),
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
         <span style={getBadgeStyle(plan.status)}>{plan.status}</span>
-        <div style={styles.titleRow}>
-          <h3 style={styles.title}>{plan.title}</h3>
-          <span style={styles.worker}>from {plan.worker}</span>
-        </div>
+        <span style={styles.title}>{plan.title}</span>
+        <span style={styles.worker}>{plan.worker}</span>
+        {(hasSteps || isPending) && (
+          <span style={{
+            ...styles.expandIcon,
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          }}>▶</span>
+        )}
       </div>
 
-      {plan.steps && plan.steps.length > 0 && (
-        <ol style={styles.steps}>
-          {plan.steps.map((step, i) => (
-            <li key={i} style={styles.step}>{step}</li>
-          ))}
-        </ol>
-      )}
+      {expanded && (hasSteps || isPending) && (
+        <div style={styles.body}>
+          {hasSteps && (
+            <ol style={styles.steps}>
+              {plan.steps.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          )}
 
-      {plan.status === 'pending' && (
-        <div style={styles.actions}>
-          <button
-            style={styles.approveButton}
-            onClick={() => onApprove?.(plan.id)}
-            disabled={disabled}
-          >
-            Approve
-          </button>
-          <button
-            style={styles.rejectButton}
-            onClick={() => onReject?.(plan.id)}
-            disabled={disabled}
-          >
-            Reject
-          </button>
+          {isPending && (
+            <div style={styles.actions}>
+              <button
+                style={styles.approveButton}
+                onClick={(e) => { e.stopPropagation(); onApprove?.(plan.id) }}
+                disabled={disabled}
+              >
+                Approve
+              </button>
+              <button
+                style={styles.rejectButton}
+                onClick={(e) => { e.stopPropagation(); onReject?.(plan.id) }}
+                disabled={disabled}
+              >
+                Reject
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

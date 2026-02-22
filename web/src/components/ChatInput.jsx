@@ -4,7 +4,7 @@ const styles = {
   container: {
     display: 'flex',
     gap: '8px',
-    padding: '12px',
+    padding: '10px 12px',
     borderTop: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
   },
@@ -12,9 +12,9 @@ const styles = {
     flex: 1,
     background: 'var(--bg-tertiary)',
     border: '1px solid var(--border)',
-    borderRadius: '6px',
-    padding: '10px 14px',
-    fontSize: '14px',
+    borderRadius: '5px',
+    padding: '8px 12px',
+    fontSize: '13px',
     color: 'var(--text-primary)',
     outline: 'none',
   },
@@ -22,14 +22,14 @@ const styles = {
     background: 'var(--accent)',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    padding: '10px 20px',
-    fontSize: '14px',
+    borderRadius: '5px',
+    padding: '8px 16px',
+    fontSize: '13px',
     fontWeight: 500,
   },
 }
 
-export default function ChatInput({ onSend, disabled = false, placeholder = "Send a message to partner..." }) {
+export default function ChatInput({ onSend, disabled = false, placeholder = "Message partner..." }) {
   const [text, setText] = useState('')
 
   const handleSubmit = (e) => {
@@ -57,6 +57,7 @@ export default function ChatInput({ onSend, disabled = false, placeholder = "Sen
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
+        autoFocus
       />
       <button
         type="submit"
