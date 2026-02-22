@@ -2,6 +2,22 @@
 
 ## 2026-02-22
 
+### Worker Proposal Testing Session
+
+- **Verified WORKER.md implementation** — workers can submit proposals via curl
+- **Tested full proposal lifecycle**:
+  - Submit proposal → pending status
+  - List via `orch proposals`
+  - Approve via `orch approve` → approved status
+  - Reject via UI → rejected status
+- **Coordinated worker shutdown**:
+  - Sent end-of-session tasks to both workers
+  - Workers updated CHANGELOG, TODO, ran usage reports
+  - Workers committed and pushed before shutdown
+  - Killed workers cleanly after receiving "DONE"
+
+---
+
 ### Rename Plans to Proposals + WORKER.md
 
 - **Renamed "plan" to "proposal"** — Avoids confusion with Claude Code's built-in plan mode
