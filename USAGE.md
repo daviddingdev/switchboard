@@ -15,10 +15,11 @@ Token usage per session for Orchestrator project.
 |---------|-------------|------|--------|-------|------------|
 | `06cd0829` | Read these files first:
 - ~/SOUL.md
-- ~/... | 113 | 2.6K | 17.2K | 13.3M |
-| `d99e0449` | hello | 49 | 214 | 800 | 2.8M |
+- ~/... | 234 | 9.2K | 19.2K | 42.8M |
+| `5f3ea02f` | spawn workers for family vault and resea... | 65 | 1.5K | 2.8K | 5.2M |
+| `d99e0449` | hello | 52 | 214 | 800 | 2.8M |
 
-**Daily Total:** 2.8K output, 18.0K input, 16.2M cache
+**Daily Total:** 10.9K output, 22.8K input, 50.8M cache
 
 ## 2026-02-20
 
@@ -40,6 +41,6 @@ Token usage per session for Orchestrator project.
 
 ---
 
-**All-Time Total:** 9.2K output | 22.2K input | 37.4M cache
+**All-Time Total:** 17.2K output | 27.0K input | 72.1M cache
 
 *Last updated: February 22, 2026*
