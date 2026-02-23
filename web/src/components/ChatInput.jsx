@@ -36,6 +36,7 @@ const styles = {
   },
 }
 
+// TODO: Add comment support for quick actions
 export default function ChatInput({ onSend, disabled = false, placeholder = "Message partner...", value, onChange }) {
   // Support both controlled (value/onChange) and uncontrolled (internal state) modes
   const [internalText, setInternalText] = useState('')

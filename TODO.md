@@ -139,6 +139,9 @@ cd ~/orchestrator
 
 ---
 
+## Next
+- [ ] **Plan mode awareness in web UI** — Detect when Claude Code is showing a plan approval prompt and show approve/reject buttons instead of text input. Currently, typing in the chat box during plan mode sends raw text to tmux, which Claude Code misinterprets (e.g., "4 test comment" got interpreted as approval)
+
 ## Backlog (Post-MVP)
 - [ ] **Push workflow: orphaned doc changes** — When "Update Docs" runs but user doesn't complete "Push All", modified CHANGELOG/TODO files are left uncommitted. Need to either: (a) auto-stash on cancel, (b) commit immediately after update, or (c) warn user about uncommitted changes
 - [ ] Non-interactive worker tasks (`claude -p`)
