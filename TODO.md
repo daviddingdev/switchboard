@@ -1,12 +1,15 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**MVP Complete — Ready for Testing**
+**MVP Complete — Ready for Self-Orchestration**
 
 Core functionality working:
 - 3-column UI: Files | Terminal | Workers+Activity
+- Tab-based navigation: multiple terminals + file previews
+- Auto-discover projects with CLAUDE.md files
+- Git status indicators (M/U/A/D) on files
+- Syntax-highlighted file preview
 - Spawn/kill workers, send messages
-- View file trees and git changes across projects
 - Approve/reject worker proposals
 - Shareable setup with setup.sh/start.sh/stop.sh
 
@@ -25,6 +28,18 @@ cd ~/orchestrator
 
 ## Completed
 
+### VSCode-Style Features (Feb 23, 2026)
+- [x] Auto-discover projects by scanning for CLAUDE.md files
+- [x] Unified file tree: `~/*.md` files + project directories
+- [x] Git status indicators on files (M=modified, U=untracked, A=added, D=deleted)
+- [x] Folder dot indicator when children have changes
+- [x] `FilePreview.jsx` — Syntax highlighting with highlight.js
+- [x] `TabBar.jsx` — Tab navigation for terminals and files
+- [x] Worker terminals open as separate tabs (not replacing partner)
+- [x] All folders collapsed by default
+- [x] `GET /api/home` — Unified file tree with git status
+- [x] `GET /api/file` — File content with language detection
+
 ### Made Shareable (Feb 23, 2026)
 - [x] `setup.sh` — Install dependencies, create directories
 - [x] `start.sh` — Launch API, web, tmux
@@ -36,13 +51,9 @@ cd ~/orchestrator
 
 ### UI Redesign (Feb 23, 2026)
 - [x] 3-column layout: Files | Terminal | Workers+Activity
-- [x] `FileTree.jsx` — Project dropdown + file explorer
+- [x] `FileTree.jsx` — Project browser + file explorer
 - [x] `WorkerList.jsx` — Simplified worker list
 - [x] `Activity.jsx` — Pending, changes, recent
-- [x] `GET /api/projects` — List projects
-- [x] `GET /api/files/<project>` — File tree
-- [x] `GET /api/changes` — Git status
-- [x] `GET /api/activity` — Combined feed
 - [x] Removed duplicate terminal (ChatArea.jsx)
 
 ### UI Polish (Feb 23, 2026)
@@ -70,14 +81,15 @@ cd ~/orchestrator
 
 ## Backlog (Post-MVP)
 
-- [ ] File content preview (click file → view)
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)
 - [ ] Claude Desktop MCP integration
 - [ ] Phone PWA
 - [ ] Child process tracking
-- [ ] Real-time WebSocket updates
+- [ ] Real-time WebSocket (replace polling)
+- [ ] Editable file preview
+- [ ] Terminal resize handling
 
 ---
 
@@ -93,6 +105,8 @@ cd ~/orchestrator
 | Feb 22 | CLI helper over API-only | Partner needs simple bash commands |
 | Feb 23 | 3-column layout | Files + Activity more useful than duplicate terminals |
 | Feb 23 | Setup scripts | Make shareable without manual steps |
+| Feb 23 | Auto-discover projects | Scan for CLAUDE.md vs manual registry |
+| Feb 23 | Tab-based terminals | Workers as tabs, not replacing partner |
 
 ---
 

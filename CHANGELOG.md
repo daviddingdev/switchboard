@@ -2,6 +2,32 @@
 
 ## 2026-02-23
 
+### VSCode-Style Features
+
+- **Auto-discover projects** — Scans for directories with CLAUDE.md files instead of manual registry
+  - `discover_projects()` recursively finds projects up to depth 3
+  - Shows `~/*.md` files (SOUL.md, INFRASTRUCTURE.md, WORKER.md) at root
+  - Projects appear as collapsible folders below
+- **Git status indicators** — Files show status badges:
+  - `M` (yellow) = modified
+  - `U` (green) = untracked
+  - `A` (green) = added
+  - `D` (red) = deleted
+  - Folders show yellow dot if children have changes
+- **File preview with syntax highlighting**:
+  - `FilePreview.jsx` — Uses highlight.js for Python, JS, JSON, YAML, Markdown, CSS, HTML, Bash
+  - Line numbers display
+  - `GET /api/file?path=` — Returns file content with language detection
+- **Tab-based navigation**:
+  - `TabBar.jsx` — Tabs for terminals and file previews
+  - Worker terminals open as new tabs (not replacing partner)
+  - Partner terminal tab cannot be closed
+  - File tabs closable with × button
+- **Folders collapsed by default** — Cleaner initial view
+- **Unified file tree** — `GET /api/home` returns combined tree with git status
+
+---
+
 ### Made Orchestrator Shareable
 
 - **Created setup/start/stop scripts** for easy installation:
@@ -282,4 +308,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: February 22, 2026*
+*Last updated: February 23, 2026*

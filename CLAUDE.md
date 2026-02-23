@@ -2,303 +2,152 @@
 
 > **Before starting:** Read `~/SOUL.md`, `~/INFRASTRUCTURE.md`, and `~/WORKER.md`
 
-Personal AI operating system for managing projects, workers, and context across Claude interfaces.
+Personal AI operating system for managing Claude Code sessions across projects.
 
-## Quick Context
+## Status: MVP Complete
 
-- **Owner**: David Ding
-- **Status**: MVP in progress
-- **Priority**: HIGH — build before LA trip (~1 month)
-- **Location**: Spark server (NVIDIA DGX, 128GB RAM, Tailscale: 100.69.237.80)
+The core system is working:
+- Web UI with 3-column layout (Files | Terminal | Workers+Activity)
+- Spawn/kill workers, view their terminals as tabs
+- File browser with git status indicators (M/U/A/D)
+- File preview with syntax highlighting
+- Proposal approval system
+- Auto-discovery of projects (directories with CLAUDE.md)
 
-## What This Is
+## Quick Start
 
-A web UI + backend that lets David:
-1. Talk to a "partner" (Claude Code session) via chat interface
-2. Spawn worker sessions (Claude Code per project) that run in parallel
-3. See all workers + their spawned subprocesses in a process tree
-4. Review and approve proposals that workers create
-5. Control everything from one interface — no more copy/paste between Claude interfaces
+```bash
+cd ~/orchestrator
+./start.sh      # Start API + web + tmux
+./stop.sh       # Stop everything
+```
+
+**UI:** http://localhost:3000 (or http://100.69.237.80:3000 via Tailscale)
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  BROWSER (Mac / Phone)                                      │
-│  React App served from Spark:5001                           │
+│  BROWSER                                                     │
+│  React App (Vite) at :3000                                  │
 └─────────────────────────┬───────────────────────────────────┘
-                          │ HTTP + WebSocket
+                          │ HTTP (polling)
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  SPARK SERVER                                               │
 │                                                             │
 │  Flask API (:5001)                                          │
-│  ├── /api/processes     — list/spawn/kill workers          │
-│  ├── /api/proposals     — list/approve/reject proposals    │
-│  ├── /ws/terminal/:id   — WebSocket for terminal streaming │
-│  └── Static files       — React app                        │
+│  ├── /api/processes    — spawn/kill/list workers           │
+│  ├── /api/proposals    — approval workflow                 │
+│  ├── /api/home         — file tree with git status         │
+│  ├── /api/file         — file content for preview          │
+│  └── /api/activity     — combined activity feed            │
 │                                                             │
-│  tmux socket: /tmp/orchestrator.sock                        │
-│  ├── window 0: partner (master Claude Code in ~/orchestrator)
-│  ├── window 1: family-vault worker                          │
-│  ├── window 2: research worker                              │
-│  └── window N: ...                                          │
-│                                                             │
-│  State files: ~/orchestrator/state/                         │
+│  tmux session: orchestrator                                 │
+│  ├── partner (this session)                                │
+│  └── workers (spawned on demand)                           │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-## Core Concepts
-
-| Concept | What it is |
-|---------|------------|
-| Partner | Master Claude Code session in ~/orchestrator. Exposed as chat in UI. Can see/control all workers. |
-| Worker | Claude Code session in a project directory (e.g., ~/family-vault). Does actual work. |
-| Process | Any running thing — workers + their children (servers, scripts, models) |
-| Plan | Structured task a worker proposes. Appears in chat for approval. |
-
-## Key Design Decisions
-
-1. **Partner IS a Claude Code session** — not a separate abstraction. UI just wraps it as chat.
-2. **Workers self-report** — write STATUS.md or proposal.yaml, partner reads them.
-3. **Process tree, not project tree** — track what's running, including child processes.
-4. **Plans appear in chat** — inline approval, no separate tab.
-5. **Start simple** — raw terminal output first, polish into chat UI later.
-
-## Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | React (Vite), xterm.js for terminals |
-| Backend | Flask + Flask-SocketIO |
-| Process management | tmux via subprocess calls |
-| State | YAML files |
-| Terminal streaming | WebSocket + tmux capture-pane or pty |
 
 ## Directory Structure
 
 ```
 ~/orchestrator/
-├── CLAUDE.md              # This file
-├── docs/
-│   ├── architecture.md    # Technical design details
-│   ├── chat-summary.md    # Design conversation history
-│   └── mockups/           # UI mockups (React components)
-├── state/
-│   ├── processes.yaml     # Active workers + children
-│   └── proposals/         # Proposal files from workers
 ├── api/
-│   ├── server.py          # Flask app
-│   ├── tmux_manager.py    # tmux wrapper functions
+│   ├── server.py         # Flask API (all endpoints)
+│   ├── tmux_manager.py   # tmux wrapper
 │   └── requirements.txt
 ├── web/
-│   ├── package.json
-│   ├── src/
-│   └── dist/
-└── scripts/
-    └── start.sh           # Launch everything
+│   └── src/
+│       ├── App.jsx           # Main layout + tab state
+│       ├── api.js            # API client
+│       └── components/
+│           ├── FileTree.jsx      # Project browser
+│           ├── FilePreview.jsx   # Syntax-highlighted viewer
+│           ├── TabBar.jsx        # Terminal/file tabs
+│           ├── Terminal.jsx      # Worker output
+│           ├── WorkerList.jsx    # Worker list
+│           ├── Activity.jsx      # Proposals + git changes
+│           ├── QuickActions.jsx  # 1/2/3/Y/N buttons
+│           └── ChatInput.jsx     # Message input
+├── state/
+│   └── proposals/        # Worker proposals (YAML)
+├── scripts/
+│   └── orch              # CLI helper
+├── logs/                 # Runtime logs
+├── setup.sh              # Install dependencies
+├── start.sh              # Launch everything
+└── stop.sh               # Clean shutdown
 ```
 
-## Build Order
+## Key Files to Know
 
-| Phase | What | Status |
-|-------|------|--------|
-| 1 | Directory structure + state schema | ✓ Done |
-| 2 | Flask API (spawn/kill/list processes) | TODO |
-| 3 | tmux manager (spawn workers, send commands, read output) | TODO |
-| 4 | React shell (layout, process tree, terminal placeholder) | TODO |
-| 5 | Wire API → UI (list workers, spawn, kill) | TODO |
-| 6 | xterm.js or ttyd (terminal embedding) | TODO |
-| 7 | Chat interface (partner input/output) | TODO |
-| 8 | Plan detection + approval buttons | TODO |
+| File | Purpose |
+|------|---------|
+| `api/server.py` | All API endpoints, file tree building, git status |
+| `web/src/App.jsx` | Main layout, tab state management |
+| `web/src/components/FileTree.jsx` | Project auto-discovery display |
+| `web/src/components/Terminal.jsx` | Polls worker output |
 
-## How Partner Understands Proposals
+## API Endpoints
 
-Workers create proposals using `orch propose` or by writing YAML to `state/proposals/`:
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/health` | Health check |
+| `GET /api/processes` | List workers |
+| `POST /api/processes` | Spawn worker |
+| `DELETE /api/processes/<name>` | Kill worker |
+| `POST /api/processes/<name>/send` | Send input |
+| `GET /api/processes/<name>/output` | Get output |
+| `GET /api/home` | File tree from ~ with git status |
+| `GET /api/file?path=` | File content for preview |
+| `GET /api/projects` | Auto-discovered projects |
+| `GET /api/activity` | Pending + changes + recent |
+| `GET /api/proposals` | List proposals |
+| `POST /api/proposals` | Create proposal |
+| `PATCH /api/proposals/<id>` | Approve/reject |
 
-```yaml
-# ~/orchestrator/state/proposals/deploy-mom.yaml
-id: deploy-mom
-title: Deploy to Mom
-worker: family-vault
-status: pending
-steps:
-  - Run final UI tests
-  - Build production bundle
-  - Deploy to Spark (port 5000)
-  - Send mom the link
-created_at: 2026-02-17T14:30:00Z
-```
-
-Partner can:
-- List proposals via `orch proposals`
-- Create proposals via `orch propose <id> <title> <worker>`
-- Approve/reject via UI or `orch approve/reject <id>`
-
-## Related Projects
-
-| Project | Directory | Description |
-|---------|-----------|-------------|
-| Family Vault | ~/family-vault | Document search for family business. ~85% done. |
-| Research | ~/research | Paper discovery pipeline. Not started. |
-| HBS Cases | ~/hbs-cases | Case study practice. Not started. |
-
-## Infrastructure Notes
-
-- **SSH**: `ssh spark` from Mac (key auth configured)
-- **Services**: Ollama (11434), OpenSearch (9200), Family-Vault API (5000)
-- **UPS**: CyberPower, auto-shutdown at 10%, ~4hr runtime
-- **BIOS**: Auto-power-on after AC loss
-
-## Commands
+## Development
 
 ```bash
-# Check Spark
-ssh spark "hostname && uptime"
+# API runs with auto-reload
+cd api && python3 server.py
 
-# Start orchestrator (after built)
-cd ~/orchestrator && ./scripts/start.sh
+# Web dev server with HMR
+cd web && npm run dev
 
-# Manual tmux for now
-tmux -L orchestrator new-session -s orchestrator -n partner -d
-tmux -L orchestrator new-window -t orchestrator -n family-vault
+# Build for production
+cd web && npm run build
 ```
 
-## Open Questions for Builder
+## Current UI Features
 
-1. **Terminal streaming**: xterm.js + custom WebSocket bridge, or use ttyd?
-2. **Partner as chat**: Parse Claude Code output into messages, or start with raw terminal?
-3. **Plan detection**: Poll files, or have workers call an API?
+- **File tree**: Auto-discovers projects with CLAUDE.md, shows git status
+- **Tabs**: Terminal tabs for each worker + file preview tabs
+- **Activity panel**: Pending proposals, git changes across projects
+- **Quick actions**: 1/2/3/4/Y/N/Enter/Esc buttons for prompts
+- **Worker list**: Click to open worker's terminal tab
 
-Start with simplest approach, iterate.
+## Backlog
 
-## Partner Orchestration
-
-You are the orchestrator partner. Use the `orch` CLI to spawn and coordinate workers.
-
-### Commands
-
-```bash
-orch projects              # List known projects with directories
-orch spawn <name> <dir>    # Spawn Claude Code worker
-orch send <name> "<task>"  # Send task to worker
-orch output <name>         # Check worker output
-orch list                  # List all workers
-orch kill <name>           # Kill worker when done
-orch propose <id> <title> <worker> [--auto]  # Create proposal
-orch proposals             # List proposals
-orch approve <id>          # Approve proposal
-```
-
-### Multi-Project Workflow
-
-1. `orch projects` to see available projects
-2. `orch spawn <name> <directory>` for each project
-3. `orch send <name> "<task description>"`
-4. Poll `orch output <name>` until worker completes (look for idle prompt)
-5. `orch kill <name>` when done
-6. Report summary to user
-
-### Example: Update All CLAUDE.md Files
-
-```bash
-# Spawn worker
-orch spawn family-vault ~/family-vault
-
-# Send task
-orch send family-vault "Add this header after the title:
-> **Before starting:** Read ~/SOUL.md and ~/INFRASTRUCTURE.md
-Then remove any duplicated infrastructure/date tracking content that's now in those shared files."
-
-# Monitor
-orch output family-vault
-
-# When done
-orch kill family-vault
-```
-
-### Auto-Approve Guidelines
-
-Use `--auto` for routine tasks:
-- Documentation updates
-- Code formatting
-- Adding standard headers
-
-Require manual approval for:
-- Deployments
-- External API changes
-- Data migrations
-
-### Shutting Down Workers
-
-Before killing a worker, ensure it completes end-of-session tasks:
-
-```bash
-orch send <name> "Complete end-of-session tasks per CLAUDE.md, then say DONE"
-# Wait for DONE in output
-orch kill <name>
-```
-
-This ensures workers update CHANGELOG, TODO, and commit before terminating.
-
-## What NOT to Build (yet)
-
-- Overnight queue/executor
-- Digest generation
-- Claude Desktop MCP integration
-- Phone PWA
-- PM methodology (standups, initiatives, etc.)
-
-Focus on: **spawn workers, see them, talk to partner, approve proposals.**
+- [ ] File content editing (not just preview)
+- [ ] Non-interactive worker tasks (`claude -p`)
+- [ ] Overnight queue + executor
+- [ ] Real-time WebSocket updates
+- [ ] Mobile responsive
 
 ---
 
 ## End-of-Session Checklist
 
-**Before finishing a session, Claude MUST:**
-
-1. **Update CHANGELOG.md** — Add entry for today's work
-2. **Update TODO.md** — Mark completed items, add new ones discovered
-3. **Run `python3 tools/usage_report.py`** — Regenerates USAGE.md with token counts
-4. **Git commit** — `git add -A && git commit -m "description" && git push`
-
-This ensures documentation stays current and usage is tracked.
+Before finishing:
+1. Update `CHANGELOG.md` with today's work
+2. Update `TODO.md` if tasks changed
+3. `git add -A && git commit && git push`
 
 ---
 
-## CRITICAL: Date Tracking — Use Local Date, NOT Spark UTC
+## Date Format
 
-**The Spark server runs in UTC. This can be 7-8 hours ahead of Pacific time.**
-
-When writing dates in CHANGELOG.md, TODO.md, or any documentation:
-- **Use the date from the system prompt** (Mac's local clock)
-- **Do NOT infer from Spark timestamps** — they're UTC
-
-**Rule:** Before writing ANY date, check the system prompt for current local date.
-
-Date format: `February 18, 2026` or `2026-02-18` (match existing format in file)
-
----
-
-## Tracking Files
-
-| File | Purpose | Update When |
-|------|---------|-------------|
-| `CHANGELOG.md` | Daily progress log | After completing work |
-| `TODO.md` | Current tasks, decisions | Tasks change |
-| `USAGE.md` | Token usage per session | End of session (auto-generated) |
-
----
-
-## Commands
-
-```bash
-# Update usage report
-python3 tools/usage_report.py
-
-# Git workflow
-git add -A && git commit -m "description" && git push
-
-# Check Spark services (if needed)
-systemctl status ollama opensearch
-```
+Use the date from system prompt (local time), not Spark timestamps (UTC).
+Format: `February 23, 2026` or `2026-02-23`
