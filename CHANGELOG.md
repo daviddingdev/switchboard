@@ -2,6 +2,12 @@
 
 ## 2026-02-23
 
+### Bug Fixes
+
+- **Fixed update-docs race condition** — Removed automatic `git add` from update-docs prompt and removed Bash tool from allowed tools to prevent doc updater from modifying git state
+
+---
+
 ### Documentation Improvements
 
 - **Removed end-of-session checklist from CLAUDE.md** — Orchestrator now handles doc updates at push time, workers don't need manual checklist
