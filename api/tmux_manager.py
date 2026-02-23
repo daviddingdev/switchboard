@@ -11,6 +11,7 @@ import time
 
 SOCKET_NAME = "orchestrator"
 SESSION_NAME = "orchestrator"
+LOGS_DIR = os.path.expanduser("~/orchestrator/logs/workers")
 
 
 def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -90,13 +91,23 @@ def spawn_worker(name: str, directory: str) -> dict:
     if not os.path.isdir(expanded_dir):
         raise ValueError(f"Directory does not exist: {expanded_dir}")
 
-    # Create new window
+    # Ensure logs directory exists
+    os.makedirs(LOGS_DIR, exist_ok=True)
+
+    # Create new window with larger scrollback
     result = _run_tmux(
         "new-window", "-t", SESSION_NAME, "-n", name, "-c", expanded_dir,
         check=False
     )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to create window: {result.stderr}")
+
+    # Set large scrollback buffer for this window
+    _run_tmux("set-option", "-t", f"{SESSION_NAME}:{name}", "history-limit", "50000", check=False)
+
+    # Start logging output to file
+    log_file = os.path.join(LOGS_DIR, f"{name}.log")
+    _run_tmux("pipe-pane", "-t", f"{SESSION_NAME}:{name}", f"cat >> {log_file}", check=False)
 
     # Start Claude Code
     _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "claude", "Enter", check=False)
@@ -117,7 +128,8 @@ def spawn_worker(name: str, directory: str) -> dict:
         "name": name,
         "directory": expanded_dir,
         "status": "running",
-        "pid": pid
+        "pid": pid,
+        "log_file": log_file
     }
 
 
@@ -130,26 +142,39 @@ def kill_worker(name: str) -> bool:
     return result.returncode == 0
 
 
-def send_keys(name: str, text: str) -> bool:
+def send_keys(name: str, text: str, raw: bool = False) -> bool:
     """
     Send text input to a worker window.
-    Uses -l for literal interpretation, then sends Enter separately.
+
+    Args:
+        name: Window name
+        text: Text to send, or special key name if raw=True
+        raw: If True, send as tmux key (Escape, Enter, C-c, etc.) without -l flag
+
     Returns True if successful.
     """
-    # Send the text literally (handles special characters)
-    result = _run_tmux(
-        "send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", text,
-        check=False
-    )
-    if result.returncode != 0:
-        return False
+    if raw:
+        # Send as raw tmux key (for Escape, Enter, C-c, etc.)
+        result = _run_tmux(
+            "send-keys", "-t", f"{SESSION_NAME}:{name}", text,
+            check=False
+        )
+        return result.returncode == 0
+    else:
+        # Send the text literally (handles special characters)
+        result = _run_tmux(
+            "send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", text,
+            check=False
+        )
+        if result.returncode != 0:
+            return False
 
-    # Send Enter
-    result = _run_tmux(
-        "send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter",
-        check=False
-    )
-    return result.returncode == 0
+        # Send Enter
+        result = _run_tmux(
+            "send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter",
+            check=False
+        )
+        return result.returncode == 0
 
 
 def capture_output(name: str, lines: int = 100) -> str:

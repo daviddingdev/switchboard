@@ -4,11 +4,11 @@ const styles = {
   container: {
     display: 'flex',
     gap: '8px',
-    padding: '10px 12px',
-    borderTop: '1px solid var(--border)',
-    background: 'var(--bg-secondary)',
+    flex: 1,
+    height: '100%',
+    alignItems: 'stretch',
   },
-  input: {
+  textarea: {
     flex: 1,
     background: 'var(--bg-tertiary)',
     border: '1px solid var(--border)',
@@ -17,6 +17,10 @@ const styles = {
     fontSize: '13px',
     color: 'var(--text-primary)',
     outline: 'none',
+    resize: 'none',
+    fontFamily: 'inherit',
+    lineHeight: 1.4,
+    overflow: 'auto',
   },
   sendButton: {
     background: 'var(--accent)',
@@ -26,6 +30,9 @@ const styles = {
     padding: '8px 16px',
     fontSize: '13px',
     fontWeight: 500,
+    height: '36px',
+    flexShrink: 0,
+    alignSelf: 'flex-end',
   },
 }
 
@@ -41,6 +48,7 @@ export default function ChatInput({ onSend, disabled = false, placeholder = "Mes
   }
 
   const handleKeyDown = (e) => {
+    // Enter sends, Shift+Enter adds newline
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit(e)
@@ -49,14 +57,14 @@ export default function ChatInput({ onSend, disabled = false, placeholder = "Mes
 
   return (
     <form style={styles.container} onSubmit={handleSubmit}>
-      <input
-        type="text"
-        style={styles.input}
+      <textarea
+        style={styles.textarea}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
+        rows={1}
         autoFocus
       />
       <button

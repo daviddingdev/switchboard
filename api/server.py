@@ -114,7 +114,8 @@ def send_to_process(name):
     """Send text input to a worker."""
     data = request.json or {}
     text = data.get('text', '')
-    success = tmux.send_keys(name, text)
+    raw = data.get('raw', False)  # If true, send as tmux key (Escape, C-c, etc.)
+    success = tmux.send_keys(name, text, raw=raw)
     return {"status": "sent" if success else "failed"}
 
 
@@ -384,8 +385,19 @@ def get_git_status(directory):
         files = []
         for line in result.stdout.splitlines():
             if line and len(line) >= 3:
-                status = line[:2].strip()
+                status_code = line[:2]
                 filepath = line[3:]
+                # Normalize status codes
+                if status_code == '??':
+                    status = 'U'  # Untracked
+                elif 'D' in status_code:
+                    status = 'D'  # Deleted
+                elif 'A' in status_code:
+                    status = 'A'  # Added
+                elif 'M' in status_code or status_code.strip():
+                    status = 'M'  # Modified
+                else:
+                    status = status_code.strip()
                 files.append({'path': filepath, 'status': status})
         return files
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -605,6 +617,75 @@ def get_changes():
         })
 
     return jsonify(result)
+
+
+@app.route('/api/diff')
+def get_diff():
+    """
+    Get git diff for a specific file.
+    Query params: project (name), path (relative file path)
+    """
+    project_name = request.args.get('project', '')
+    file_path = request.args.get('path', '')
+
+    if not project_name or not file_path:
+        return {"error": "project and path required"}, 400
+
+    directory = get_project_directory(project_name)
+    if not directory:
+        return {"error": f"project '{project_name}' not found"}, 404
+
+    try:
+        # Get diff for the file (staged + unstaged)
+        result = subprocess.run(
+            ['git', '-C', directory, 'diff', 'HEAD', '--', file_path],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # If no diff with HEAD, try without HEAD (for untracked files)
+        if not result.stdout and result.returncode == 0:
+            # Check if file is untracked
+            status_result = subprocess.run(
+                ['git', '-C', directory, 'status', '--porcelain', '--', file_path],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if status_result.stdout.startswith('??'):
+                # Untracked file - show full content as addition
+                full_path = os.path.join(directory, file_path)
+                if os.path.exists(full_path):
+                    try:
+                        with open(full_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        lines = content.split('\n')
+                        diff_lines = [f'diff --git a/{file_path} b/{file_path}',
+                                      'new file',
+                                      f'--- /dev/null',
+                                      f'+++ b/{file_path}',
+                                      f'@@ -0,0 +1,{len(lines)} @@']
+                        diff_lines.extend(f'+{line}' for line in lines)
+                        return jsonify({
+                            'diff': '\n'.join(diff_lines),
+                            'project': project_name,
+                            'path': file_path,
+                            'status': 'untracked'
+                        })
+                    except:
+                        pass
+
+        return jsonify({
+            'diff': result.stdout,
+            'project': project_name,
+            'path': file_path,
+            'status': 'modified' if result.stdout else 'unchanged'
+        })
+    except subprocess.TimeoutExpired:
+        return {"error": "Diff timed out"}, 500
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 @app.route('/api/activity')

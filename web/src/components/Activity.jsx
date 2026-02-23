@@ -15,12 +15,12 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    fontSize: '10px',
+    fontSize: '11px',
     fontWeight: 600,
-    color: 'var(--text-secondary)',
+    color: 'var(--text-primary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '6px',
+    marginBottom: '8px',
   },
   sectionIcon: {
     fontSize: '11px',
@@ -91,18 +91,34 @@ const styles = {
     marginLeft: 'auto',
   },
   changeProject: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
     fontSize: '12px',
-    fontWeight: 500,
-    color: 'var(--text-secondary)',
-    marginBottom: '2px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    marginBottom: '4px',
+    padding: '4px 6px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: '4px',
+  },
+  projectIcon: {
+    fontSize: '10px',
   },
   changeFile: {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    padding: '2px 0',
+    padding: '3px 6px',
+    marginLeft: '8px',
     fontSize: '12px',
     color: 'var(--text-primary)',
+    cursor: 'pointer',
+    borderRadius: '3px',
+    transition: 'background 0.1s',
+  },
+  changeFileHover: {
+    background: 'var(--bg-tertiary)',
   },
   changeStatus: {
     fontFamily: 'monospace',
@@ -174,9 +190,10 @@ function getStatusStyle(status) {
   return styles.statusM // default
 }
 
-export default function Activity() {
+export default function Activity({ onFileClick }) {
   const [activity, setActivity] = useState({ pending: [], changes: [], recent: [] })
   const [updating, setUpdating] = useState(null)
+  const [hoveredFile, setHoveredFile] = useState(null)
 
   const loadActivity = async () => {
     try {
@@ -280,16 +297,34 @@ export default function Activity() {
             <div style={styles.empty}>No uncommitted changes</div>
           ) : (
             activity.changes?.map(project => (
-              <div key={project.project} style={{ marginBottom: '8px' }}>
-                <div style={styles.changeProject}>{project.project}</div>
-                {project.files.map((file, i) => (
-                  <div key={i} style={styles.changeFile}>
-                    <span style={{ ...styles.changeStatus, ...getStatusStyle(file.status) }}>
-                      {file.status}
-                    </span>
-                    <span>{file.path}</span>
-                  </div>
-                ))}
+              <div key={project.project} style={{ marginBottom: '10px' }}>
+                <div style={styles.changeProject}>
+                  <span style={styles.projectIcon}>📁</span>
+                  <span>{project.project}</span>
+                </div>
+                {project.files.map((file, i) => {
+                  const fileKey = `${project.project}:${file.path}`
+                  const isHovered = hoveredFile === fileKey
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        ...styles.changeFile,
+                        ...(isHovered ? styles.changeFileHover : {}),
+                      }}
+                      onMouseEnter={() => setHoveredFile(fileKey)}
+                      onMouseLeave={() => setHoveredFile(null)}
+                      onClick={() => onFileClick?.(project, file)}
+                    >
+                      <span style={{ ...styles.changeStatus, ...getStatusStyle(file.status) }}>
+                        {file.status}
+                      </span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {file.path}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             ))
           )}

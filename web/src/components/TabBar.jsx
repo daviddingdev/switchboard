@@ -65,12 +65,13 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
         >
           <span style={{
             ...styles.tabIcon,
-            ...(tab.type === 'terminal' ? styles.tabIconTerminal : {})
+            ...(tab.type === 'terminal' ? styles.tabIconTerminal : {}),
+            ...(tab.type === 'diff' ? { color: 'var(--warning)' } : {})
           }}>
-            {tab.type === 'terminal' ? '●' : '📄'}
+            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
+          {(tab.type === 'file' || tab.type === 'diff' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
             <button
               style={styles.closeButton}
               onClick={(e) => {

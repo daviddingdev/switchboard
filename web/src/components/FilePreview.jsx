@@ -63,6 +63,9 @@ const styles = {
     userSelect: 'none',
     borderRight: '1px solid var(--border)',
     marginRight: '16px',
+    fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
+    fontSize: '13px',
+    lineHeight: 1.6,
   },
   content: {
     flex: 1,
@@ -113,14 +116,16 @@ export default function FilePreview({ filepath }) {
     return <div style={styles.error}>{error}</div>
   }
 
+  // Count actual lines (don't count trailing empty line from final newline)
   const lines = content.split('\n')
+  const lineCount = content.endsWith('\n') ? lines.length - 1 : lines.length
 
   return (
     <div style={styles.container}>
       <pre style={styles.pre}>
         <div style={styles.lineNumbers}>
           <div style={styles.numbers}>
-            {lines.map((_, i) => (
+            {Array.from({ length: lineCount }, (_, i) => (
               <div key={i}>{i + 1}</div>
             ))}
           </div>

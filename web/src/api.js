@@ -30,11 +30,11 @@ export async function killProcess(name) {
   return res.json();
 }
 
-export async function sendToProcess(name, text) {
+export async function sendToProcess(name, text, raw = false) {
   const res = await fetch(`${API_BASE}/processes/${encodeURIComponent(name)}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, raw })
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -122,5 +122,16 @@ export async function fetchChanges() {
 export async function fetchActivity() {
   const res = await fetch(`${API_BASE}/activity`);
   if (!res.ok) throw new Error(`Failed to fetch activity: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchDiff(project, path) {
+  const res = await fetch(
+    `${API_BASE}/diff?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to fetch diff: ${res.status}`);
+  }
   return res.json();
 }
