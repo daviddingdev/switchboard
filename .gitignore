@@ -8,10 +8,18 @@ venv/
 node_modules/
 dist/
 
-# State (track structure, not content)
+# Logs
+logs/
+!logs/.gitkeep
+
+# User-specific config (keep examples)
+state/projects.yaml
 state/processes.yaml
-state/plans/*.yaml
-!state/plans/.gitkeep
+config.yaml
+
+# State content (keep structure)
+state/proposals/*.yaml
+!state/proposals/.gitkeep
 
 # IDE
 .vscode/
@@ -19,3 +27,4 @@ state/plans/*.yaml
 
 # OS
 .DS_Store
+Thumbs.db
