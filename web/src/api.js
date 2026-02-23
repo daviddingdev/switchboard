@@ -135,3 +135,37 @@ export async function fetchDiff(project, path) {
   }
   return res.json();
 }
+
+// Push workflow
+
+export async function fetchDocContext() {
+  const res = await fetch(`${API_BASE}/doc-context`);
+  if (!res.ok) throw new Error(`Failed to fetch doc context: ${res.status}`);
+  return res.json();
+}
+
+export async function updateDocs(project) {
+  const res = await fetch(`${API_BASE}/update-docs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to update docs: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function pushProject(project, commitDocs = false) {
+  const res = await fetch(`${API_BASE}/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, commit_docs: commitDocs })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to push: ${res.status}`);
+  }
+  return res.json();
+}

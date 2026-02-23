@@ -2,6 +2,28 @@
 
 ## 2026-02-23
 
+### Push Workflow with Auto Doc Updates
+
+- **PushDialog.jsx** — Modal workflow for pushing changes across projects
+  - Step 1: Shows unpushed commits per project, checkbox to update docs
+  - Step 2: Runs `claude -p` to update CHANGELOG/TODO/USAGE per project
+  - Step 3: Review changes and push all
+- **`POST /api/update-docs`** — Spawns Claude to update docs for a project
+  - Builds context from: unpushed commits, git diff, worker session logs
+  - Runs `claude -p` with allowedTools for Read/Edit/Write/Bash/Glob
+  - Returns updated file status
+- **`POST /api/push`** — Commits doc updates (if any) and pushes
+- **`GET /api/doc-context`** — Returns context for doc automation
+  - Includes commit messages, diff stats, worker logs (last 500 lines)
+  - Reports which doc files exist (CHANGELOG.md, TODO.md)
+- **Worker log rotation** — Existing log rotated to `<name>-timestamp.log` on spawn
+  - Current session always writes to fresh `<name>.log`
+- **Push button** in Activity panel's Unpushed section
+
+Workers no longer need to update docs — this is handled at push time.
+
+---
+
 ### Diff Preview + Raw Keys + Unpushed Tracking
 
 - **Diff preview** — Click changed files in Activity panel to see git diff in a new tab

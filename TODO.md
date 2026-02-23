@@ -30,6 +30,15 @@ cd ~/orchestrator
 
 ## Completed
 
+### Push Workflow with Auto Doc Updates (Feb 23, 2026)
+- [x] PushDialog.jsx — 3-step modal (select → update docs → push)
+- [x] `POST /api/update-docs` — Run claude -p to update CHANGELOG/TODO/USAGE
+- [x] `POST /api/push` — Commit doc changes and push
+- [x] `GET /api/doc-context` — Context for doc automation (commits, diff, logs)
+- [x] Worker log rotation on spawn (prevents stale context)
+- [x] Push button in Activity panel Unpushed section
+- [x] Workers no longer need to update docs (handled at push time)
+
 ### Diff Preview + Raw Keys + Unpushed (Feb 23, 2026)
 - [x] Diff preview — Click changed files to see git diff in tab
 - [x] Raw key sending — Escape/Enter work properly in tmux
@@ -90,8 +99,6 @@ cd ~/orchestrator
 ---
 
 ## Backlog (Post-MVP)
-
-- [ ] **Post-push hooks** — Auto-trigger CHANGELOG/TODO/usage updates on git push
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)

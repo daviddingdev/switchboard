@@ -7,6 +7,7 @@ import DiffPreview from './components/DiffPreview'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
+import PushDialog from './components/PushDialog'
 import QuickActions from './components/QuickActions'
 import ChatInput from './components/ChatInput'
 import { sendToProcess } from './api'
@@ -121,6 +122,7 @@ const styles = {
 
 export default function App() {
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
+  const [showPushDialog, setShowPushDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [sending, setSending] = useState(false)
 
@@ -346,7 +348,7 @@ export default function App() {
             onSelect={handleWorkerSelect}
             onRefresh={() => setRefreshKey(k => k + 1)}
           />
-          <Activity onFileClick={handleChangeFileClick} />
+          <Activity onFileClick={handleChangeFileClick} onPushClick={() => setShowPushDialog(true)} />
         </aside>
       </div>
 
@@ -378,6 +380,13 @@ export default function App() {
         <SpawnDialog
           onClose={() => setShowSpawnDialog(false)}
           onSpawned={handleSpawned}
+        />
+      )}
+
+      {/* Push Dialog */}
+      {showPushDialog && (
+        <PushDialog
+          onClose={() => setShowPushDialog(false)}
         />
       )}
     </div>

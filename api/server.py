@@ -849,6 +849,202 @@ def get_doc_context():
     return jsonify(result)
 
 
+@app.route('/api/update-docs', methods=['POST'])
+def update_docs():
+    """
+    Run claude -p to update docs for a project.
+    Uses context from unpushed commits + worker logs.
+    """
+    data = request.json or {}
+    project_name = data.get('project')
+
+    if not project_name:
+        return {"error": "project required"}, 400
+
+    directory = get_project_directory(project_name)
+    if not directory:
+        return {"error": f"project '{project_name}' not found"}, 404
+
+    # Get context for this project
+    logs_dir = os.path.expanduser("~/orchestrator/logs/workers")
+    commits = get_unpushed_commits(directory)
+
+    if not commits:
+        return {"error": "no unpushed commits"}, 400
+
+    # Build context string
+    context_parts = [f"Project: {project_name}", f"Directory: {directory}", ""]
+
+    # Commits
+    context_parts.append("## Unpushed Commits")
+    for c in commits:
+        context_parts.append(f"- {c['hash']} {c['message']}")
+    context_parts.append("")
+
+    # Diff stat
+    try:
+        stat_result = subprocess.run(
+            ['git', '-C', directory, 'diff', '--stat', '@{u}..HEAD'],
+            capture_output=True, text=True, timeout=10
+        )
+        if stat_result.returncode == 0 and stat_result.stdout.strip():
+            context_parts.append("## Files Changed")
+            context_parts.append("```")
+            context_parts.append(stat_result.stdout.strip())
+            context_parts.append("```")
+            context_parts.append("")
+    except:
+        pass
+
+    # Full diff (limited)
+    try:
+        diff_result = subprocess.run(
+            ['git', '-C', directory, 'diff', '@{u}..HEAD'],
+            capture_output=True, text=True, timeout=30
+        )
+        if diff_result.returncode == 0 and diff_result.stdout.strip():
+            diff_text = diff_result.stdout.strip()
+            # Limit diff to ~50k chars to avoid overwhelming context
+            if len(diff_text) > 50000:
+                diff_text = diff_text[:50000] + "\n... (diff truncated)"
+            context_parts.append("## Full Diff")
+            context_parts.append("```diff")
+            context_parts.append(diff_text)
+            context_parts.append("```")
+            context_parts.append("")
+    except:
+        pass
+
+    # Worker log if available
+    log_path = os.path.join(logs_dir, f"{project_name}.log")
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+                log_text = ''.join(lines[-300:]) if len(lines) > 300 else ''.join(lines)
+                if log_text.strip():
+                    context_parts.append("## Worker Session Log (recent)")
+                    context_parts.append("```")
+                    context_parts.append(log_text.strip())
+                    context_parts.append("```")
+        except:
+            pass
+
+    context = '\n'.join(context_parts)
+
+    # Build the prompt
+    prompt = f"""Update the documentation files in this project based on the changes described below.
+
+UPDATE THESE FILES (if they exist):
+- CHANGELOG.md: Add entry for today's changes under current date heading
+- TODO.md: Mark completed items as [x], add new discovered tasks
+- USAGE.md: Update if usage/API changed
+
+RULES:
+- Only update files that exist in the project
+- Use today's date: {datetime.now().strftime('%Y-%m-%d')}
+- Be concise but complete
+- Match existing file style/format
+- Don't add entries for doc updates themselves
+
+CONTEXT:
+{context}
+
+After updating, run: git add CHANGELOG.md TODO.md USAGE.md 2>/dev/null; git status --short"""
+
+    # Run claude -p
+    try:
+        result = subprocess.run(
+            ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write,Bash,Glob'],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 min timeout
+        )
+
+        # Get the updated files status
+        status_result = subprocess.run(
+            ['git', '-C', directory, 'status', '--short'],
+            capture_output=True, text=True, timeout=5
+        )
+
+        return jsonify({
+            'success': result.returncode == 0,
+            'output': result.stdout[-5000:] if result.stdout else '',  # Last 5k chars
+            'error': result.stderr[-1000:] if result.stderr else '',
+            'git_status': status_result.stdout.strip() if status_result.returncode == 0 else ''
+        })
+    except subprocess.TimeoutExpired:
+        return {"error": "claude timed out after 2 minutes"}, 500
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route('/api/push', methods=['POST'])
+def push_project():
+    """
+    Commit doc updates (if any) and push a project.
+    """
+    data = request.json or {}
+    project_name = data.get('project')
+    commit_docs = data.get('commit_docs', False)
+
+    if not project_name:
+        return {"error": "project required"}, 400
+
+    directory = get_project_directory(project_name)
+    if not directory:
+        return {"error": f"project '{project_name}' not found"}, 404
+
+    results = {'steps': []}
+
+    # Optionally commit doc updates first
+    if commit_docs:
+        # Stage doc files
+        stage_result = subprocess.run(
+            ['git', '-C', directory, 'add', 'CHANGELOG.md', 'TODO.md', 'USAGE.md'],
+            capture_output=True, text=True, timeout=10
+        )
+
+        # Check if there's anything to commit
+        diff_result = subprocess.run(
+            ['git', '-C', directory, 'diff', '--cached', '--quiet'],
+            capture_output=True, timeout=5
+        )
+
+        if diff_result.returncode != 0:  # There are staged changes
+            commit_result = subprocess.run(
+                ['git', '-C', directory, 'commit', '-m', 'Update docs for recent changes'],
+                capture_output=True, text=True, timeout=10
+            )
+            results['steps'].append({
+                'action': 'commit_docs',
+                'success': commit_result.returncode == 0,
+                'output': commit_result.stdout.strip()
+            })
+
+    # Push
+    try:
+        push_result = subprocess.run(
+            ['git', '-C', directory, 'push'],
+            capture_output=True, text=True, timeout=60
+        )
+        results['steps'].append({
+            'action': 'push',
+            'success': push_result.returncode == 0,
+            'output': push_result.stdout.strip() or push_result.stderr.strip()
+        })
+        results['success'] = push_result.returncode == 0
+    except subprocess.TimeoutExpired:
+        results['success'] = False
+        results['error'] = 'push timed out'
+    except Exception as e:
+        results['success'] = False
+        results['error'] = str(e)
+
+    return jsonify(results)
+
+
 if __name__ == '__main__':
     tmux.ensure_session()
     app.run(host='0.0.0.0', port=5001, debug=True)

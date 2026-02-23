@@ -209,6 +209,17 @@ const styles = {
     whiteSpace: 'nowrap',
     color: 'var(--text-secondary)',
   },
+  pushBtn: {
+    background: 'var(--accent)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '2px 8px',
+    fontSize: '10px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    marginLeft: 'auto',
+  },
 }
 
 function getStatusStyle(status) {
@@ -219,7 +230,7 @@ function getStatusStyle(status) {
   return styles.statusM // default
 }
 
-export default function Activity({ onFileClick }) {
+export default function Activity({ onFileClick, onPushClick }) {
   const [activity, setActivity] = useState({ pending: [], changes: [], recent: [] })
   const [updating, setUpdating] = useState(null)
   const [hoveredFile, setHoveredFile] = useState(null)
@@ -368,6 +379,9 @@ export default function Activity({ onFileClick }) {
               <span style={styles.countPush}>
                 {activity.unpushed.reduce((sum, p) => sum + p.commits.length, 0)}
               </span>
+              <button style={styles.pushBtn} onClick={onPushClick}>
+                Push
+              </button>
             </div>
             {activity.unpushed.map(project => (
               <div key={project.project} style={{ marginBottom: '10px' }}>
