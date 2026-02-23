@@ -374,14 +374,16 @@ export default function App() {
             {activeDiffTab && (
               <DiffPreview project={activeDiffTab.project} filepath={activeDiffTab.filepath} />
             )}
-            {/* Keep PushPanel mounted to preserve state during tab switches */}
+            {/* Keep panels mounted to preserve state during tab switches */}
             {tabs.find(t => t.type === 'push') && (
               <div style={{ display: activePushTab ? 'contents' : 'none' }}>
                 <PushPanel />
               </div>
             )}
-            {activeCommitTab && (
-              <CommitPanel />
+            {tabs.find(t => t.type === 'commit') && (
+              <div style={{ display: activeCommitTab ? 'contents' : 'none' }}>
+                <CommitPanel />
+              </div>
             )}
             {activeHistoryTab && (
               <PartnerHistory />

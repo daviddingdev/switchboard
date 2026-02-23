@@ -67,12 +67,13 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
             ...styles.tabIcon,
             ...(tab.type === 'terminal' ? styles.tabIconTerminal : {}),
             ...(tab.type === 'diff' ? { color: 'var(--warning)' } : {}),
-            ...(tab.type === 'push' ? { color: 'var(--accent)' } : {})
+            ...(tab.type === 'push' ? { color: 'var(--accent)' } : {}),
+            ...(tab.type === 'commit' ? { color: 'var(--success)' } : {})
           }}>
-            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'history' ? '💬' : '📄'}
+            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'commit' ? '✓' : tab.type === 'history' ? '💬' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'history' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
+          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
             <button
               style={styles.closeButton}
               onClick={(e) => {
