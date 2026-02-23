@@ -110,6 +110,7 @@ cd ~/orchestrator
 ---
 
 ## Backlog (Post-MVP)
+- [ ] **Push workflow: orphaned doc changes** — When "Update Docs" runs but user doesn't complete "Push All", modified CHANGELOG/TODO files are left uncommitted. Need to either: (a) auto-stash on cancel, (b) commit immediately after update, or (c) warn user about uncommitted changes
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)
