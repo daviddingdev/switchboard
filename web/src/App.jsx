@@ -325,17 +325,23 @@ export default function App() {
             onTabClose={handleTabClose}
           />
           <div style={styles.centerContent}>
-            {activeTerminalTab ? (
+            {activeTerminalTab && (
               <div style={styles.terminalWrapper}>
                 <Terminal workerName={activeTerminalTab.workerName} fullHeight />
               </div>
-            ) : activeFileTab ? (
+            )}
+            {activeFileTab && (
               <FilePreview filepath={activeFileTab.filepath} />
-            ) : activeDiffTab ? (
+            )}
+            {activeDiffTab && (
               <DiffPreview project={activeDiffTab.project} filepath={activeDiffTab.filepath} />
-            ) : activePushTab ? (
-              <PushPanel />
-            ) : null}
+            )}
+            {/* Keep PushPanel mounted to preserve state during tab switches */}
+            {tabs.find(t => t.type === 'push') && (
+              <div style={{ display: activePushTab ? 'contents' : 'none' }}>
+                <PushPanel />
+              </div>
+            )}
           </div>
         </main>
 

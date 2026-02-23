@@ -2,6 +2,12 @@
 
 ## 2026-02-23
 
+### Push Upstream Detection
+
+- **Fixed push to detect upstream remote/branch** — Push API now queries git for the tracking branch and pushes to correct remote (e.g., `github/master` instead of always `origin/main`)
+
+---
+
 ### Push Tab Improvements
 
 - **Push tab close button** — Push tab now closable like file/diff tabs

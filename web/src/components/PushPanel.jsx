@@ -256,12 +256,15 @@ export default function PushPanel() {
   const handleUpdateDocs = async () => {
     const toUpdate = projects.filter(p => updateDocsFor[p.project])
 
-    for (const p of toUpdate) {
-      setStatus(prev => ({
-        ...prev,
-        [p.project]: { state: 'updating', message: 'Updating docs...' }
-      }))
+    // Mark all as updating
+    const updatingStatus = {}
+    toUpdate.forEach(p => {
+      updatingStatus[p.project] = { state: 'updating', message: 'Updating docs...' }
+    })
+    setStatus(prev => ({ ...prev, ...updatingStatus }))
 
+    // Run all doc updates in parallel
+    await Promise.all(toUpdate.map(async (p) => {
       try {
         const result = await updateDocs(p.project)
         if (result.success) {
@@ -283,16 +286,19 @@ export default function PushPanel() {
           [p.project]: { state: 'error', message: err.message }
         }))
       }
-    }
+    }))
   }
 
   const handlePushAll = async () => {
-    for (const p of projects) {
-      setStatus(prev => ({
-        ...prev,
-        [p.project]: { state: 'pushing', message: 'Pushing...' }
-      }))
+    // Mark all as pushing
+    const pushingStatus = {}
+    projects.forEach(p => {
+      pushingStatus[p.project] = { state: 'pushing', message: 'Pushing...' }
+    })
+    setStatus(prev => ({ ...prev, ...pushingStatus }))
 
+    // Push all in parallel
+    await Promise.all(projects.map(async (p) => {
       try {
         // Always commits any staged doc changes before pushing
         const result = await pushProject(p.project)
@@ -313,7 +319,7 @@ export default function PushPanel() {
           [p.project]: { state: 'error', message: err.message }
         }))
       }
-    }
+    }))
   }
 
   const getBadgeStyle = (state) => {
