@@ -30,6 +30,12 @@ cd ~/orchestrator
 
 ## Completed
 
+### Commit Panel + Tab Improvements (Feb 23, 2026)
+- [x] Commit panel — Manual commit UI with custom messages per project
+- [x] `POST /api/commit` — Stage all and commit endpoint
+- [x] Closable tabs for all panel types (push, commit, history)
+- [x] Persistent panel state — Panels stay mounted during tab switches
+
 ### Context Usage Display Improvements (Feb 23, 2026)
 - [x] Show token counts in usage meter (e.g., "142k/85%")
 - [x] Compact layout with smaller progress bars
