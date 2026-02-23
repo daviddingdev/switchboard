@@ -2,6 +2,25 @@
 
 ## 2026-02-23
 
+### Partner Context Management
+
+- **Context usage meter** — Activity panel shows context % for each active worker
+  - Parses Claude session JSONL files to extract token usage
+  - Color-coded progress bars (green/yellow/red)
+- **Partner history viewer** — New tab showing filtered conversation history
+  - Shows user and assistant text messages only (no tool calls/thinking)
+  - Auto-refreshes, closable tab with chat icon
+- **Partner reset button** — Soft reset to restart the partner session
+  - Sends Ctrl-C to interrupt, then restarts claude
+- **New API endpoints:**
+  - `GET /api/workers/usage` — Token usage for all active workers
+  - `GET /api/partner/history` — Filtered conversation history
+  - `POST /api/partner/reset` — Restart partner session
+- **New component:** `PartnerHistory.jsx` — Scrollable message history viewer
+- **API version bump:** 0.3.0 → 0.4.0
+
+---
+
 ### API Client Cleanup
 
 - **Minor API response handling improvements** — Performance comment in api.js

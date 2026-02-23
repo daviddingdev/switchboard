@@ -30,6 +30,15 @@ cd ~/orchestrator
 
 ## Completed
 
+### Partner Context Management (Feb 23, 2026)
+- [x] Context usage meter in Activity panel — shows % for each worker
+- [x] Partner history viewer — tab showing filtered conversation messages
+- [x] Partner reset button — soft reset to restart session
+- [x] `GET /api/workers/usage` — Token usage stats
+- [x] `GET /api/partner/history` — Conversation history
+- [x] `POST /api/partner/reset` — Restart partner
+- [x] `PartnerHistory.jsx` component — Message history viewer
+
 ### Push Tab Mounted + Parallel (Feb 23, 2026)
 - [x] Keep Push tab mounted during tab switches — preserves state
 - [x] Parallelize doc updates — runs concurrently across projects
