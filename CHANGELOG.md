@@ -2,6 +2,14 @@
 
 ## 2026-02-23
 
+### Session Detection + Reset Improvements
+
+- **Session detection uses mtime** — `find_latest_session_file()` now uses modification time as primary heuristic (most recently modified = active session), reverting from file size approach
+- **Improved soft reset reliability** — `POST /api/partner/reset` now sends multiple Ctrl-C, Escape, and Ctrl-U to ensure clean exit from Claude Code before restarting
+- **Removed SOUL.md from CLAUDE.md header** — SOUL.md now auto-loads via `~/.claude/CLAUDE.md`
+
+---
+
 ### Commit Panel + Tab Improvements
 
 - **Commit panel** — New tab for manually committing changes with custom messages
@@ -11,12 +19,6 @@
   - Commit button in Activity panel's Changes section
 - **Closable tabs** — All panel tabs (push, commit, history) now have × close button
 - **Persistent panel state** — Push and Commit panels stay mounted during tab switches to preserve state (checkboxes, progress, form input)
-
----
-
-### Session File Selection Fix
-
-- **Use file size instead of mtime** — `find_latest_session_file()` now uses file size as primary heuristic (active sessions grow larger), with modification time as tiebreaker
 
 ---
 
