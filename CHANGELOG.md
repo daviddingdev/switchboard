@@ -1,5 +1,61 @@
 # Orchestrator Changelog
 
+## 2026-02-23
+
+### Made Orchestrator Shareable
+
+- **Created setup/start/stop scripts** for easy installation:
+  - `setup.sh` — Checks dependencies, installs Python/Node packages
+  - `start.sh` — Launches API, web server, and tmux session
+  - `stop.sh` — Clean shutdown of all processes
+- **Created README.md** — Quick start guide with requirements
+- **Created example files**:
+  - `state/projects.example.yaml` — Template for user configuration
+  - `docs/SOUL.example.md` — Example working style document
+- **Updated .gitignore** — Properly ignores user config, logs, proposals
+
+Fresh clone now works in 5 minutes:
+```bash
+git clone <repo> && cd orchestrator
+./setup.sh
+cp state/projects.example.yaml state/projects.yaml
+./start.sh
+```
+
+---
+
+### UI Redesign: 3-Column Layout
+
+- **New layout structure**:
+  - Left: FileTree with project dropdown + recursive file explorer
+  - Center: Single terminal for selected worker (removed duplicate)
+  - Right: WorkerList + Activity panel
+  - Bottom: QuickActions + input bar
+- **New API endpoints**:
+  - `GET /api/projects` — List from projects.yaml
+  - `GET /api/files/<project>` — Recursive file tree (max depth 4)
+  - `GET /api/changes` — Git status across all projects
+  - `GET /api/activity` — Combined pending/changes/recent feed
+- **New components**:
+  - `FileTree.jsx` — Project dropdown + expandable file tree
+  - `WorkerList.jsx` — Simplified worker list
+  - `Activity.jsx` — Pending proposals, git changes, recent activity
+- **Deleted redundant components**:
+  - `ChatArea.jsx` — Had duplicate partner terminal
+  - `ProcessTree.jsx` — Replaced by simpler WorkerList
+- **Bug fix**: Git status parsing (`strip().split()` was corrupting first line)
+
+---
+
+### Resizable Panels + Quick Actions
+
+- **All panels now resizable**: proposals section, process tree, sidebar
+- **QuickActions component**: 1, 2, 3, 4, Y, N, Enter, Esc buttons
+- **Quick actions on both** partner terminal and worker terminal
+- **Input field** for sending text to selected worker
+
+---
+
 ## 2026-02-22
 
 ### Worker Proposal Testing Session
