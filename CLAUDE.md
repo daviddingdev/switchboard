@@ -138,15 +138,6 @@ cd web && npm run build
 
 ---
 
-## End-of-Session Checklist
-
-Before finishing:
-1. Update `CHANGELOG.md` with today's work
-2. Update `TODO.md` if tasks changed
-3. `git add -A && git commit && git push`
-
----
-
 ## Date Format
 
 Use the date from system prompt (local time), not Spark timestamps (UTC).

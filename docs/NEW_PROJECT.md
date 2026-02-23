@@ -31,12 +31,6 @@ How to run/use the project.
 ## File Structure
 
 Key files and their purpose.
-
-## End-of-Session Checklist
-
-Before finishing:
-1. Update CHANGELOG.md if exists
-2. git add -A && git commit && git push
 ```
 
 This enables:
