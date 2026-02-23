@@ -2,6 +2,15 @@
 
 ## 2026-02-23
 
+### Context Usage Display Improvements
+
+- **Show token counts** — Usage meter now displays actual tokens (e.g., "142k/85%") instead of just percentage
+- **Compact layout** — Streamlined usage row styling with smaller progress bars
+- **Warning indicators** — Shows ⚠️ emoji and bold text when usage exceeds 80%
+- **Reorganized actions** — History/Reset buttons moved to separate row below usage bar
+
+---
+
 ### Quick Action Button Improvements
 
 - **Send with Enter** — Number/letter buttons (1-4, Y/N) now send as text with Enter for Claude Code prompts

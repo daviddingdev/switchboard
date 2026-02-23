@@ -30,6 +30,12 @@ cd ~/orchestrator
 
 ## Completed
 
+### Context Usage Display Improvements (Feb 23, 2026)
+- [x] Show token counts in usage meter (e.g., "142k/85%")
+- [x] Compact layout with smaller progress bars
+- [x] Warning indicators (⚠️ + bold) when usage >= 80%
+- [x] Reorganized action buttons below usage bar
+
 ### Quick Action Button Improvements (Feb 23, 2026)
 - [x] Send with Enter — Number/letter buttons send as text+Enter
 - [x] Shift+click to populate chat input instead of sending
