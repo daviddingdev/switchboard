@@ -2,6 +2,11 @@
 
 ## 2026-02-23
 
+### Push Tab Mounted + Parallel Operations
+
+- **Keep Push tab mounted** — Push tab stays mounted during tab switches to preserve state (checkboxes, progress)
+- **Parallelize doc updates and pushes** — Update docs and push operations now run concurrently across projects instead of sequentially
+
 ### Push Upstream Detection
 
 - **Fixed push to detect upstream remote/branch** — Push API now queries git for the tracking branch and pushes to correct remote (e.g., `github/master` instead of always `origin/main`)

@@ -30,10 +30,16 @@ cd ~/orchestrator
 
 ## Completed
 
+### Push Tab Mounted + Parallel (Feb 23, 2026)
+- [x] Keep Push tab mounted during tab switches — preserves state
+- [x] Parallelize doc updates — runs concurrently across projects
+- [x] Parallelize pushes — runs concurrently across projects
+
 ### Push Tab Improvements (Feb 23, 2026)
 - [x] Push tab close button — closable like file/diff tabs
 - [x] Always commit docs before push — removed commit_docs flag from API
 - [x] Push tab icon styling — blue arrow icon in TabBar
+- [x] Fixed push to detect upstream remote/branch
 
 ### Push Workflow with Auto Doc Updates (Feb 23, 2026)
 - [x] PushDialog.jsx — 3-step modal (select → update docs → push)
