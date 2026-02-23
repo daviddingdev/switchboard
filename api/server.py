@@ -1086,13 +1086,18 @@ def get_project_session_dir(directory):
 
 
 def find_latest_session_file(session_dir):
-    """Find the most recently modified .jsonl file in a session directory."""
+    """
+    Find the most likely active session file in a session directory.
+    Uses file size as primary heuristic (active sessions grow larger),
+    with modification time as tiebreaker.
+    """
     if not os.path.isdir(session_dir):
         return None
     jsonl_files = glob_module.glob(os.path.join(session_dir, '*.jsonl'))
     if not jsonl_files:
         return None
-    return max(jsonl_files, key=os.path.getmtime)
+    # Sort by size (descending), then by mtime (descending) as tiebreaker
+    return max(jsonl_files, key=lambda f: (os.path.getsize(f), os.path.getmtime(f)))
 
 
 def parse_session_usage(session_file):
