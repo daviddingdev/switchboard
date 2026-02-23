@@ -2,6 +2,12 @@
 
 ## 2026-02-23
 
+### Session File Selection Fix
+
+- **Use file size instead of mtime** — `find_latest_session_file()` now uses file size as primary heuristic (active sessions grow larger), with modification time as tiebreaker
+
+---
+
 ### Context Usage Display Improvements
 
 - **Show token counts** — Usage meter now displays actual tokens (e.g., "142k/85%") instead of just percentage
