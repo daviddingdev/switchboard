@@ -784,6 +784,71 @@ def get_activity():
     return jsonify(result)
 
 
+@app.route('/api/doc-context')
+def get_doc_context():
+    """
+    Get context needed to update docs for projects with unpushed commits.
+    Returns commit messages, diff stats, and worker logs (if available).
+    """
+    result = []
+    logs_dir = os.path.expanduser("~/orchestrator/logs/workers")
+
+    try:
+        projects = load_projects()
+        for p in projects:
+            name = p.get('name', '')
+            directory = os.path.expanduser(p.get('directory', ''))
+            if not os.path.isdir(directory):
+                continue
+
+            commits = get_unpushed_commits(directory)
+            if not commits:
+                continue
+
+            # Get diff stat for unpushed commits
+            diff_stat = None
+            try:
+                stat_result = subprocess.run(
+                    ['git', '-C', directory, 'diff', '--stat', '@{u}..HEAD'],
+                    capture_output=True, text=True, timeout=10
+                )
+                if stat_result.returncode == 0:
+                    diff_stat = stat_result.stdout.strip()
+            except:
+                pass
+
+            # Look for worker log (current session)
+            worker_log = None
+            log_path = os.path.join(logs_dir, f"{name}.log")
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        # Read last 500 lines max to keep context manageable
+                        lines = f.readlines()
+                        worker_log = ''.join(lines[-500:]) if len(lines) > 500 else ''.join(lines)
+                except:
+                    pass
+
+            # Check for CHANGELOG.md and TODO.md
+            has_changelog = os.path.exists(os.path.join(directory, 'CHANGELOG.md'))
+            has_todo = os.path.exists(os.path.join(directory, 'TODO.md'))
+
+            result.append({
+                'project': name,
+                'directory': directory,
+                'commits': commits,
+                'diff_stat': diff_stat,
+                'worker_log': worker_log,
+                'worker_log_lines': len(worker_log.split('\n')) if worker_log else 0,
+                'has_changelog': has_changelog,
+                'has_todo': has_todo
+            })
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+    return jsonify(result)
+
+
 if __name__ == '__main__':
     tmux.ensure_session()
     app.run(host='0.0.0.0', port=5001, debug=True)

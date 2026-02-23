@@ -8,6 +8,7 @@ allowing multiple Claude Code workers to run in parallel.
 import subprocess
 import os
 import time
+from datetime import datetime
 
 SOCKET_NAME = "orchestrator"
 SESSION_NAME = "orchestrator"
@@ -94,6 +95,13 @@ def spawn_worker(name: str, directory: str) -> dict:
     # Ensure logs directory exists
     os.makedirs(LOGS_DIR, exist_ok=True)
 
+    # Rotate existing log if present (so current session is always fresh)
+    log_file = os.path.join(LOGS_DIR, f"{name}.log")
+    if os.path.exists(log_file):
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        rotated = os.path.join(LOGS_DIR, f"{name}-{timestamp}.log")
+        os.rename(log_file, rotated)
+
     # Create new window with larger scrollback
     result = _run_tmux(
         "new-window", "-t", SESSION_NAME, "-n", name, "-c", expanded_dir,
@@ -105,9 +113,8 @@ def spawn_worker(name: str, directory: str) -> dict:
     # Set large scrollback buffer for this window
     _run_tmux("set-option", "-t", f"{SESSION_NAME}:{name}", "history-limit", "50000", check=False)
 
-    # Start logging output to file
-    log_file = os.path.join(LOGS_DIR, f"{name}.log")
-    _run_tmux("pipe-pane", "-t", f"{SESSION_NAME}:{name}", f"cat >> {log_file}", check=False)
+    # Start logging output to file (fresh file, old one was rotated above)
+    _run_tmux("pipe-pane", "-t", f"{SESSION_NAME}:{name}", f"cat > {log_file}", check=False)
 
     # Start Claude Code
     _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "claude", "Enter", check=False)
