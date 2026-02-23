@@ -98,6 +98,15 @@ export async function fetchHome() {
   return res.json();
 }
 
+export async function fetchFileContent(filepath) {
+  const res = await fetch(`${API_BASE}/file?path=${encodeURIComponent(filepath)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to fetch file: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchFiles(project) {
   const res = await fetch(`${API_BASE}/files/${encodeURIComponent(project)}`);
   if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);

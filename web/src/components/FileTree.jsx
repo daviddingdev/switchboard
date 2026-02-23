@@ -47,6 +47,7 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    flex: 1,
   },
   projectBadge: {
     marginLeft: '6px',
@@ -56,6 +57,21 @@ const styles = {
     background: 'var(--accent)',
     color: 'white',
     fontWeight: 500,
+  },
+  statusIndicator: {
+    marginLeft: '6px',
+    fontSize: '11px',
+    fontWeight: 600,
+    fontFamily: 'monospace',
+  },
+  statusM: { color: '#e2c08d' },  // yellow - modified
+  statusU: { color: '#73c991' },  // green - untracked
+  statusA: { color: '#73c991' },  // green - added
+  statusD: { color: '#f14c4c' },  // red - deleted
+  folderDot: {
+    marginLeft: '4px',
+    color: '#e2c08d',
+    fontSize: '14px',
   },
   empty: {
     padding: '20px',
@@ -72,7 +88,7 @@ const styles = {
 }
 
 function FileItem({ item, depth = 0, onFileSelect }) {
-  // Auto-expand projects and root level, collapse deep directories
+  // Auto-expand projects and root level
   const [expanded, setExpanded] = useState(item.is_project || depth < 1)
   const [hovered, setHovered] = useState(false)
   const isDir = item.type === 'dir'
@@ -82,7 +98,7 @@ function FileItem({ item, depth = 0, onFileSelect }) {
     if (isDir) {
       setExpanded(!expanded)
     } else if (onFileSelect) {
-      onFileSelect(item.path)
+      onFileSelect(item)
     }
   }
 
@@ -92,7 +108,6 @@ function FileItem({ item, depth = 0, onFileSelect }) {
       if (item.is_project) return expanded ? '📂' : '📁'
       return expanded ? '📂' : '📁'
     }
-    // Special icons for known files
     if (item.name === 'SOUL.md') return '✨'
     if (item.name === 'INFRASTRUCTURE.md') return '🏗️'
     if (item.name === 'WORKER.md') return '👷'
@@ -101,7 +116,20 @@ function FileItem({ item, depth = 0, onFileSelect }) {
     if (item.name.endsWith('.py')) return '🐍'
     if (item.name.endsWith('.js') || item.name.endsWith('.jsx')) return '📜'
     if (item.name.endsWith('.yaml') || item.name.endsWith('.yml')) return '⚙️'
+    if (item.name.endsWith('.json')) return '📋'
+    if (item.name.endsWith('.css')) return '🎨'
+    if (item.name.endsWith('.html')) return '🌐'
     return '📄'
+  }
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'M': return styles.statusM
+      case 'U': return styles.statusU
+      case 'A': return styles.statusA
+      case 'D': return styles.statusD
+      default: return {}
+    }
   }
 
   return (
@@ -118,7 +146,20 @@ function FileItem({ item, depth = 0, onFileSelect }) {
         onMouseLeave={() => setHovered(false)}
       >
         <span style={styles.icon}>{getIcon()}</span>
-        <span style={styles.name}>{item.name}</span>
+        <span style={{
+          ...styles.name,
+          ...(item.status ? getStatusStyle(item.status) : {})
+        }}>
+          {item.name}
+        </span>
+        {item.status && (
+          <span style={{ ...styles.statusIndicator, ...getStatusStyle(item.status) }}>
+            {item.status}
+          </span>
+        )}
+        {isDir && item.has_changes && !item.status && (
+          <span style={styles.folderDot}>•</span>
+        )}
         {item.is_project && <span style={styles.projectBadge}>project</span>}
       </div>
       {isDir && expanded && item.children?.map((child, i) => (
@@ -138,7 +179,7 @@ export default function FileTree({ onFileSelect }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
+  const loadFiles = () => {
     fetchHome()
       .then(data => {
         setFiles(data.files || [])
@@ -149,6 +190,13 @@ export default function FileTree({ onFileSelect }) {
         setError(err.message)
       })
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadFiles()
+    // Refresh every 5 seconds to pick up git changes
+    const interval = setInterval(loadFiles, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   return (

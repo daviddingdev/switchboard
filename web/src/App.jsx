@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react'
 import FileTree from './components/FileTree'
 import Terminal from './components/Terminal'
+import TabBar from './components/TabBar'
+import FilePreview from './components/FilePreview'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
@@ -25,35 +27,20 @@ const styles = {
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  terminalPanel: {
+  centerPanel: {
     gridRow: 1,
     gridColumn: 2,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  terminalHeader: {
+  centerContent: {
+    flex: 1,
+    overflow: 'hidden',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '8px 12px',
-    borderBottom: '1px solid var(--border)',
-    background: 'var(--bg-secondary)',
+    flexDirection: 'column',
   },
-  terminalTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
-  },
-  spawnButton: {
-    background: 'var(--accent)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    padding: '4px 10px',
-    fontSize: '11px',
-    fontWeight: 500,
-  },
-  terminalContent: {
+  terminalWrapper: {
     flex: 1,
     padding: '8px',
     overflow: 'hidden',
@@ -87,24 +74,15 @@ const styles = {
     display: 'flex',
     gap: '8px',
   },
-  input: {
-    flex: 1,
-    background: 'var(--bg-tertiary)',
-    border: '1px solid var(--border)',
-    borderRadius: '5px',
-    padding: '8px 12px',
-    fontSize: '13px',
-    color: 'var(--text-primary)',
-    outline: 'none',
-  },
-  sendButton: {
+  spawnButton: {
     background: 'var(--accent)',
     color: 'white',
     border: 'none',
-    borderRadius: '5px',
-    padding: '8px 16px',
-    fontSize: '13px',
+    borderRadius: '4px',
+    padding: '4px 10px',
+    fontSize: '11px',
     fontWeight: 500,
+    cursor: 'pointer',
   },
 }
 
@@ -114,11 +92,36 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [sending, setSending] = useState(false)
 
-  const handleFileSelect = useCallback((path) => {
-    // For now, just log the selected file
-    // Future: open in editor or preview
-    console.log('Selected file:', path)
-  }, [])
+  // Tab state
+  const [tabs, setTabs] = useState([
+    { id: 'terminal', label: 'Terminal', type: 'terminal' }
+  ])
+  const [activeTab, setActiveTab] = useState('terminal')
+
+  const handleFileSelect = useCallback((file) => {
+    if (file.type === 'dir') return  // Don't open directories
+
+    const tabId = file.path
+
+    // Check if already open
+    if (!tabs.find(t => t.id === tabId)) {
+      setTabs(prev => [...prev, {
+        id: tabId,
+        label: file.name,
+        type: 'file',
+        filepath: file.path
+      }])
+    }
+
+    setActiveTab(tabId)
+  }, [tabs])
+
+  const handleTabClose = useCallback((tabId) => {
+    setTabs(prev => prev.filter(t => t.id !== tabId))
+    if (activeTab === tabId) {
+      setActiveTab('terminal')
+    }
+  }, [activeTab])
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
@@ -137,6 +140,8 @@ export default function App() {
     }
   }
 
+  const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
+
   return (
     <div style={styles.layout}>
       {/* Left Panel: File Tree */}
@@ -144,12 +149,28 @@ export default function App() {
         <FileTree onFileSelect={handleFileSelect} />
       </aside>
 
-      {/* Center: Terminal */}
-      <main style={styles.terminalPanel}>
-        <div style={styles.terminalHeader}>
-          <span style={styles.terminalTitle}>
-            {selectedWorker === 'partner' ? 'Partner' : selectedWorker}
-          </span>
+      {/* Center: Tabs + Terminal/Preview */}
+      <main style={styles.centerPanel}>
+        <TabBar
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabSelect={setActiveTab}
+          onTabClose={handleTabClose}
+        />
+        <div style={styles.centerContent}>
+          {activeTab === 'terminal' ? (
+            <div style={styles.terminalWrapper}>
+              <Terminal workerName={selectedWorker} fullHeight />
+            </div>
+          ) : activeFileTab ? (
+            <FilePreview filepath={activeFileTab.filepath} />
+          ) : null}
+        </div>
+      </main>
+
+      {/* Right Panel: Workers + Activity */}
+      <aside style={styles.rightPanel}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
           <button
             style={styles.spawnButton}
             onClick={() => setShowSpawnDialog(true)}
@@ -157,13 +178,6 @@ export default function App() {
             + Spawn
           </button>
         </div>
-        <div style={styles.terminalContent}>
-          <Terminal workerName={selectedWorker} fullHeight />
-        </div>
-      </main>
-
-      {/* Right Panel: Workers + Activity */}
-      <aside style={styles.rightPanel}>
         <WorkerList
           key={refreshKey}
           selectedWorker={selectedWorker}

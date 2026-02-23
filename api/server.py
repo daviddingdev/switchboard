@@ -32,7 +32,7 @@ def index():
     """Root endpoint with API info."""
     return {
         "name": "Orchestrator API",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "endpoints": [
             "GET /api/health",
             "GET /api/processes",
@@ -47,6 +47,7 @@ def index():
             "GET /api/projects",
             "GET /api/home",
             "GET /api/files/<project>",
+            "GET /api/file?path=<filepath>",
             "GET /api/changes",
             "GET /api/activity"
         ]
@@ -282,10 +283,53 @@ def get_project_directory(project_name):
     return None
 
 
-def build_file_tree(directory, depth=0):
-    """Recursively build file tree for a directory."""
+def get_git_status_map(directory):
+    """
+    Get git status as a dict mapping filepath to status code.
+    Returns empty dict if not a git repo.
+    Status codes: M (modified), A (added), D (deleted), U (untracked)
+    """
+    result = {}
+    try:
+        proc = subprocess.run(
+            ['git', '-C', directory, 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if proc.returncode != 0:
+            return {}
+
+        for line in proc.stdout.splitlines():
+            if line and len(line) >= 3:
+                status_code = line[:2]
+                filepath = line[3:]
+                # Normalize status
+                if status_code == '??':
+                    result[filepath] = 'U'  # Untracked
+                elif 'D' in status_code:
+                    result[filepath] = 'D'  # Deleted
+                elif 'A' in status_code:
+                    result[filepath] = 'A'  # Added
+                elif 'M' in status_code or status_code.strip():
+                    result[filepath] = 'M'  # Modified
+        return result
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return {}
+
+
+def build_file_tree(directory, depth=0, git_status=None, base_dir=None):
+    """
+    Recursively build file tree for a directory.
+    Includes git status on files and has_changes flag on directories.
+    """
     if depth >= MAX_DEPTH:
         return []
+
+    if git_status is None:
+        git_status = {}
+    if base_dir is None:
+        base_dir = directory
 
     result = []
     try:
@@ -300,13 +344,23 @@ def build_file_tree(directory, depth=0):
             continue
 
         path = os.path.join(directory, name)
+        rel_path = os.path.relpath(path, base_dir)
         entry = {'name': name, 'path': path}
 
         if os.path.isdir(path):
             entry['type'] = 'dir'
-            entry['children'] = build_file_tree(path, depth + 1)
+            children = build_file_tree(path, depth + 1, git_status, base_dir)
+            entry['children'] = children
+            # Check if any children have changes
+            entry['has_changes'] = any(
+                c.get('status') or c.get('has_changes') for c in children
+            )
         else:
             entry['type'] = 'file'
+            # Check git status for this file
+            status = git_status.get(rel_path)
+            if status:
+                entry['status'] = status
 
         result.append(entry)
 
@@ -316,7 +370,7 @@ def build_file_tree(directory, depth=0):
 
 
 def get_git_status(directory):
-    """Get git status for a directory. Returns empty list if not a git repo."""
+    """Get git status for a directory. Returns None if not a git repo, list otherwise."""
     try:
         result = subprocess.run(
             ['git', '-C', directory, 'status', '--porcelain'],
@@ -373,10 +427,17 @@ def get_home_tree():
                     'type': 'file'
                 })
 
-    # Add project directories with their file trees
+    # Add project directories with their file trees (including git status)
     for project in projects:
         proj_dir = project['directory']
         proj_name = project['name']
+
+        # Get git status for this project
+        git_status = get_git_status_map(proj_dir)
+
+        # Build file tree with git status
+        children = build_file_tree(proj_dir, git_status=git_status, base_dir=proj_dir)
+        has_changes = any(c.get('status') or c.get('has_changes') for c in children)
 
         # Get relative path from home (e.g., "services/research-pipeline" or just "orchestrator")
         rel_path = os.path.relpath(proj_dir, home_dir)
@@ -389,7 +450,8 @@ def get_home_tree():
                 'path': proj_dir,
                 'type': 'dir',
                 'is_project': True,
-                'children': build_file_tree(proj_dir)
+                'has_changes': has_changes,
+                'children': children
             })
         else:
             # Nested (e.g., ~/services/research-pipeline)
@@ -404,6 +466,7 @@ def get_home_tree():
                     'path': parent_path,
                     'type': 'dir',
                     'is_project': False,
+                    'has_changes': False,
                     'children': []
                 }
                 result.append(existing_parent)
@@ -414,8 +477,13 @@ def get_home_tree():
                 'path': proj_dir,
                 'type': 'dir',
                 'is_project': True,
-                'children': build_file_tree(proj_dir)
+                'has_changes': has_changes,
+                'children': children
             })
+
+            # Update parent's has_changes
+            if has_changes:
+                existing_parent['has_changes'] = True
 
     # Sort: files first (SOUL.md etc.), then directories
     result.sort(key=lambda x: (0 if x['type'] == 'file' else 1, x['name'].lower()))
@@ -428,7 +496,7 @@ def get_home_tree():
 
 @app.route('/api/files/<project>')
 def list_files(project):
-    """List files for a project."""
+    """List files for a project with git status."""
     directory = get_project_directory(project)
     if not directory:
         return {"error": f"project '{project}' not found"}, 404
@@ -436,11 +504,84 @@ def list_files(project):
     if not os.path.isdir(directory):
         return {"error": f"directory '{directory}' does not exist"}, 404
 
-    tree = build_file_tree(directory)
+    git_status = get_git_status_map(directory)
+    tree = build_file_tree(directory, git_status=git_status, base_dir=directory)
     return jsonify({
         'project': project,
         'directory': directory,
         'files': tree
+    })
+
+
+def detect_language(filepath):
+    """Map file extension to highlight.js language name."""
+    ext_map = {
+        '.py': 'python',
+        '.js': 'javascript',
+        '.jsx': 'javascript',
+        '.ts': 'typescript',
+        '.tsx': 'typescript',
+        '.json': 'json',
+        '.yaml': 'yaml',
+        '.yml': 'yaml',
+        '.md': 'markdown',
+        '.html': 'html',
+        '.css': 'css',
+        '.sh': 'bash',
+        '.bash': 'bash',
+        '.sql': 'sql',
+        '.txt': 'plaintext',
+    }
+    ext = os.path.splitext(filepath)[1].lower()
+    return ext_map.get(ext, 'plaintext')
+
+
+@app.route('/api/file')
+def get_file_content():
+    """
+    Return file contents with language hint.
+    Query param: path (absolute path to file)
+    """
+    filepath = request.args.get('path', '')
+
+    if not filepath:
+        return {"error": "path parameter required"}, 400
+
+    # Expand ~ if present
+    filepath = os.path.expanduser(filepath)
+
+    # Security: only allow files under home directory
+    home_dir = os.path.expanduser('~')
+    real_path = os.path.realpath(filepath)
+    if not real_path.startswith(os.path.realpath(home_dir)):
+        return {"error": "Access denied"}, 403
+
+    if not os.path.exists(filepath):
+        return {"error": "File not found"}, 404
+
+    if os.path.isdir(filepath):
+        return {"error": "Is a directory"}, 400
+
+    # Check file size (limit to 500KB)
+    file_size = os.path.getsize(filepath)
+    if file_size > 500_000:
+        return {"error": f"File too large ({file_size} bytes)"}, 413
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except UnicodeDecodeError:
+        return {"error": "Binary file"}, 415
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+    language = detect_language(filepath)
+
+    return jsonify({
+        'content': content,
+        'language': language,
+        'path': filepath,
+        'name': os.path.basename(filepath)
     })
 
 
