@@ -6,6 +6,8 @@ Provides HTTP endpoints for managing Claude Code worker sessions.
 
 import os
 import subprocess
+import json
+import glob as glob_module
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +15,10 @@ import yaml
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tmux_manager as tmux
+
+# Claude session files location
+CLAUDE_PROJECTS_DIR = os.path.expanduser('~/.claude/projects')
+CLAUDE_CONFIG_FILE = os.path.expanduser('~/.claude.json')
 
 STATE_DIR = Path(__file__).parent.parent / 'state'
 PROPOSALS_DIR = STATE_DIR / 'proposals'
@@ -32,7 +38,7 @@ def index():
     """Root endpoint with API info."""
     return {
         "name": "Orchestrator API",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "endpoints": [
             "GET /api/health",
             "GET /api/processes",
@@ -49,7 +55,10 @@ def index():
             "GET /api/files/<project>",
             "GET /api/file?path=<filepath>",
             "GET /api/changes",
-            "GET /api/activity"
+            "GET /api/activity",
+            "GET /api/workers/usage",
+            "GET /api/partner/history",
+            "POST /api/partner/reset"
         ]
     }
 
@@ -1062,6 +1071,230 @@ def push_project():
         results['error'] = str(e)
 
     return jsonify(results)
+
+
+# =============================================================================
+# Partner Context Management endpoints
+# =============================================================================
+
+def get_project_session_dir(directory):
+    """Get the Claude session directory for a project."""
+    # Claude uses a sanitized path format: -home-davidding-projectname
+    # The path starts with a hyphen replacing the leading /
+    sanitized = directory.replace('/', '-')
+    return os.path.join(CLAUDE_PROJECTS_DIR, sanitized)
+
+
+def find_latest_session_file(session_dir):
+    """Find the most recently modified .jsonl file in a session directory."""
+    if not os.path.isdir(session_dir):
+        return None
+    jsonl_files = glob_module.glob(os.path.join(session_dir, '*.jsonl'))
+    if not jsonl_files:
+        return None
+    return max(jsonl_files, key=os.path.getmtime)
+
+
+def parse_session_usage(session_file):
+    """
+    Parse a session JSONL file to extract token usage.
+    Returns both cumulative totals and latest context size.
+    """
+    if not session_file or not os.path.exists(session_file):
+        return None
+
+    total_input = 0
+    total_output = 0
+    latest_context = 0  # Most recent turn's full context
+
+    try:
+        with open(session_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    if entry.get('type') == 'assistant':
+                        usage = entry.get('message', {}).get('usage', {})
+                        total_input += usage.get('input_tokens', 0)
+                        total_output += usage.get('output_tokens', 0)
+                        # Latest context = input + cached tokens (what was sent to model)
+                        turn_input = usage.get('input_tokens', 0)
+                        cache_read = usage.get('cache_read_input_tokens', 0)
+                        latest_context = turn_input + cache_read
+                except json.JSONDecodeError:
+                    continue
+    except Exception:
+        return None
+
+    return {
+        'input_tokens': total_input,
+        'output_tokens': total_output,
+        'total': total_input + total_output,
+        'latest_context': latest_context
+    }
+
+
+def filter_conversation(session_file, limit=100):
+    """
+    Parse session JSONL and return filtered conversation messages.
+    Includes user messages and assistant text (excludes tool_use, thinking).
+    """
+    if not session_file or not os.path.exists(session_file):
+        return []
+
+    messages = []
+    try:
+        with open(session_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    msg_type = entry.get('type')
+                    timestamp = entry.get('timestamp', '')
+
+                    if msg_type == 'user':
+                        content = entry.get('message', {}).get('content', '')
+                        # Content can be string or list
+                        if isinstance(content, list):
+                            text_parts = [c.get('text', '') for c in content if c.get('type') == 'text']
+                            content = '\n'.join(text_parts)
+                        if content:
+                            messages.append({
+                                'role': 'user',
+                                'content': content,
+                                'timestamp': timestamp
+                            })
+
+                    elif msg_type == 'assistant':
+                        content = entry.get('message', {}).get('content', [])
+                        if isinstance(content, list):
+                            # Filter to just text blocks, skip tool_use and thinking
+                            text_parts = [c.get('text', '') for c in content
+                                         if c.get('type') == 'text' and c.get('text')]
+                            if text_parts:
+                                messages.append({
+                                    'role': 'assistant',
+                                    'content': '\n'.join(text_parts),
+                                    'timestamp': timestamp
+                                })
+                except json.JSONDecodeError:
+                    continue
+    except Exception:
+        return []
+
+    # Return last N messages
+    return messages[-limit:] if limit else messages
+
+
+@app.route('/api/workers/usage')
+def get_workers_usage():
+    """
+    Get context usage stats for all active workers.
+    Returns token counts and percentage estimates.
+    """
+    result = []
+
+    # Get active workers from tmux
+    windows = tmux.list_windows()
+
+    for window in windows:
+        name = window.get('name', '')
+
+        # Find the project directory for this worker
+        # For partner, it's ~/orchestrator. For others, we need to determine.
+        if name == 'partner':
+            proj_dir = os.path.expanduser('~/orchestrator')
+        else:
+            # Check if it matches a known project
+            projects = load_projects()
+            proj_dir = None
+            for p in projects:
+                if p.get('name') == name:
+                    proj_dir = p.get('directory')
+                    break
+            if not proj_dir:
+                continue
+
+        # Find session directory and latest session file
+        session_dir = get_project_session_dir(proj_dir)
+        session_file = find_latest_session_file(session_dir)
+        usage = parse_session_usage(session_file)
+
+        if usage:
+            # Estimate context percentage (rough: 200k context window)
+            # latest_context = what was sent to the model on the last turn
+            context_tokens = usage.get('latest_context', 0)
+            pct = min(100, int(context_tokens / 2000))  # 200k = 100%, so /2000
+
+            result.append({
+                'name': name,
+                'input': usage['input_tokens'],
+                'output': usage['output_tokens'],
+                'context': context_tokens,
+                'total': usage['total'],
+                'pct': pct
+            })
+        else:
+            result.append({
+                'name': name,
+                'input': 0,
+                'output': 0,
+                'context': 0,
+                'total': 0,
+                'pct': 0
+            })
+
+    return jsonify({'workers': result})
+
+
+@app.route('/api/partner/history')
+def get_partner_history():
+    """
+    Get filtered conversation history for the partner session.
+    Returns text messages only (no tool calls or thinking blocks).
+    """
+    limit = request.args.get('limit', 100, type=int)
+
+    # Partner is always ~/orchestrator
+    proj_dir = os.path.expanduser('~/orchestrator')
+    session_dir = get_project_session_dir(proj_dir)
+    session_file = find_latest_session_file(session_dir)
+
+    messages = filter_conversation(session_file, limit=limit if limit > 0 else None)
+
+    return jsonify({
+        'messages': messages,
+        'session_file': os.path.basename(session_file) if session_file else None
+    })
+
+
+@app.route('/api/partner/reset', methods=['POST'])
+def reset_partner():
+    """
+    Soft reset the partner session.
+    Sends Ctrl-C to interrupt, then restarts claude.
+    """
+    import time
+
+    try:
+        # Send Ctrl-C to interrupt any running operation
+        tmux.send_keys('partner', 'C-c', raw=True)
+        time.sleep(0.5)
+
+        # Send another Ctrl-C in case first was absorbed
+        tmux.send_keys('partner', 'C-c', raw=True)
+        time.sleep(0.5)
+
+        # Start a new claude session
+        tmux.send_keys('partner', 'claude', raw=False)
+
+        return jsonify({'status': 'reset', 'message': 'Partner session restarting'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

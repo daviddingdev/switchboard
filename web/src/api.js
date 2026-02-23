@@ -169,5 +169,28 @@ export async function pushProject(project) {
   }
   return res.json();
 }
-// Final test 16:38:00
-// perf tweak
+
+// Partner context management
+
+export async function fetchWorkersUsage() {
+  const res = await fetch(`${API_BASE}/workers/usage`);
+  if (!res.ok) throw new Error(`Failed to fetch workers usage: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPartnerHistory(limit = 100) {
+  const res = await fetch(`${API_BASE}/partner/history?limit=${limit}`);
+  if (!res.ok) throw new Error(`Failed to fetch partner history: ${res.status}`);
+  return res.json();
+}
+
+export async function resetPartner() {
+  const res = await fetch(`${API_BASE}/partner/reset`, {
+    method: 'POST'
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to reset partner: ${res.status}`);
+  }
+  return res.json();
+}

@@ -5,6 +5,7 @@ import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
 import DiffPreview from './components/DiffPreview'
 import PushPanel from './components/PushPanel'
+import PartnerHistory from './components/PartnerHistory'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
@@ -260,6 +261,20 @@ export default function App() {
     setActiveTab(tabId)
   }, [tabs])
 
+  const handleHistoryClick = useCallback(() => {
+    const tabId = 'history'
+
+    if (!tabs.find(t => t.id === tabId)) {
+      setTabs(prev => [...prev, {
+        id: tabId,
+        label: 'History',
+        type: 'history'
+      }])
+    }
+
+    setActiveTab(tabId)
+  }, [tabs])
+
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
@@ -292,6 +307,7 @@ export default function App() {
   const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
   const activeDiffTab = tabs.find(t => t.id === activeTab && t.type === 'diff')
   const activePushTab = tabs.find(t => t.id === activeTab && t.type === 'push')
+  const activeHistoryTab = tabs.find(t => t.id === activeTab && t.type === 'history')
 
   return (
     <div
@@ -342,6 +358,9 @@ export default function App() {
                 <PushPanel />
               </div>
             )}
+            {activeHistoryTab && (
+              <PartnerHistory />
+            )}
           </div>
         </main>
 
@@ -370,7 +389,7 @@ export default function App() {
             onSelect={handleWorkerSelect}
             onRefresh={() => setRefreshKey(k => k + 1)}
           />
-          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} />
+          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} onHistoryClick={handleHistoryClick} />
         </aside>
       </div>
 

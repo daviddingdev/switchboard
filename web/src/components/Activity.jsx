@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchActivity, updateProposal, deleteProposal } from '../api'
+import { fetchActivity, updateProposal, deleteProposal, fetchWorkersUsage, resetPartner } from '../api'
 
 const styles = {
   container: {
@@ -220,6 +220,51 @@ const styles = {
     cursor: 'pointer',
     marginLeft: 'auto',
   },
+  usageRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '4px 6px',
+    fontSize: '12px',
+    marginBottom: '4px',
+  },
+  usageName: {
+    fontWeight: 500,
+    color: 'var(--text-primary)',
+    minWidth: '60px',
+  },
+  usageBar: {
+    flex: 1,
+    height: '8px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: '4px',
+    overflow: 'hidden',
+  },
+  usageFill: {
+    height: '100%',
+    borderRadius: '4px',
+    transition: 'width 0.3s ease',
+  },
+  usagePct: {
+    fontSize: '11px',
+    color: 'var(--text-secondary)',
+    minWidth: '32px',
+    textAlign: 'right',
+  },
+  usageBtn: {
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: '3px',
+    padding: '1px 6px',
+    fontSize: '10px',
+    cursor: 'pointer',
+  },
+  usageBtnActive: {
+    background: 'var(--accent)',
+    color: 'white',
+    border: '1px solid var(--accent)',
+  },
 }
 
 function getStatusStyle(status) {
@@ -230,10 +275,12 @@ function getStatusStyle(status) {
   return styles.statusM // default
 }
 
-export default function Activity({ onFileClick, onPushClick }) {
+export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
   const [activity, setActivity] = useState({ pending: [], changes: [], recent: [] })
+  const [usage, setUsage] = useState({ workers: [] })
   const [updating, setUpdating] = useState(null)
   const [hoveredFile, setHoveredFile] = useState(null)
+  const [resetting, setResetting] = useState(false)
 
   const loadActivity = async () => {
     try {
@@ -244,11 +291,45 @@ export default function Activity({ onFileClick, onPushClick }) {
     }
   }
 
+  const loadUsage = async () => {
+    try {
+      const data = await fetchWorkersUsage()
+      setUsage(data)
+    } catch (err) {
+      console.error('Failed to load usage:', err)
+    }
+  }
+
   useEffect(() => {
     loadActivity()
-    const interval = setInterval(loadActivity, 2000)
-    return () => clearInterval(interval)
+    loadUsage()
+    const activityInterval = setInterval(loadActivity, 2000)
+    const usageInterval = setInterval(loadUsage, 5000) // Less frequent for usage
+    return () => {
+      clearInterval(activityInterval)
+      clearInterval(usageInterval)
+    }
   }, [])
+
+  const handleReset = async () => {
+    if (!confirm('Reset partner session? This will interrupt any running operation.')) {
+      return
+    }
+    setResetting(true)
+    try {
+      await resetPartner()
+    } catch (err) {
+      alert(`Failed to reset: ${err.message}`)
+    } finally {
+      setTimeout(() => setResetting(false), 2000)
+    }
+  }
+
+  const getUsageColor = (pct) => {
+    if (pct >= 80) return '#ef4444' // red
+    if (pct >= 60) return '#f59e0b' // yellow/amber
+    return '#22c55e' // green
+  }
 
   const handleApprove = async (id) => {
     setUpdating(id)
@@ -288,6 +369,55 @@ export default function Activity({ onFileClick, onPushClick }) {
   return (
     <div style={styles.container}>
       <div style={styles.scrollArea}>
+        {/* Context Usage */}
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <span style={styles.sectionIcon}>📊</span>
+            <span>Context</span>
+          </div>
+          {usage.workers?.length === 0 ? (
+            <div style={styles.empty}>No active workers</div>
+          ) : (
+            usage.workers?.map(w => (
+              <div key={w.name} style={styles.usageRow}>
+                <span style={styles.usageName}>{w.name}</span>
+                <div style={styles.usageBar}>
+                  <div
+                    style={{
+                      ...styles.usageFill,
+                      width: `${Math.min(100, w.pct)}%`,
+                      background: getUsageColor(w.pct),
+                    }}
+                  />
+                </div>
+                <span style={styles.usagePct}>{w.pct}%</span>
+                {w.name === 'partner' && (
+                  <>
+                    <button
+                      style={styles.usageBtn}
+                      onClick={onHistoryClick}
+                      title="View conversation history"
+                    >
+                      History
+                    </button>
+                    <button
+                      style={{
+                        ...styles.usageBtn,
+                        ...(resetting ? styles.usageBtnActive : {}),
+                      }}
+                      onClick={handleReset}
+                      disabled={resetting}
+                      title="Reset partner session"
+                    >
+                      {resetting ? '...' : 'Reset'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
         {/* Pending Proposals */}
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
