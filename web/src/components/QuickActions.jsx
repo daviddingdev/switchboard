@@ -35,6 +35,8 @@ const styles = {
 }
 
 // Quick actions - raw means send as tmux key without Enter
+// Numbers and Y/N send as text+Enter for Claude Code prompts
+// Shift+click any button to populate chat input instead
 const QUICK_ACTIONS = [
   { key: '1', label: '1' },
   { key: '2', label: '2' },
@@ -47,8 +49,14 @@ const QUICK_ACTIONS = [
   { key: '/plan', label: 'Plan', style: 'plan' },
 ]
 
-export default function QuickActions({ onSend, onSendRaw, disabled = false }) {
-  const handleClick = (action) => {
+export default function QuickActions({ onSend, onSendRaw, onPopulate, disabled = false }) {
+  const handleClick = (action, e) => {
+    // Shift+click populates chat input instead of sending
+    if (e.shiftKey && onPopulate) {
+      onPopulate(action.key)
+      return
+    }
+
     if (action.raw && onSendRaw) {
       // Send as raw tmux key (Escape, Enter)
       onSendRaw(action.key)
@@ -74,9 +82,9 @@ export default function QuickActions({ onSend, onSendRaw, disabled = false }) {
         <button
           key={action.key}
           style={getButtonStyle(action)}
-          onClick={() => handleClick(action)}
+          onClick={(e) => handleClick(action, e)}
           disabled={disabled}
-          title={action.key}
+          title={`${action.key} (shift+click to edit)`}
         >
           {action.label}
         </button>

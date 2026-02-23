@@ -125,6 +125,7 @@ export default function App() {
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [sending, setSending] = useState(false)
+  const [chatInput, setChatInput] = useState('')
 
   // Panel sizes (resizable)
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT)
@@ -285,6 +286,7 @@ export default function App() {
     setSending(true)
     try {
       await sendToProcess(currentWorker, text, false)
+      setChatInput('')  // Clear input after sending
     } catch (err) {
       alert(`Failed to send: ${err.message}`)
     } finally {
@@ -302,6 +304,10 @@ export default function App() {
     } finally {
       setSending(false)
     }
+  }
+
+  const handlePopulate = (text) => {
+    setChatInput(prev => prev ? `${prev} ${text}` : text)
   }
 
   const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
@@ -405,13 +411,15 @@ export default function App() {
       {/* Bottom: Input Bar */}
       <footer style={{ ...styles.inputBar, height: inputHeight }}>
         <div style={styles.quickActionsWrapper}>
-          <QuickActions onSend={handleSend} onSendRaw={handleSendRaw} disabled={sending} />
+          <QuickActions onSend={handleSend} onSendRaw={handleSendRaw} onPopulate={handlePopulate} disabled={sending} />
         </div>
         <div style={styles.inputWrapper}>
           <ChatInput
             onSend={handleSend}
             disabled={sending}
             placeholder={`Send to ${currentWorker}...`}
+            value={chatInput}
+            onChange={setChatInput}
           />
         </div>
       </footer>
