@@ -1022,10 +1022,28 @@ def push_project():
             'output': commit_result.stdout.strip()
         })
 
-    # Push
+    # Get the upstream remote/branch for pushing
+    try:
+        upstream_result = subprocess.run(
+            ['git', '-C', directory, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+            capture_output=True, text=True, timeout=5
+        )
+        if upstream_result.returncode == 0:
+            # Parse "origin/main" or "github/master" into remote and branch
+            upstream = upstream_result.stdout.strip()
+            if '/' in upstream:
+                remote, branch = upstream.split('/', 1)
+            else:
+                remote, branch = 'origin', upstream
+        else:
+            remote, branch = 'origin', 'main'  # Fallback
+    except:
+        remote, branch = 'origin', 'main'
+
+    # Push to the correct remote/branch
     try:
         push_result = subprocess.run(
-            ['git', '-C', directory, 'push'],
+            ['git', '-C', directory, 'push', remote, f'HEAD:{branch}'],
             capture_output=True, text=True, timeout=60
         )
         results['steps'].append({
@@ -1034,6 +1052,8 @@ def push_project():
             'output': push_result.stdout.strip() or push_result.stderr.strip()
         })
         results['success'] = push_result.returncode == 0
+        if not results['success']:
+            results['error'] = push_result.stderr.strip()
     except subprocess.TimeoutExpired:
         results['success'] = False
         results['error'] = 'push timed out'
