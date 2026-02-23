@@ -8,9 +8,11 @@ Core functionality working:
 - Tab-based navigation: multiple terminals + file previews
 - Auto-discover projects with CLAUDE.md files
 - Git status indicators (M/U/A/D) on files
-- Syntax-highlighted file preview
+- Syntax-highlighted file preview + diff preview
 - Spawn/kill workers, send messages
 - Approve/reject worker proposals
+- Quick actions: 1-4, Y/N, Enter, Esc, Plan
+- Unpushed commits tracking in Activity panel
 - Shareable setup with setup.sh/start.sh/stop.sh
 
 ---
@@ -27,6 +29,14 @@ cd ~/orchestrator
 ---
 
 ## Completed
+
+### Diff Preview + Raw Keys + Unpushed (Feb 23, 2026)
+- [x] Diff preview — Click changed files to see git diff in tab
+- [x] Raw key sending — Escape/Enter work properly in tmux
+- [x] Plan button — Send /plan to active worker
+- [x] Unpushed commits section in Activity panel
+- [x] Worker logging to `logs/workers/<name>.log`
+- [x] Git status normalization (consistent M/U/A/D)
 
 ### VSCode-Style Features (Feb 23, 2026)
 - [x] Auto-discover projects by scanning for CLAUDE.md files
@@ -81,6 +91,7 @@ cd ~/orchestrator
 
 ## Backlog (Post-MVP)
 
+- [ ] **Post-push hooks** — Auto-trigger CHANGELOG/TODO/usage updates on git push
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)

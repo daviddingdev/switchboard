@@ -2,6 +2,26 @@
 
 ## 2026-02-23
 
+### Diff Preview + Raw Keys + Unpushed Tracking
+
+- **Diff preview** — Click changed files in Activity panel to see git diff in a new tab
+  - `DiffPreview.jsx` — Syntax-colored diff viewer (green additions, red deletions)
+  - `GET /api/diff?project=&path=` — Returns git diff for specific file
+  - Handles untracked files (shows full content as additions)
+- **Raw key sending** — Escape/Enter buttons now work properly in tmux
+  - `raw` parameter in `send_keys()` sends as tmux key vs literal text
+  - Escape button styled red, Plan button styled blue
+- **Plan button** — Sends `/plan` to active worker's Claude Code session
+- **Unpushed commits section** — Activity panel shows commits ahead of origin
+  - `get_unpushed_commits()` — Gets commits via `git log upstream..HEAD`
+  - Blue badge shows total count across projects
+  - Shows commit hash + message for each
+- **Worker logging** — Output saved to `~/orchestrator/logs/workers/<name>.log`
+  - 50k line scrollback buffer per worker
+- **Git status normalization** — Consistent M/U/A/D indicators
+
+---
+
 ### VSCode-Style Features
 
 - **Auto-discover projects** — Scans for directories with CLAUDE.md files instead of manual registry
