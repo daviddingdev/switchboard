@@ -157,11 +157,11 @@ export async function updateDocs(project) {
   return res.json();
 }
 
-export async function pushProject(project, commitDocs = false) {
+export async function pushProject(project) {
   const res = await fetch(`${API_BASE}/push`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ project, commit_docs: commitDocs })
+    body: JSON.stringify({ project })
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

@@ -984,10 +984,10 @@ After updating, run: git add CHANGELOG.md TODO.md USAGE.md 2>/dev/null; git stat
 def push_project():
     """
     Commit doc updates (if any) and push a project.
+    Always stages and commits modified doc files before pushing.
     """
     data = request.json or {}
     project_name = data.get('project')
-    commit_docs = data.get('commit_docs', False)
 
     if not project_name:
         return {"error": "project required"}, 400
@@ -998,30 +998,29 @@ def push_project():
 
     results = {'steps': []}
 
-    # Optionally commit doc updates first
-    if commit_docs:
-        # Stage doc files
-        stage_result = subprocess.run(
-            ['git', '-C', directory, 'add', 'CHANGELOG.md', 'TODO.md', 'USAGE.md'],
+    # Always try to stage and commit doc files if modified
+    # Stage doc files (ignores files that don't exist)
+    subprocess.run(
+        ['git', '-C', directory, 'add', 'CHANGELOG.md', 'TODO.md', 'USAGE.md'],
+        capture_output=True, text=True, timeout=10
+    )
+
+    # Check if there are staged changes to commit
+    diff_result = subprocess.run(
+        ['git', '-C', directory, 'diff', '--cached', '--quiet'],
+        capture_output=True, timeout=5
+    )
+
+    if diff_result.returncode != 0:  # There are staged changes
+        commit_result = subprocess.run(
+            ['git', '-C', directory, 'commit', '-m', 'Update docs for recent changes'],
             capture_output=True, text=True, timeout=10
         )
-
-        # Check if there's anything to commit
-        diff_result = subprocess.run(
-            ['git', '-C', directory, 'diff', '--cached', '--quiet'],
-            capture_output=True, timeout=5
-        )
-
-        if diff_result.returncode != 0:  # There are staged changes
-            commit_result = subprocess.run(
-                ['git', '-C', directory, 'commit', '-m', 'Update docs for recent changes'],
-                capture_output=True, text=True, timeout=10
-            )
-            results['steps'].append({
-                'action': 'commit_docs',
-                'success': commit_result.returncode == 0,
-                'output': commit_result.stdout.strip()
-            })
+        results['steps'].append({
+            'action': 'commit_docs',
+            'success': commit_result.returncode == 0,
+            'output': commit_result.stdout.strip()
+        })
 
     # Push
     try:

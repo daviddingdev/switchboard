@@ -288,15 +288,14 @@ export default function PushPanel() {
 
   const handlePushAll = async () => {
     for (const p of projects) {
-      const needsCommit = status[p.project]?.state === 'done'
-
       setStatus(prev => ({
         ...prev,
         [p.project]: { state: 'pushing', message: 'Pushing...' }
       }))
 
       try {
-        const result = await pushProject(p.project, needsCommit)
+        // Always commits any staged doc changes before pushing
+        const result = await pushProject(p.project)
         if (result.success) {
           setStatus(prev => ({
             ...prev,
