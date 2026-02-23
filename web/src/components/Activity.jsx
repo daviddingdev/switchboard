@@ -220,43 +220,53 @@ const styles = {
     cursor: 'pointer',
     marginLeft: 'auto',
   },
+  usageItem: {
+    padding: '4px 6px',
+    marginBottom: '6px',
+  },
   usageRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '4px 6px',
+    gap: '6px',
     fontSize: '12px',
-    marginBottom: '4px',
   },
   usageName: {
     fontWeight: 500,
     color: 'var(--text-primary)',
-    minWidth: '60px',
+    flexShrink: 0,
   },
   usageBar: {
     flex: 1,
-    height: '8px',
+    height: '6px',
     background: 'var(--bg-tertiary)',
-    borderRadius: '4px',
+    borderRadius: '3px',
     overflow: 'hidden',
+    minWidth: '40px',
   },
   usageFill: {
     height: '100%',
-    borderRadius: '4px',
+    borderRadius: '3px',
     transition: 'width 0.3s ease',
   },
-  usagePct: {
-    fontSize: '11px',
+  usageStats: {
+    fontSize: '10px',
     color: 'var(--text-secondary)',
-    minWidth: '32px',
-    textAlign: 'right',
+    fontFamily: 'ui-monospace, monospace',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  },
+  usageActions: {
+    display: 'flex',
+    gap: '4px',
+    marginTop: '4px',
+    justifyContent: 'flex-end',
   },
   usageBtn: {
     background: 'transparent',
     color: 'var(--text-secondary)',
     border: '1px solid var(--border)',
     borderRadius: '3px',
-    padding: '1px 6px',
+    padding: '2px 8px',
     fontSize: '10px',
     cursor: 'pointer',
   },
@@ -331,6 +341,12 @@ export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
     return '#22c55e' // green
   }
 
+  const formatTokens = (tokens) => {
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`
+    if (tokens >= 1000) return `${Math.round(tokens / 1000)}k`
+    return String(tokens)
+  }
+
   const handleApprove = async (id) => {
     setUpdating(id)
     try {
@@ -379,20 +395,28 @@ export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
             <div style={styles.empty}>No active workers</div>
           ) : (
             usage.workers?.map(w => (
-              <div key={w.name} style={styles.usageRow}>
-                <span style={styles.usageName}>{w.name}</span>
-                <div style={styles.usageBar}>
-                  <div
-                    style={{
-                      ...styles.usageFill,
-                      width: `${Math.min(100, w.pct)}%`,
-                      background: getUsageColor(w.pct),
-                    }}
-                  />
+              <div key={w.name} style={styles.usageItem}>
+                <div style={styles.usageRow}>
+                  <span style={styles.usageName}>{w.name}</span>
+                  <div style={styles.usageBar}>
+                    <div
+                      style={{
+                        ...styles.usageFill,
+                        width: `${Math.min(100, w.pct)}%`,
+                        background: getUsageColor(w.pct),
+                      }}
+                    />
+                  </div>
+                  <span style={{
+                    ...styles.usageStats,
+                    color: w.pct >= 80 ? '#ef4444' : w.pct >= 70 ? '#f59e0b' : 'var(--text-secondary)',
+                    fontWeight: w.pct >= 70 ? 600 : 400,
+                  }}>
+                    {w.pct >= 80 ? '⚠️' : ''}{formatTokens(w.context)}/{w.pct}%
+                  </span>
                 </div>
-                <span style={styles.usagePct}>{w.pct}%</span>
                 {w.name === 'partner' && (
-                  <>
+                  <div style={styles.usageActions}>
                     <button
                       style={styles.usageBtn}
                       onClick={onHistoryClick}
@@ -411,7 +435,7 @@ export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
                     >
                       {resetting ? '...' : 'Reset'}
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             ))
