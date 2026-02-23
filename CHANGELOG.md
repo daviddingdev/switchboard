@@ -2,6 +2,12 @@
 
 ## 2026-02-23
 
+### API Client Cleanup
+
+- **Minor API response handling improvements** — Performance comment in api.js
+
+---
+
 ### Push Tab Mounted + Parallel Operations
 
 - **Keep Push tab mounted** — Push tab stays mounted during tab switches to preserve state (checkboxes, progress)
