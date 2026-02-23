@@ -30,6 +30,11 @@ cd ~/orchestrator
 
 ## Completed
 
+### Quick Action Button Improvements (Feb 23, 2026)
+- [x] Send with Enter — Number/letter buttons send as text+Enter
+- [x] Shift+click to populate chat input instead of sending
+- [x] ChatInput supports controlled mode (value/onChange props)
+
 ### Partner Context Management (Feb 23, 2026)
 - [x] Context usage meter in Activity panel — shows % for each worker
 - [x] Partner history viewer — tab showing filtered conversation messages

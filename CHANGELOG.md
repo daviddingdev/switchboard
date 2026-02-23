@@ -2,6 +2,14 @@
 
 ## 2026-02-23
 
+### Quick Action Button Improvements
+
+- **Send with Enter** — Number/letter buttons (1-4, Y/N) now send as text with Enter for Claude Code prompts
+- **Shift+click to edit** — Hold shift and click any quick action button to populate the chat input instead of sending immediately
+- **ChatInput controlled mode** — Component now supports both controlled (value/onChange) and uncontrolled modes
+
+---
+
 ### Partner Context Management
 
 - **Context usage meter** — Activity panel shows context % for each active worker
