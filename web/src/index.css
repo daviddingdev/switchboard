@@ -66,3 +66,14 @@ input:focus {
   background: var(--accent);
   color: white;
 }
+
+/* Select dropdown styling */
+select {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}

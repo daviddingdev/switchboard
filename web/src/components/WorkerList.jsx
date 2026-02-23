@@ -3,40 +3,48 @@ import { fetchProcesses, killProcess } from '../api'
 
 const styles = {
   container: {
-    padding: '12px',
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
-    overflow: 'hidden',
+    borderBottom: '1px solid var(--border)',
   },
   header: {
-    fontSize: '11px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    fontSize: '10px',
     fontWeight: 600,
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '8px',
+  },
+  count: {
+    background: 'var(--bg-tertiary)',
+    padding: '1px 6px',
+    borderRadius: '8px',
+    fontSize: '9px',
   },
   list: {
     listStyle: 'none',
     margin: 0,
-    padding: 0,
-    flex: 1,
-    overflow: 'auto',
+    padding: '0 8px 8px',
   },
   item: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '6px 10px',
+    padding: '6px 8px',
     marginBottom: '2px',
     borderRadius: '4px',
-    background: 'var(--bg-tertiary)',
     cursor: 'pointer',
+    fontSize: '13px',
     transition: 'background 0.1s',
   },
   itemSelected: {
     background: 'var(--accent)',
+  },
+  itemDefault: {
+    background: 'var(--bg-tertiary)',
   },
   itemInfo: {
     display: 'flex',
@@ -44,7 +52,6 @@ const styles = {
     gap: '8px',
     overflow: 'hidden',
     flex: 1,
-    minWidth: 0,
   },
   status: {
     width: '6px',
@@ -53,11 +60,10 @@ const styles = {
     flexShrink: 0,
   },
   name: {
-    fontSize: '13px',
     fontWeight: 500,
-    whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   killButton: {
     background: 'transparent',
@@ -66,60 +72,43 @@ const styles = {
     borderRadius: '3px',
     padding: '2px 6px',
     fontSize: '11px',
-    flexShrink: 0,
-    marginLeft: '8px',
-  },
-  loading: {
-    color: 'var(--text-secondary)',
-    fontSize: '13px',
-    textAlign: 'center',
-    padding: '12px',
-  },
-  error: {
-    color: 'var(--danger)',
-    fontSize: '13px',
-    textAlign: 'center',
-    padding: '12px',
+    marginLeft: '6px',
   },
   empty: {
-    color: 'var(--text-secondary)',
-    fontSize: '13px',
-    textAlign: 'center',
     padding: '12px',
+    textAlign: 'center',
+    color: 'var(--text-secondary)',
+    fontSize: '12px',
   },
 }
 
-export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
-  const [processes, setProcesses] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+export default function WorkerList({ selectedWorker, onSelect, onRefresh }) {
+  const [workers, setWorkers] = useState([])
   const [killing, setKilling] = useState(null)
 
-  const loadProcesses = async () => {
+  const loadWorkers = async () => {
     try {
       const data = await fetchProcesses()
-      setProcesses(data)
-      setError(null)
+      setWorkers(data)
     } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+      console.error('Failed to load workers:', err)
     }
   }
 
   useEffect(() => {
-    loadProcesses()
-    const interval = setInterval(loadProcesses, 2000)
+    loadWorkers()
+    const interval = setInterval(loadWorkers, 2000)
     return () => clearInterval(interval)
   }, [])
 
   const handleKill = async (e, name) => {
     e.stopPropagation()
     if (killing) return
+
     setKilling(name)
     try {
       await killProcess(name)
-      await loadProcesses()
+      await loadWorkers()
       onRefresh?.()
     } catch (err) {
       alert(`Failed to kill ${name}: ${err.message}`)
@@ -128,56 +117,42 @@ export default function ProcessTree({ onRefresh, selectedWorker, onSelect }) {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.header}>Workers</div>
-        <div style={styles.loading}>Loading...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.header}>Workers</div>
-        <div style={styles.error}>{error}</div>
-      </div>
-    )
-  }
-
   return (
     <div style={styles.container}>
-      <div style={styles.header}>Workers ({processes.length})</div>
-      {processes.length === 0 ? (
-        <div style={styles.empty}>No workers running</div>
+      <div style={styles.header}>
+        <span>Workers</span>
+        <span style={styles.count}>{workers.length}</span>
+      </div>
+
+      {workers.length === 0 ? (
+        <div style={styles.empty}>No workers</div>
       ) : (
         <ul style={styles.list}>
-          {processes.map(proc => (
+          {workers.map(worker => (
             <li
-              key={proc.name}
+              key={worker.name}
               style={{
                 ...styles.item,
-                ...(selectedWorker === proc.name ? styles.itemSelected : {}),
+                ...(selectedWorker === worker.name ? styles.itemSelected : styles.itemDefault),
               }}
-              onClick={() => onSelect?.(proc.name)}
+              onClick={() => onSelect?.(worker.name)}
             >
               <div style={styles.itemInfo}>
                 <div
                   style={{
                     ...styles.status,
-                    background: proc.pid ? 'var(--success)' : 'var(--text-secondary)',
+                    background: worker.pid ? 'var(--success)' : 'var(--text-secondary)',
                   }}
                 />
-                <span style={styles.name}>{proc.name}</span>
+                <span style={styles.name}>{worker.name}</span>
               </div>
-              {proc.name !== 'partner' && (
+              {worker.name !== 'partner' && (
                 <button
                   style={styles.killButton}
-                  onClick={(e) => handleKill(e, proc.name)}
-                  disabled={killing === proc.name}
+                  onClick={(e) => handleKill(e, worker.name)}
+                  disabled={killing === worker.name}
                 >
-                  {killing === proc.name ? '...' : '×'}
+                  {killing === worker.name ? '...' : '×'}
                 </button>
               )}
             </li>

@@ -1,30 +1,47 @@
-import { useState, useRef, useCallback } from 'react'
-import ProcessTree from './components/ProcessTree'
-import SpawnDialog from './components/SpawnDialog'
-import ChatArea from './components/ChatArea'
+import { useState, useCallback } from 'react'
+import FileTree from './components/FileTree'
 import Terminal from './components/Terminal'
-import ChatInput from './components/ChatInput'
+import WorkerList from './components/WorkerList'
+import Activity from './components/Activity'
+import SpawnDialog from './components/SpawnDialog'
 import QuickActions from './components/QuickActions'
+import ChatInput from './components/ChatInput'
 import { sendToProcess } from './api'
 
 const styles = {
-  container: {
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: '220px 1fr 280px',
+    gridTemplateRows: '1fr auto',
+    height: '100vh',
+    background: 'var(--bg-primary)',
+  },
+  filesPanel: {
+    gridRow: 1,
+    gridColumn: 1,
+    background: 'var(--bg-secondary)',
+    borderRight: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
+    overflow: 'hidden',
   },
-  header: {
+  terminalPanel: {
+    gridRow: 1,
+    gridColumn: 2,
     display: 'flex',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  terminalHeader: {
+    display: 'flex',
     alignItems: 'center',
-    padding: '8px 16px',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
     borderBottom: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
-    flexShrink: 0,
   },
-  title: {
-    margin: 0,
-    fontSize: '15px',
+  terminalTitle: {
+    fontSize: '13px',
     fontWeight: 600,
   },
   spawnButton: {
@@ -32,155 +49,83 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    padding: '5px 10px',
-    fontSize: '12px',
+    padding: '4px 10px',
+    fontSize: '11px',
     fontWeight: 500,
   },
-  main: {
-    display: 'flex',
+  terminalContent: {
     flex: 1,
+    padding: '8px',
     overflow: 'hidden',
-  },
-  content: {
     display: 'flex',
     flexDirection: 'column',
-    minHeight: 0,
-    minWidth: 0,
-    overflow: 'hidden',
   },
-  dividerV: {
-    width: '4px',
-    background: 'var(--border)',
-    cursor: 'col-resize',
-    flexShrink: 0,
-    transition: 'background 0.15s',
-  },
-  dividerH: {
-    height: '4px',
-    background: 'var(--border)',
-    cursor: 'row-resize',
-    flexShrink: 0,
-    transition: 'background 0.15s',
-  },
-  dividerActive: {
-    background: 'var(--accent)',
-  },
-  sidebar: {
-    display: 'flex',
-    flexDirection: 'column',
+  rightPanel: {
+    gridRow: 1,
+    gridColumn: 3,
     background: 'var(--bg-secondary)',
-    minWidth: '200px',
-    maxWidth: '600px',
-  },
-  sidebarSection: {
+    borderLeft: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
-    minHeight: 0,
-    padding: '0 10px 10px',
     overflow: 'hidden',
   },
-  sidebarLabel: {
-    fontSize: '10px',
-    fontWeight: 600,
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    marginBottom: '6px',
-  },
-  processTreeWrapper: {
-    overflow: 'hidden',
+  inputBar: {
+    gridRow: 2,
+    gridColumn: '1 / -1',
     display: 'flex',
-    flexDirection: 'column',
-  },
-  terminalSection: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
-    padding: '0 10px 10px',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px 12px',
+    borderTop: '1px solid var(--border)',
+    background: 'var(--bg-secondary)',
   },
   quickActionsWrapper: {
-    paddingTop: '4px',
+    flexShrink: 0,
   },
   inputWrapper: {
-    padding: '0 10px 10px',
+    flex: 1,
+    display: 'flex',
+    gap: '8px',
+  },
+  input: {
+    flex: 1,
+    background: 'var(--bg-tertiary)',
+    border: '1px solid var(--border)',
+    borderRadius: '5px',
+    padding: '8px 12px',
+    fontSize: '13px',
+    color: 'var(--text-primary)',
+    outline: 'none',
+  },
+  sendButton: {
+    background: 'var(--accent)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    padding: '8px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
   },
 }
 
 export default function App() {
+  const [selectedWorker, setSelectedWorker] = useState('partner')
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [selectedWorker, setSelectedWorker] = useState('partner')
-  const [sidebarWidth, setSidebarWidth] = useState(400)
-  const [processTreeHeight, setProcessTreeHeight] = useState(180)
-  const [isDraggingV, setIsDraggingV] = useState(false)
-  const [isDraggingH, setIsDraggingH] = useState(false)
   const [sending, setSending] = useState(false)
-  const dragRefV = useRef(null)
-  const dragRefH = useRef(null)
+
+  const handleFileSelect = useCallback((path) => {
+    // For now, just log the selected file
+    // Future: open in editor or preview
+    console.log('Selected file:', path)
+  }, [])
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
   }
 
-  // Vertical divider (sidebar width)
-  const handleMouseDownV = useCallback((e) => {
-    e.preventDefault()
-    setIsDraggingV(true)
-    dragRefV.current = {
-      startX: e.clientX,
-      startWidth: sidebarWidth,
-    }
-  }, [sidebarWidth])
-
-  const handleMouseMoveV = useCallback((e) => {
-    if (!isDraggingV || !dragRefV.current) return
-    const delta = dragRefV.current.startX - e.clientX
-    const newWidth = Math.min(600, Math.max(200, dragRefV.current.startWidth + delta))
-    setSidebarWidth(newWidth)
-  }, [isDraggingV])
-
-  const handleMouseUpV = useCallback(() => {
-    setIsDraggingV(false)
-    dragRefV.current = null
-  }, [])
-
-  // Horizontal divider (process tree height)
-  const handleMouseDownH = useCallback((e) => {
-    e.preventDefault()
-    setIsDraggingH(true)
-    dragRefH.current = {
-      startY: e.clientY,
-      startHeight: processTreeHeight,
-    }
-  }, [processTreeHeight])
-
-  const handleMouseMoveH = useCallback((e) => {
-    if (!isDraggingH || !dragRefH.current) return
-    const delta = e.clientY - dragRefH.current.startY
-    const newHeight = Math.min(400, Math.max(80, dragRefH.current.startHeight + delta))
-    setProcessTreeHeight(newHeight)
-  }, [isDraggingH])
-
-  const handleMouseUpH = useCallback(() => {
-    setIsDraggingH(false)
-    dragRefH.current = null
-  }, [])
-
-  const isDragging = isDraggingV || isDraggingH
-
-  const handleMouseMove = useCallback((e) => {
-    if (isDraggingV) handleMouseMoveV(e)
-    if (isDraggingH) handleMouseMoveH(e)
-  }, [isDraggingV, isDraggingH, handleMouseMoveV, handleMouseMoveH])
-
-  const handleMouseUp = useCallback(() => {
-    handleMouseUpV()
-    handleMouseUpH()
-  }, [handleMouseUpV, handleMouseUpH])
-
-  const handleSendToWorker = async (text) => {
+  const handleSend = async (text) => {
     if (!selectedWorker) return
     setSending(true)
     try {
@@ -193,70 +138,56 @@ export default function App() {
   }
 
   return (
-    <div
-      style={styles.container}
-      onMouseMove={isDragging ? handleMouseMove : undefined}
-      onMouseUp={isDragging ? handleMouseUp : undefined}
-      onMouseLeave={isDragging ? handleMouseUp : undefined}
-    >
-      <header style={styles.header}>
-        <h1 style={styles.title}>Orchestrator</h1>
-        <button style={styles.spawnButton} onClick={() => setShowSpawnDialog(true)}>
-          + Spawn
-        </button>
-      </header>
+    <div style={styles.layout}>
+      {/* Left Panel: File Tree */}
+      <aside style={styles.filesPanel}>
+        <FileTree onFileSelect={handleFileSelect} />
+      </aside>
 
-      <main style={styles.main}>
-        <div style={{ ...styles.content, flex: 1 }}>
-          <ChatArea />
+      {/* Center: Terminal */}
+      <main style={styles.terminalPanel}>
+        <div style={styles.terminalHeader}>
+          <span style={styles.terminalTitle}>
+            {selectedWorker === 'partner' ? 'Partner' : selectedWorker}
+          </span>
+          <button
+            style={styles.spawnButton}
+            onClick={() => setShowSpawnDialog(true)}
+          >
+            + Spawn
+          </button>
         </div>
-
-        <div
-          style={{
-            ...styles.dividerV,
-            ...(isDraggingV ? styles.dividerActive : {}),
-          }}
-          onMouseDown={handleMouseDownV}
-        />
-
-        <aside style={{ ...styles.sidebar, width: sidebarWidth }}>
-          <div style={{ ...styles.processTreeWrapper, height: processTreeHeight }}>
-            <ProcessTree
-              key={refreshKey}
-              onRefresh={() => setRefreshKey(k => k + 1)}
-              selectedWorker={selectedWorker}
-              onSelect={setSelectedWorker}
-            />
-          </div>
-
-          <div
-            style={{
-              ...styles.dividerH,
-              ...(isDraggingH ? styles.dividerActive : {}),
-            }}
-            onMouseDown={handleMouseDownH}
-          />
-
-          <div style={styles.terminalSection}>
-            <div style={styles.sidebarLabel}>
-              {selectedWorker === 'partner' ? 'Partner' : selectedWorker}
-            </div>
-            <Terminal workerName={selectedWorker} />
-            <div style={styles.quickActionsWrapper}>
-              <QuickActions onSend={handleSendToWorker} disabled={sending} />
-            </div>
-          </div>
-
-          <div style={styles.inputWrapper}>
-            <ChatInput
-              onSend={handleSendToWorker}
-              disabled={sending}
-              placeholder={`Send to ${selectedWorker}...`}
-            />
-          </div>
-        </aside>
+        <div style={styles.terminalContent}>
+          <Terminal workerName={selectedWorker} fullHeight />
+        </div>
       </main>
 
+      {/* Right Panel: Workers + Activity */}
+      <aside style={styles.rightPanel}>
+        <WorkerList
+          key={refreshKey}
+          selectedWorker={selectedWorker}
+          onSelect={setSelectedWorker}
+          onRefresh={() => setRefreshKey(k => k + 1)}
+        />
+        <Activity />
+      </aside>
+
+      {/* Bottom: Input Bar */}
+      <footer style={styles.inputBar}>
+        <div style={styles.quickActionsWrapper}>
+          <QuickActions onSend={handleSend} disabled={sending} />
+        </div>
+        <div style={styles.inputWrapper}>
+          <ChatInput
+            onSend={handleSend}
+            disabled={sending}
+            placeholder={`Send to ${selectedWorker}...`}
+          />
+        </div>
+      </footer>
+
+      {/* Spawn Dialog */}
       {showSpawnDialog && (
         <SpawnDialog
           onClose={() => setShowSpawnDialog(false)}

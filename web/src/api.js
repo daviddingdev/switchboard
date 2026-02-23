@@ -83,3 +83,29 @@ export async function deleteProposal(id) {
   }
   return res.json();
 }
+
+// Projects, Files, Changes, Activity
+
+export async function fetchProjects() {
+  const res = await fetch(`${API_BASE}/projects`);
+  if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchFiles(project) {
+  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(project)}`);
+  if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchChanges() {
+  const res = await fetch(`${API_BASE}/changes`);
+  if (!res.ok) throw new Error(`Failed to fetch changes: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchActivity() {
+  const res = await fetch(`${API_BASE}/activity`);
+  if (!res.ok) throw new Error(`Failed to fetch activity: ${res.status}`);
+  return res.json();
+}

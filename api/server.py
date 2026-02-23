@@ -5,6 +5,7 @@ Provides HTTP endpoints for managing Claude Code worker sessions.
 """
 
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +14,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tmux_manager as tmux
 
-PROPOSALS_DIR = Path(__file__).parent.parent / 'state' / 'proposals'
+STATE_DIR = Path(__file__).parent.parent / 'state'
+PROPOSALS_DIR = STATE_DIR / 'proposals'
+PROJECTS_FILE = STATE_DIR / 'projects.yaml'
+
+# Directories to exclude from file listings
+EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', '.next', '.cache'}
+EXCLUDE_FILES = {'.DS_Store', 'Thumbs.db'}
+MAX_DEPTH = 4
 
 app = Flask(__name__)
 CORS(app)
@@ -24,7 +32,7 @@ def index():
     """Root endpoint with API info."""
     return {
         "name": "Orchestrator API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "endpoints": [
             "GET /api/health",
             "GET /api/processes",
@@ -35,7 +43,11 @@ def index():
             "GET /api/proposals",
             "POST /api/proposals",
             "PATCH /api/proposals/<id>",
-            "DELETE /api/proposals/<id>"
+            "DELETE /api/proposals/<id>",
+            "GET /api/projects",
+            "GET /api/files/<project>",
+            "GET /api/changes",
+            "GET /api/activity"
         ]
     }
 
@@ -210,6 +222,182 @@ def delete_proposal(proposal_id):
         return {"status": "deleted"}
     except Exception as e:
         return {"error": str(e)}, 500
+
+
+# =============================================================================
+# Projects, Files, Changes, Activity endpoints
+# =============================================================================
+
+def load_projects():
+    """Load projects from state/projects.yaml."""
+    if not PROJECTS_FILE.exists():
+        return []
+    try:
+        with open(PROJECTS_FILE) as f:
+            data = yaml.safe_load(f)
+            return data.get('projects', [])
+    except Exception:
+        return []
+
+
+def get_project_directory(project_name):
+    """Get the directory path for a project by name."""
+    projects = load_projects()
+    for p in projects:
+        if p.get('name') == project_name:
+            return os.path.expanduser(p.get('directory', ''))
+    return None
+
+
+def build_file_tree(directory, depth=0):
+    """Recursively build file tree for a directory."""
+    if depth >= MAX_DEPTH:
+        return []
+
+    result = []
+    try:
+        entries = sorted(os.listdir(directory))
+    except (PermissionError, FileNotFoundError):
+        return []
+
+    for name in entries:
+        if name in EXCLUDE_DIRS or name in EXCLUDE_FILES:
+            continue
+        if name.startswith('.') and name not in {'.env.example', '.gitignore'}:
+            continue
+
+        path = os.path.join(directory, name)
+        entry = {'name': name, 'path': path}
+
+        if os.path.isdir(path):
+            entry['type'] = 'dir'
+            entry['children'] = build_file_tree(path, depth + 1)
+        else:
+            entry['type'] = 'file'
+
+        result.append(entry)
+
+    # Sort: directories first, then files
+    result.sort(key=lambda x: (0 if x['type'] == 'dir' else 1, x['name'].lower()))
+    return result
+
+
+def get_git_status(directory):
+    """Get git status for a directory. Returns empty list if not a git repo."""
+    try:
+        result = subprocess.run(
+            ['git', '-C', directory, 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None  # Not a git repo or error
+
+        files = []
+        for line in result.stdout.splitlines():
+            if line and len(line) >= 3:
+                status = line[:2].strip()
+                filepath = line[3:]
+                files.append({'path': filepath, 'status': status})
+        return files
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
+@app.route('/api/projects')
+def list_projects():
+    """List all projects from state/projects.yaml."""
+    return jsonify(load_projects())
+
+
+@app.route('/api/files/<project>')
+def list_files(project):
+    """List files for a project."""
+    directory = get_project_directory(project)
+    if not directory:
+        return {"error": f"project '{project}' not found"}, 404
+
+    if not os.path.isdir(directory):
+        return {"error": f"directory '{directory}' does not exist"}, 404
+
+    tree = build_file_tree(directory)
+    return jsonify({
+        'project': project,
+        'directory': directory,
+        'files': tree
+    })
+
+
+@app.route('/api/changes')
+def get_changes():
+    """Get git status across all projects."""
+    projects = load_projects()
+    result = []
+
+    for p in projects:
+        directory = os.path.expanduser(p.get('directory', ''))
+        if not os.path.isdir(directory):
+            continue
+
+        status = get_git_status(directory)
+        result.append({
+            'project': p.get('name'),
+            'directory': directory,
+            'has_git': status is not None,
+            'files': status or []
+        })
+
+    return jsonify(result)
+
+
+@app.route('/api/activity')
+def get_activity():
+    """Get combined activity feed: pending proposals + changes + recent."""
+    result = {'pending': [], 'changes': [], 'recent': []}
+
+    # Pending proposals
+    try:
+        proposals = []
+        if PROPOSALS_DIR.exists():
+            for proposal_file in PROPOSALS_DIR.glob('*.yaml'):
+                try:
+                    with open(proposal_file) as f:
+                        proposal = yaml.safe_load(f)
+                        if proposal:
+                            if 'id' not in proposal:
+                                proposal['id'] = proposal_file.stem
+                            proposals.append(proposal)
+                except Exception:
+                    pass
+
+        result['pending'] = [p for p in proposals if p.get('status') == 'pending']
+        result['recent'] = sorted(
+            [p for p in proposals if p.get('status') in ('approved', 'rejected')],
+            key=lambda p: p.get('created_at', ''),
+            reverse=True
+        )[:5]
+    except Exception:
+        pass
+
+    # Git changes
+    try:
+        projects = load_projects()
+        for p in projects:
+            directory = os.path.expanduser(p.get('directory', ''))
+            if not os.path.isdir(directory):
+                continue
+
+            status = get_git_status(directory)
+            if status:  # Only include if has changes
+                result['changes'].append({
+                    'project': p.get('name'),
+                    'files': status
+                })
+    except Exception:
+        pass
+
+    return jsonify(result)
 
 
 if __name__ == '__main__':

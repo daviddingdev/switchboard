@@ -1,14 +1,14 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**Worker Proposal System Complete**
+**UI Redesign — Files, Activity, Simplified Layout**
 
-Core MVP + worker proposal system complete:
-- Partner can spawn/kill workers via `orch` CLI
-- Partner can send tasks and monitor output
-- Workers submit proposals via `POST /api/proposals`
-- ~/WORKER.md documents proposal API for workers
-- UI: collapsible proposals, resizable sidebar, delete completed
+Problems with current UI:
+- Partner terminal shown twice (redundant)
+- No file visibility across projects
+- No view of what changed (git status)
+- Proposals panel takes space even when empty
+- Hard to understand what's happening across workers
 
 ---
 
@@ -24,26 +24,85 @@ cd ~/orchestrator/api && python3 server.py &
 
 # Start Vite dev server
 cd ~/orchestrator/web && npm run dev
-
-# Partner orchestration
-./scripts/orch list          # List workers
-./scripts/orch projects      # List known projects
 ```
 
-**UI accessible at:** http://100.69.237.80:3000
+**UI accessible at:** http://100.69.237.80:3001
 
 ---
 
 ## In Progress
 
-### Phase 7: Non-Interactive Worker Tasks
-- [ ] Add `orch task` command for non-interactive execution (`claude -p`)
-- [ ] Auto-respond to permission prompts (send "2" for "Yes, don't ask again")
-- [ ] Worker completion detection (poll for idle prompt)
+### Phase 8: UI Redesign (3-Column Layout)
+
+**New Layout:**
+```
+┌──────────────┬─────────────────────────────┬─────────────────┐
+│ FILES        │ TERMINAL                    │ WORKERS         │
+│              │                             │ • partner       │
+│ [project ▼]  │ (selected worker)           │ • family-vault  │
+│              │                             │                 │
+│ ├─ CLAUDE.md │                             ├─────────────────┤
+│ ├─ src/      │                             │ ACTIVITY        │
+│ │  └─ ...    │                             │                 │
+│ └─ docs/     │                             │ ⏳ Pending (1)  │
+│              │                             │ 📝 Changes      │
+│              │                             │ ✓ Recent        │
+├──────────────┴─────────────────────────────┴─────────────────┤
+│ [1][2][3][4][Y][N][Esc]              [Message...]     [Send] │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**API Additions:**
+- [ ] `GET /api/projects` — List from state/projects.yaml
+- [ ] `GET /api/files/<project>` — Recursive file tree (exclude .git, node_modules, etc.)
+- [ ] `GET /api/changes` — Git status across all projects
+- [ ] `GET /api/activity` — Combined: pending proposals + changes + recent
+
+**New Components:**
+- [ ] `FileTree.jsx` — Project dropdown + recursive file explorer
+- [ ] `WorkerList.jsx` — Simplified worker list (click to select)
+- [ ] `Activity.jsx` — Pending proposals + git changes + recent activity
+
+**Modify:**
+- [ ] `App.jsx` — New 3-column CSS grid layout
+- [ ] `api.js` — Add fetchProjects, fetchFiles, fetchChanges, fetchActivity
+- [ ] `index.css` — Grid styles
+
+**Delete:**
+- [ ] `ChatArea.jsx` — Replaced by single terminal in main panel
+- [ ] `ProcessTree.jsx` — Replaced by WorkerList.jsx
+
+**Keep & Reuse:**
+- `ProposalCard.jsx` — Used inside Activity.jsx
+- `Terminal.jsx` — Used in main panel
+- `QuickActions.jsx` — Used in input bar
+- `ChatInput.jsx` — Used in input bar
+- `SpawnDialog.jsx` — Still needed for spawning workers
+
+**Verification:**
+```bash
+# API tests
+curl http://localhost:5001/api/projects
+curl http://localhost:5001/api/files/orchestrator
+curl http://localhost:5001/api/changes
+curl http://localhost:5001/api/activity
+
+# Visual tests
+# - 3-column layout renders correctly
+# - Project dropdown switches file trees
+# - Worker selection switches terminal
+# - Git changes appear in Activity
+# - Proposals appear in Pending section
+```
 
 ---
 
 ## Completed
+
+### UI Polish (Feb 23, 2026)
+- [x] Resizable panels (proposals, process tree, sidebar)
+- [x] QuickActions component (1, 2, 3, 4, Y, N, Enter, Esc)
+- [x] Worker terminal input field
 
 ### Proposals + WORKER.md (Feb 22, 2026)
 - [x] Renamed "plan" to "proposal" (avoids Claude Code plan mode confusion)
@@ -98,11 +157,14 @@ cd ~/orchestrator/web && npm run dev
 
 ## Backlog (Post-MVP)
 
+- [ ] File content preview (click file → view in modal)
+- [ ] Non-interactive worker tasks (`claude -p` mode)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)
 - [ ] Claude Desktop MCP integration
 - [ ] Phone PWA
 - [ ] Child process tracking
+- [ ] Real-time WebSocket updates
 
 ---
 
@@ -115,14 +177,12 @@ cd ~/orchestrator/web && npm run dev
 | Feb 17 | Plans inline in chat | Reduces context switching |
 | Feb 17 | YAML state files | Human-readable, git-friendly |
 | Feb 17 | Polling before WebSocket | Start simple, upgrade if needed |
-
----
-
 | Feb 20 | Polling terminal, not xterm.js | Simpler, works well enough for MVP |
 | Feb 22 | CLI helper over API-only | Partner needs simple bash commands |
 | Feb 22 | SOUL.md as shared context | Reduces duplication across project CLAUDE.md files |
 | Feb 22 | Number prompts for permissions | Arrow keys don't work via tmux send-keys |
+| Feb 23 | 3-column layout | Files + Activity more useful than duplicate terminals |
 
 ---
 
-*Last updated: February 22, 2026*
+*Last updated: February 23, 2026*
