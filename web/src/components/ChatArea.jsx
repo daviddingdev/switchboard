@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Terminal from './Terminal'
 import ChatInput from './ChatInput'
+import QuickActions from './QuickActions'
 import ProposalCard from './ProposalCard'
 import { fetchProposals, updateProposal, deleteProposal, sendToProcess } from '../api'
 
@@ -16,6 +17,9 @@ const styles = {
     borderBottom: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
     flexShrink: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
   proposalHeader: {
     display: 'flex',
@@ -52,8 +56,18 @@ const styles = {
   },
   proposalList: {
     padding: '0 12px 8px',
-    maxHeight: '150px',
     overflow: 'auto',
+    flex: 1,
+  },
+  divider: {
+    height: '4px',
+    background: 'var(--border)',
+    cursor: 'row-resize',
+    flexShrink: 0,
+    transition: 'background 0.15s',
+  },
+  dividerActive: {
+    background: 'var(--accent)',
   },
   terminalWrapper: {
     flex: 1,
@@ -71,6 +85,9 @@ const styles = {
     letterSpacing: '0.5px',
     marginBottom: '6px',
   },
+  quickActionsWrapper: {
+    padding: '0 12px',
+  },
   noProposals: {
     color: 'var(--text-secondary)',
     fontSize: '11px',
@@ -83,6 +100,10 @@ export default function ChatArea() {
   const [updating, setUpdating] = useState(null)
   const [sending, setSending] = useState(false)
   const [proposalsExpanded, setProposalsExpanded] = useState(true)
+  const [proposalHeight, setProposalHeight] = useState(150)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef(null)
+  const containerRef = useRef(null)
 
   const loadProposals = async () => {
     try {
@@ -143,13 +164,40 @@ export default function ChatArea() {
     }
   }
 
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault()
+    setIsDragging(true)
+    dragRef.current = {
+      startY: e.clientY,
+      startHeight: proposalHeight,
+    }
+  }, [proposalHeight])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !dragRef.current) return
+    const delta = e.clientY - dragRef.current.startY
+    const newHeight = Math.min(400, Math.max(60, dragRef.current.startHeight + delta))
+    setProposalHeight(newHeight)
+  }, [isDragging])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+    dragRef.current = null
+  }, [])
+
   const pendingProposals = proposals.filter(p => p.status === 'pending')
   const otherProposals = proposals.filter(p => p.status !== 'pending')
   const pendingCount = pendingProposals.length
 
   return (
-    <div style={styles.container}>
-      <div style={styles.proposalSection}>
+    <div
+      ref={containerRef}
+      style={styles.container}
+      onMouseMove={isDragging ? handleMouseMove : undefined}
+      onMouseUp={isDragging ? handleMouseUp : undefined}
+      onMouseLeave={isDragging ? handleMouseUp : undefined}
+    >
+      <div style={{ ...styles.proposalSection, height: proposalsExpanded ? proposalHeight : 'auto' }}>
         <div style={styles.proposalHeader} onClick={() => setProposalsExpanded(!proposalsExpanded)}>
           <div style={styles.proposalHeaderLeft}>
             <span style={styles.proposalTitle}>Proposals</span>
@@ -188,9 +236,23 @@ export default function ChatArea() {
         )}
       </div>
 
+      {proposalsExpanded && (
+        <div
+          style={{
+            ...styles.divider,
+            ...(isDragging ? styles.dividerActive : {}),
+          }}
+          onMouseDown={handleMouseDown}
+        />
+      )}
+
       <div style={styles.terminalWrapper}>
         <div style={styles.terminalLabel}>Partner</div>
         <Terminal workerName="partner" fullHeight />
+      </div>
+
+      <div style={styles.quickActionsWrapper}>
+        <QuickActions onSend={handleSend} disabled={sending} />
       </div>
 
       <ChatInput onSend={handleSend} disabled={sending} />

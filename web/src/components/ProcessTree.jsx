@@ -4,7 +4,10 @@ import { fetchProcesses, killProcess } from '../api'
 const styles = {
   container: {
     padding: '12px',
-    borderBottom: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    overflow: 'hidden',
   },
   header: {
     fontSize: '11px',
@@ -18,6 +21,8 @@ const styles = {
     listStyle: 'none',
     margin: 0,
     padding: 0,
+    flex: 1,
+    overflow: 'auto',
   },
   item: {
     display: 'flex',

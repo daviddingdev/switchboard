@@ -3,6 +3,9 @@ import ProcessTree from './components/ProcessTree'
 import SpawnDialog from './components/SpawnDialog'
 import ChatArea from './components/ChatArea'
 import Terminal from './components/Terminal'
+import ChatInput from './components/ChatInput'
+import QuickActions from './components/QuickActions'
+import { sendToProcess } from './api'
 
 const styles = {
   container: {
@@ -45,10 +48,17 @@ const styles = {
     minWidth: 0,
     overflow: 'hidden',
   },
-  divider: {
+  dividerV: {
     width: '4px',
     background: 'var(--border)',
     cursor: 'col-resize',
+    flexShrink: 0,
+    transition: 'background 0.15s',
+  },
+  dividerH: {
+    height: '4px',
+    background: 'var(--border)',
+    cursor: 'row-resize',
     flexShrink: 0,
     transition: 'background 0.15s',
   },
@@ -65,9 +75,9 @@ const styles = {
   sidebarSection: {
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
     minHeight: 0,
     padding: '0 10px 10px',
+    overflow: 'hidden',
   },
   sidebarLabel: {
     fontSize: '10px',
@@ -77,6 +87,24 @@ const styles = {
     letterSpacing: '0.5px',
     marginBottom: '6px',
   },
+  processTreeWrapper: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  terminalSection: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    padding: '0 10px 10px',
+  },
+  quickActionsWrapper: {
+    paddingTop: '4px',
+  },
+  inputWrapper: {
+    padding: '0 10px 10px',
+  },
 }
 
 export default function App() {
@@ -84,34 +112,85 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedWorker, setSelectedWorker] = useState('partner')
   const [sidebarWidth, setSidebarWidth] = useState(400)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef(null)
+  const [processTreeHeight, setProcessTreeHeight] = useState(180)
+  const [isDraggingV, setIsDraggingV] = useState(false)
+  const [isDraggingH, setIsDraggingH] = useState(false)
+  const [sending, setSending] = useState(false)
+  const dragRefV = useRef(null)
+  const dragRefH = useRef(null)
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
   }
 
-  const handleMouseDown = useCallback((e) => {
+  // Vertical divider (sidebar width)
+  const handleMouseDownV = useCallback((e) => {
     e.preventDefault()
-    setIsDragging(true)
-    dragRef.current = {
+    setIsDraggingV(true)
+    dragRefV.current = {
       startX: e.clientX,
       startWidth: sidebarWidth,
     }
   }, [sidebarWidth])
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !dragRef.current) return
-    const delta = dragRef.current.startX - e.clientX
-    const newWidth = Math.min(600, Math.max(200, dragRef.current.startWidth + delta))
+  const handleMouseMoveV = useCallback((e) => {
+    if (!isDraggingV || !dragRefV.current) return
+    const delta = dragRefV.current.startX - e.clientX
+    const newWidth = Math.min(600, Math.max(200, dragRefV.current.startWidth + delta))
     setSidebarWidth(newWidth)
-  }, [isDragging])
+  }, [isDraggingV])
+
+  const handleMouseUpV = useCallback(() => {
+    setIsDraggingV(false)
+    dragRefV.current = null
+  }, [])
+
+  // Horizontal divider (process tree height)
+  const handleMouseDownH = useCallback((e) => {
+    e.preventDefault()
+    setIsDraggingH(true)
+    dragRefH.current = {
+      startY: e.clientY,
+      startHeight: processTreeHeight,
+    }
+  }, [processTreeHeight])
+
+  const handleMouseMoveH = useCallback((e) => {
+    if (!isDraggingH || !dragRefH.current) return
+    const delta = e.clientY - dragRefH.current.startY
+    const newHeight = Math.min(400, Math.max(80, dragRefH.current.startHeight + delta))
+    setProcessTreeHeight(newHeight)
+  }, [isDraggingH])
+
+  const handleMouseUpH = useCallback(() => {
+    setIsDraggingH(false)
+    dragRefH.current = null
+  }, [])
+
+  const isDragging = isDraggingV || isDraggingH
+
+  const handleMouseMove = useCallback((e) => {
+    if (isDraggingV) handleMouseMoveV(e)
+    if (isDraggingH) handleMouseMoveH(e)
+  }, [isDraggingV, isDraggingH, handleMouseMoveV, handleMouseMoveH])
 
   const handleMouseUp = useCallback(() => {
-    setIsDragging(false)
-    dragRef.current = null
-  }, [])
+    handleMouseUpV()
+    handleMouseUpH()
+  }, [handleMouseUpV, handleMouseUpH])
+
+  const handleSendToWorker = async (text) => {
+    if (!selectedWorker) return
+    setSending(true)
+    try {
+      await sendToProcess(selectedWorker, text)
+    } catch (err) {
+      alert(`Failed to send: ${err.message}`)
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <div
@@ -134,24 +213,46 @@ export default function App() {
 
         <div
           style={{
-            ...styles.divider,
-            ...(isDragging ? styles.dividerActive : {}),
+            ...styles.dividerV,
+            ...(isDraggingV ? styles.dividerActive : {}),
           }}
-          onMouseDown={handleMouseDown}
+          onMouseDown={handleMouseDownV}
         />
 
         <aside style={{ ...styles.sidebar, width: sidebarWidth }}>
-          <ProcessTree
-            key={refreshKey}
-            onRefresh={() => setRefreshKey(k => k + 1)}
-            selectedWorker={selectedWorker}
-            onSelect={setSelectedWorker}
+          <div style={{ ...styles.processTreeWrapper, height: processTreeHeight }}>
+            <ProcessTree
+              key={refreshKey}
+              onRefresh={() => setRefreshKey(k => k + 1)}
+              selectedWorker={selectedWorker}
+              onSelect={setSelectedWorker}
+            />
+          </div>
+
+          <div
+            style={{
+              ...styles.dividerH,
+              ...(isDraggingH ? styles.dividerActive : {}),
+            }}
+            onMouseDown={handleMouseDownH}
           />
-          <div style={styles.sidebarSection}>
+
+          <div style={styles.terminalSection}>
             <div style={styles.sidebarLabel}>
               {selectedWorker === 'partner' ? 'Partner' : selectedWorker}
             </div>
             <Terminal workerName={selectedWorker} />
+            <div style={styles.quickActionsWrapper}>
+              <QuickActions onSend={handleSendToWorker} disabled={sending} />
+            </div>
+          </div>
+
+          <div style={styles.inputWrapper}>
+            <ChatInput
+              onSend={handleSendToWorker}
+              disabled={sending}
+              placeholder={`Send to ${selectedWorker}...`}
+            />
           </div>
         </aside>
       </main>
