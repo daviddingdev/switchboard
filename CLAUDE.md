@@ -1,6 +1,6 @@
 # Orchestrator
 
-> **Before starting:** Read `~/SOUL.md`, `~/INFRASTRUCTURE.md`, and `~/WORKER.md`
+> **Before starting:** Read `~/INFRASTRUCTURE.md` and `~/WORKER.md`
 
 Personal AI operating system for managing Claude Code sessions across projects.
 
