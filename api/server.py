@@ -957,14 +957,12 @@ RULES:
 - Don't add entries for doc updates themselves
 
 CONTEXT:
-{context}
-
-After updating, run: git add CHANGELOG.md TODO.md USAGE.md 2>/dev/null; git status --short"""
+{context}"""
 
     # Run claude -p
     try:
         result = subprocess.run(
-            ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write,Bash,Glob'],
+            ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write,Glob'],
             cwd=directory,
             capture_output=True,
             text=True,
