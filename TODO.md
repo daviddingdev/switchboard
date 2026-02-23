@@ -30,6 +30,10 @@ cd ~/orchestrator
 
 ## Completed
 
+### Documentation Improvements (Feb 23, 2026)
+- [x] Removed end-of-session checklist — orchestrator handles doc updates
+- [x] Added `docs/NEW_PROJECT.md` — Setup guide for new projects
+
 ### Commit Panel + Tab Improvements (Feb 23, 2026)
 - [x] Commit panel — Manual commit UI with custom messages per project
 - [x] `POST /api/commit` — Stage all and commit endpoint

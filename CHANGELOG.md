@@ -2,6 +2,16 @@
 
 ## 2026-02-23
 
+### Documentation Improvements
+
+- **Removed end-of-session checklist from CLAUDE.md** — Orchestrator now handles doc updates at push time, workers don't need manual checklist
+- **Added `docs/NEW_PROJECT.md`** — Setup guide for creating new projects on Spark
+  - Git init, CLAUDE.md template, GitHub repo creation
+  - Connect and push instructions
+  - Common .gitignore template
+
+---
+
 ### Session Detection + Reset Improvements
 
 - **Session detection uses mtime** — `find_latest_session_file()` now uses modification time as primary heuristic (most recently modified = active session), reverting from file size approach
