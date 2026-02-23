@@ -26,8 +26,11 @@ const styles = {
     marginBottom: '-1px',
   },
   tabIcon: {
-    fontSize: '12px',
+    fontSize: '10px',
     flexShrink: 0,
+  },
+  tabIconTerminal: {
+    color: 'var(--success)',
   },
   tabLabel: {
     overflow: 'hidden',
@@ -60,11 +63,14 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
           }}
           onClick={() => onTabSelect(tab.id)}
         >
-          <span style={styles.tabIcon}>
-            {tab.type === 'terminal' ? '▶' : '📄'}
+          <span style={{
+            ...styles.tabIcon,
+            ...(tab.type === 'terminal' ? styles.tabIconTerminal : {})
+          }}>
+            {tab.type === 'terminal' ? '●' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {tab.type === 'file' && (
+          {(tab.type === 'file' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
             <button
               style={styles.closeButton}
               onClick={(e) => {

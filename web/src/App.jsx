@@ -87,23 +87,25 @@ const styles = {
 }
 
 export default function App() {
-  const [selectedWorker, setSelectedWorker] = useState('partner')
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [sending, setSending] = useState(false)
 
-  // Tab state
+  // Tab state - terminals and files
   const [tabs, setTabs] = useState([
-    { id: 'terminal', label: 'Terminal', type: 'terminal' }
+    { id: 'terminal:partner', label: 'partner', type: 'terminal', workerName: 'partner' }
   ])
-  const [activeTab, setActiveTab] = useState('terminal')
+  const [activeTab, setActiveTab] = useState('terminal:partner')
+
+  // Get current worker from active terminal tab
+  const activeTerminalTab = tabs.find(t => t.id === activeTab && t.type === 'terminal')
+  const currentWorker = activeTerminalTab?.workerName || 'partner'
 
   const handleFileSelect = useCallback((file) => {
-    if (file.type === 'dir') return  // Don't open directories
+    if (file.type === 'dir') return
 
-    const tabId = file.path
+    const tabId = `file:${file.path}`
 
-    // Check if already open
     if (!tabs.find(t => t.id === tabId)) {
       setTabs(prev => [...prev, {
         id: tabId,
@@ -116,10 +118,29 @@ export default function App() {
     setActiveTab(tabId)
   }, [tabs])
 
+  const handleWorkerSelect = useCallback((workerName) => {
+    const tabId = `terminal:${workerName}`
+
+    // Check if terminal tab already exists
+    if (!tabs.find(t => t.id === tabId)) {
+      setTabs(prev => [...prev, {
+        id: tabId,
+        label: workerName,
+        type: 'terminal',
+        workerName: workerName
+      }])
+    }
+
+    setActiveTab(tabId)
+  }, [tabs])
+
   const handleTabClose = useCallback((tabId) => {
+    // Don't allow closing partner terminal
+    if (tabId === 'terminal:partner') return
+
     setTabs(prev => prev.filter(t => t.id !== tabId))
     if (activeTab === tabId) {
-      setActiveTab('terminal')
+      setActiveTab('terminal:partner')
     }
   }, [activeTab])
 
@@ -129,10 +150,10 @@ export default function App() {
   }
 
   const handleSend = async (text) => {
-    if (!selectedWorker) return
+    if (!currentWorker) return
     setSending(true)
     try {
-      await sendToProcess(selectedWorker, text)
+      await sendToProcess(currentWorker, text)
     } catch (err) {
       alert(`Failed to send: ${err.message}`)
     } finally {
@@ -158,9 +179,9 @@ export default function App() {
           onTabClose={handleTabClose}
         />
         <div style={styles.centerContent}>
-          {activeTab === 'terminal' ? (
+          {activeTerminalTab ? (
             <div style={styles.terminalWrapper}>
-              <Terminal workerName={selectedWorker} fullHeight />
+              <Terminal workerName={activeTerminalTab.workerName} fullHeight />
             </div>
           ) : activeFileTab ? (
             <FilePreview filepath={activeFileTab.filepath} />
@@ -180,8 +201,8 @@ export default function App() {
         </div>
         <WorkerList
           key={refreshKey}
-          selectedWorker={selectedWorker}
-          onSelect={setSelectedWorker}
+          selectedWorker={currentWorker}
+          onSelect={handleWorkerSelect}
           onRefresh={() => setRefreshKey(k => k + 1)}
         />
         <Activity />
@@ -196,7 +217,7 @@ export default function App() {
           <ChatInput
             onSend={handleSend}
             disabled={sending}
-            placeholder={`Send to ${selectedWorker}...`}
+            placeholder={`Send to ${currentWorker}...`}
           />
         </div>
       </footer>

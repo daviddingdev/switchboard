@@ -88,8 +88,8 @@ const styles = {
 }
 
 function FileItem({ item, depth = 0, onFileSelect }) {
-  // Auto-expand projects and root level
-  const [expanded, setExpanded] = useState(item.is_project || depth < 1)
+  // All folders collapsed by default
+  const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
   const isDir = item.type === 'dir'
   const indent = depth * 14
