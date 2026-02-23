@@ -30,6 +30,17 @@ cd ~/orchestrator
 
 ## Completed
 
+### Auto-Preview for Plan Files (Feb 23, 2026)
+- [x] `POST /api/preview` + `GET /api/preview/pending` — Preview queue API
+- [x] `EphemeralPreview.jsx` — Tab component for temporary content
+- [x] Terminal preview extraction — Parse `:::PREVIEW:::` blocks from output
+- [x] Plan mode integration — Workers post plans that auto-open in UI
+- [x] Preview test button (👁) in QuickActions
+
+### Documentation Cleanup (Feb 23, 2026)
+- [x] Simplified CLAUDE.md — 144 lines → 38 lines
+- [x] Added plan mode curl command for workers
+
 ### Documentation Improvements (Feb 23, 2026)
 - [x] Removed end-of-session checklist — orchestrator handles doc updates
 - [x] Added `docs/NEW_PROJECT.md` — Setup guide for new projects

@@ -2,6 +2,32 @@
 
 ## 2026-02-23
 
+### Auto-Preview for Plan Files
+
+- **Preview API** — New endpoint to queue content for display in the UI
+  - `POST /api/preview` — Queue content (markdown, code, etc.) for preview
+  - `GET /api/preview/pending` — Fetch and clear pending previews
+- **EphemeralPreview component** — New tab type for temporary content display
+  - Syntax highlighting with highlight.js
+  - Copy button
+  - Full-height scrollable content
+- **Terminal preview extraction** — Terminal output can contain `:::PREVIEW:Title:lang:::` blocks that auto-open as preview tabs
+- **Plan mode integration** — Workers can post plans to `/api/preview` and have them open automatically in the UI
+- **Preview test button** (👁) in QuickActions for testing preview functionality
+
+---
+
+### Documentation Cleanup
+
+- **Simplified CLAUDE.md** — Reduced from 144 lines to 38 lines
+  - Removed detailed architecture docs (moved to architecture.md)
+  - Removed API endpoint reference (check server.py)
+  - Removed directory structure listing
+  - Added plan mode curl command for workers
+  - Focused on quick start, key details, and gotchas
+
+---
+
 ### Bug Fixes
 
 - **Fixed update-docs race condition** — Removed automatic `git add` from update-docs prompt and removed Bash tool from allowed tools to prevent doc updater from modifying git state
