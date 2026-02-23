@@ -45,6 +45,7 @@ def index():
             "PATCH /api/proposals/<id>",
             "DELETE /api/proposals/<id>",
             "GET /api/projects",
+            "GET /api/home",
             "GET /api/files/<project>",
             "GET /api/changes",
             "GET /api/activity"
@@ -228,16 +229,48 @@ def delete_proposal(proposal_id):
 # Projects, Files, Changes, Activity endpoints
 # =============================================================================
 
+def discover_projects(root_dir=None, max_depth=3):
+    """
+    Auto-discover projects by finding directories with CLAUDE.md files.
+    Returns list of project directories relative to root.
+    """
+    if root_dir is None:
+        root_dir = os.path.expanduser('~')
+
+    projects = []
+
+    def scan_dir(directory, depth=0):
+        if depth > max_depth:
+            return
+        try:
+            entries = os.listdir(directory)
+        except (PermissionError, FileNotFoundError):
+            return
+
+        # Check if this directory has CLAUDE.md
+        if 'CLAUDE.md' in entries:
+            projects.append({
+                'name': os.path.basename(directory),
+                'directory': directory,
+                'has_claude_md': True
+            })
+            return  # Don't recurse into projects
+
+        # Recurse into subdirectories
+        for name in entries:
+            if name in EXCLUDE_DIRS or name.startswith('.'):
+                continue
+            path = os.path.join(directory, name)
+            if os.path.isdir(path):
+                scan_dir(path, depth + 1)
+
+    scan_dir(root_dir)
+    return sorted(projects, key=lambda p: p['name'].lower())
+
+
 def load_projects():
-    """Load projects from state/projects.yaml."""
-    if not PROJECTS_FILE.exists():
-        return []
-    try:
-        with open(PROJECTS_FILE) as f:
-            data = yaml.safe_load(f)
-            return data.get('projects', [])
-    except Exception:
-        return []
+    """Auto-discover projects with CLAUDE.md files."""
+    return discover_projects()
 
 
 def get_project_directory(project_name):
@@ -245,7 +278,7 @@ def get_project_directory(project_name):
     projects = load_projects()
     for p in projects:
         if p.get('name') == project_name:
-            return os.path.expanduser(p.get('directory', ''))
+            return p.get('directory', '')
     return None
 
 
@@ -307,8 +340,90 @@ def get_git_status(directory):
 
 @app.route('/api/projects')
 def list_projects():
-    """List all projects from state/projects.yaml."""
+    """Auto-discover projects with CLAUDE.md files."""
     return jsonify(load_projects())
+
+
+@app.route('/api/home')
+def get_home_tree():
+    """
+    Get home directory tree showing:
+    - Root-level .md files (SOUL.md, INFRASTRUCTURE.md, etc.)
+    - Only directories that are projects (have CLAUDE.md)
+    """
+    home_dir = os.path.expanduser('~')
+    projects = discover_projects()
+    project_dirs = {p['directory'] for p in projects}
+
+    result = []
+
+    try:
+        entries = sorted(os.listdir(home_dir))
+    except (PermissionError, FileNotFoundError):
+        return jsonify([])
+
+    # Add root-level .md files
+    for name in entries:
+        if name.endswith('.md') and not name.startswith('.'):
+            path = os.path.join(home_dir, name)
+            if os.path.isfile(path):
+                result.append({
+                    'name': name,
+                    'path': path,
+                    'type': 'file'
+                })
+
+    # Add project directories with their file trees
+    for project in projects:
+        proj_dir = project['directory']
+        proj_name = project['name']
+
+        # Get relative path from home (e.g., "services/research-pipeline" or just "orchestrator")
+        rel_path = os.path.relpath(proj_dir, home_dir)
+        parts = rel_path.split(os.sep)
+
+        if len(parts) == 1:
+            # Direct child of home (e.g., ~/orchestrator)
+            result.append({
+                'name': proj_name,
+                'path': proj_dir,
+                'type': 'dir',
+                'is_project': True,
+                'children': build_file_tree(proj_dir)
+            })
+        else:
+            # Nested (e.g., ~/services/research-pipeline)
+            # Find or create parent directories
+            parent_name = parts[0]
+            existing_parent = next((r for r in result if r['name'] == parent_name and r['type'] == 'dir'), None)
+
+            if not existing_parent:
+                parent_path = os.path.join(home_dir, parent_name)
+                existing_parent = {
+                    'name': parent_name,
+                    'path': parent_path,
+                    'type': 'dir',
+                    'is_project': False,
+                    'children': []
+                }
+                result.append(existing_parent)
+
+            # Add the project as child
+            existing_parent['children'].append({
+                'name': proj_name,
+                'path': proj_dir,
+                'type': 'dir',
+                'is_project': True,
+                'children': build_file_tree(proj_dir)
+            })
+
+    # Sort: files first (SOUL.md etc.), then directories
+    result.sort(key=lambda x: (0 if x['type'] == 'file' else 1, x['name'].lower()))
+
+    return jsonify({
+        'directory': home_dir,
+        'files': result
+    })
 
 
 @app.route('/api/files/<project>')

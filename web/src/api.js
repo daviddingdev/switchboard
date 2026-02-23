@@ -92,6 +92,12 @@ export async function fetchProjects() {
   return res.json();
 }
 
+export async function fetchHome() {
+  const res = await fetch(`${API_BASE}/home`);
+  if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchFiles(project) {
   const res = await fetch(`${API_BASE}/files/${encodeURIComponent(project)}`);
   if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);

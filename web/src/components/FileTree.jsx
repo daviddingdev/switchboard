@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchProjects, fetchFiles } from '../api'
+import { fetchHome } from '../api'
 
 const styles = {
   container: {
@@ -9,22 +9,18 @@ const styles = {
     overflow: 'hidden',
   },
   header: {
-    padding: '10px 12px',
+    padding: '8px 12px',
     borderBottom: '1px solid var(--border)',
-  },
-  select: {
-    width: '100%',
-    padding: '6px 8px',
-    background: 'var(--bg-tertiary)',
-    border: '1px solid var(--border)',
-    borderRadius: '4px',
-    color: 'var(--text-primary)',
-    fontSize: '13px',
+    fontSize: '10px',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   tree: {
     flex: 1,
     overflow: 'auto',
-    padding: '8px 0',
+    padding: '4px 0',
   },
   item: {
     display: 'flex',
@@ -37,16 +33,29 @@ const styles = {
   itemHover: {
     background: 'var(--bg-tertiary)',
   },
+  itemProject: {
+    fontWeight: 500,
+  },
   icon: {
     marginRight: '6px',
     fontSize: '12px',
     width: '16px',
     textAlign: 'center',
+    flexShrink: 0,
   },
   name: {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  projectBadge: {
+    marginLeft: '6px',
+    fontSize: '9px',
+    padding: '1px 4px',
+    borderRadius: '3px',
+    background: 'var(--accent)',
+    color: 'white',
+    fontWeight: 500,
   },
   empty: {
     padding: '20px',
@@ -63,10 +72,11 @@ const styles = {
 }
 
 function FileItem({ item, depth = 0, onFileSelect }) {
-  const [expanded, setExpanded] = useState(depth < 2)
+  // Auto-expand projects and root level, collapse deep directories
+  const [expanded, setExpanded] = useState(item.is_project || depth < 1)
   const [hovered, setHovered] = useState(false)
   const isDir = item.type === 'dir'
-  const indent = depth * 16
+  const indent = depth * 14
 
   const handleClick = () => {
     if (isDir) {
@@ -76,22 +86,40 @@ function FileItem({ item, depth = 0, onFileSelect }) {
     }
   }
 
+  // Choose icon based on file type
+  const getIcon = () => {
+    if (isDir) {
+      if (item.is_project) return expanded ? '📂' : '📁'
+      return expanded ? '📂' : '📁'
+    }
+    // Special icons for known files
+    if (item.name === 'SOUL.md') return '✨'
+    if (item.name === 'INFRASTRUCTURE.md') return '🏗️'
+    if (item.name === 'WORKER.md') return '👷'
+    if (item.name === 'CLAUDE.md') return '🤖'
+    if (item.name.endsWith('.md')) return '📝'
+    if (item.name.endsWith('.py')) return '🐍'
+    if (item.name.endsWith('.js') || item.name.endsWith('.jsx')) return '📜'
+    if (item.name.endsWith('.yaml') || item.name.endsWith('.yml')) return '⚙️'
+    return '📄'
+  }
+
   return (
     <>
       <div
         style={{
           ...styles.item,
-          paddingLeft: 12 + indent,
+          paddingLeft: 8 + indent,
           ...(hovered ? styles.itemHover : {}),
+          ...(item.is_project ? styles.itemProject : {}),
         }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <span style={styles.icon}>
-          {isDir ? (expanded ? '📂' : '📁') : '📄'}
-        </span>
+        <span style={styles.icon}>{getIcon()}</span>
         <span style={styles.name}>{item.name}</span>
+        {item.is_project && <span style={styles.projectBadge}>project</span>}
       </div>
       {isDir && expanded && item.children?.map((child, i) => (
         <FileItem
@@ -106,62 +134,34 @@ function FileItem({ item, depth = 0, onFileSelect }) {
 }
 
 export default function FileTree({ onFileSelect }) {
-  const [projects, setProjects] = useState([])
-  const [selectedProject, setSelectedProject] = useState('')
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Load projects on mount
   useEffect(() => {
-    fetchProjects()
+    fetchHome()
       .then(data => {
-        setProjects(data)
-        if (data.length > 0) {
-          // Default to orchestrator if available, else first project
-          const defaultProject = data.find(p => p.name === 'orchestrator') || data[0]
-          setSelectedProject(defaultProject.name)
-        }
+        setFiles(data.files || [])
+        setError(null)
       })
-      .catch(err => console.error('Failed to load projects:', err))
+      .catch(err => {
+        console.error('Failed to load files:', err)
+        setError(err.message)
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  // Load files when project changes
-  useEffect(() => {
-    if (!selectedProject) {
-      setFiles([])
-      return
-    }
-
-    setLoading(true)
-    fetchFiles(selectedProject)
-      .then(data => setFiles(data.files || []))
-      .catch(err => {
-        console.error('Failed to load files:', err)
-        setFiles([])
-      })
-      .finally(() => setLoading(false))
-  }, [selectedProject])
-
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <select
-          style={styles.select}
-          value={selectedProject}
-          onChange={(e) => setSelectedProject(e.target.value)}
-        >
-          {projects.map(p => (
-            <option key={p.name} value={p.name}>{p.name}</option>
-          ))}
-        </select>
-      </div>
+      <div style={styles.header}>Files</div>
 
       <div style={styles.tree}>
         {loading ? (
           <div style={styles.loading}>Loading...</div>
+        ) : error ? (
+          <div style={styles.empty}>Error: {error}</div>
         ) : files.length === 0 ? (
-          <div style={styles.empty}>No files</div>
+          <div style={styles.empty}>No projects found</div>
         ) : (
           files.map((item, i) => (
             <FileItem
