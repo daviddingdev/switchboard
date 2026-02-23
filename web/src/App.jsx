@@ -4,10 +4,10 @@ import Terminal from './components/Terminal'
 import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
 import DiffPreview from './components/DiffPreview'
+import PushPanel from './components/PushPanel'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
-import PushDialog from './components/PushDialog'
 import QuickActions from './components/QuickActions'
 import ChatInput from './components/ChatInput'
 import { sendToProcess } from './api'
@@ -122,7 +122,6 @@ const styles = {
 
 export default function App() {
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
-  const [showPushDialog, setShowPushDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [sending, setSending] = useState(false)
 
@@ -247,6 +246,20 @@ export default function App() {
     setActiveTab(tabId)
   }, [tabs])
 
+  const handlePushClick = useCallback(() => {
+    const tabId = 'push'
+
+    if (!tabs.find(t => t.id === tabId)) {
+      setTabs(prev => [...prev, {
+        id: tabId,
+        label: 'Push',
+        type: 'push'
+      }])
+    }
+
+    setActiveTab(tabId)
+  }, [tabs])
+
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
@@ -278,6 +291,7 @@ export default function App() {
 
   const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
   const activeDiffTab = tabs.find(t => t.id === activeTab && t.type === 'diff')
+  const activePushTab = tabs.find(t => t.id === activeTab && t.type === 'push')
 
   return (
     <div
@@ -319,6 +333,8 @@ export default function App() {
               <FilePreview filepath={activeFileTab.filepath} />
             ) : activeDiffTab ? (
               <DiffPreview project={activeDiffTab.project} filepath={activeDiffTab.filepath} />
+            ) : activePushTab ? (
+              <PushPanel />
             ) : null}
           </div>
         </main>
@@ -348,7 +364,7 @@ export default function App() {
             onSelect={handleWorkerSelect}
             onRefresh={() => setRefreshKey(k => k + 1)}
           />
-          <Activity onFileClick={handleChangeFileClick} onPushClick={() => setShowPushDialog(true)} />
+          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} />
         </aside>
       </div>
 
@@ -380,13 +396,6 @@ export default function App() {
         <SpawnDialog
           onClose={() => setShowSpawnDialog(false)}
           onSpawned={handleSpawned}
-        />
-      )}
-
-      {/* Push Dialog */}
-      {showPushDialog && (
-        <PushDialog
-          onClose={() => setShowPushDialog(false)}
         />
       )}
     </div>
