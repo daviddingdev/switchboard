@@ -51,7 +51,38 @@ function parseAnsi(text) {
     .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '') // Remove other ANSI escapes
 }
 
-export default function Terminal({ workerName, fullHeight = false }) {
+// Extract preview blocks from output
+// Format: :::PREVIEW:Title:language::: content :::/PREVIEW:::
+const PREVIEW_PATTERN = /:::PREVIEW:([^:]+)(?::([^:]+))?:::([\s\S]*?):::\/PREVIEW:::/
+
+// Global set to track seen previews across all Terminal instances
+const globalSeenPreviews = new Set()
+
+function extractPreviews(text) {
+  const previews = []
+  let remaining = text
+  let cleanedText = text
+
+  // Find all preview blocks
+  let match
+  while ((match = PREVIEW_PATTERN.exec(remaining)) !== null) {
+    const fullMatch = match[0]
+    previews.push({
+      title: match[1],
+      language: match[2] || 'markdown',
+      content: match[3].trim(),
+      key: fullMatch
+    })
+    // Remove this match from remaining to find next
+    remaining = remaining.slice(match.index + fullMatch.length)
+    // Replace in cleaned text
+    cleanedText = cleanedText.replace(fullMatch, `[Preview: ${match[1]}]`)
+  }
+
+  return { previews, cleanedText }
+}
+
+export default function Terminal({ workerName, fullHeight = false, onPreview }) {
   const [output, setOutput] = useState('')
   const [loading, setLoading] = useState(true)
   const outputRef = useRef(null)
@@ -71,7 +102,21 @@ export default function Terminal({ workerName, fullHeight = false }) {
             const el = outputRef.current
             wasAtBottomRef.current = el.scrollHeight - el.scrollTop <= el.clientHeight + 50
           }
-          setOutput(parseAnsi(data.output || ''))
+
+          const rawOutput = parseAnsi(data.output || '')
+          const { previews, cleanedText } = extractPreviews(rawOutput)
+
+          // Open preview tabs for new previews (use global set for deduplication)
+          if (onPreview) {
+            for (const preview of previews) {
+              if (!globalSeenPreviews.has(preview.key)) {
+                globalSeenPreviews.add(preview.key)
+                onPreview(preview.content, preview.title, preview.language)
+              }
+            }
+          }
+
+          setOutput(cleanedText)
           setLoading(false)
         }
       } catch (err) {
@@ -89,7 +134,7 @@ export default function Terminal({ workerName, fullHeight = false }) {
       mounted = false
       clearInterval(interval)
     }
-  }, [workerName])
+  }, [workerName, onPreview])
 
   useEffect(() => {
     if (outputRef.current && wasAtBottomRef.current) {

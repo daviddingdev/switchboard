@@ -207,3 +207,24 @@ export async function resetPartner() {
   }
   return res.json();
 }
+
+// Preview
+
+export async function createPreview(content, title = 'Preview', language = 'markdown') {
+  const res = await fetch(`${API_BASE}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, title, language })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to create preview: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchPendingPreviews() {
+  const res = await fetch(`${API_BASE}/preview/pending`);
+  if (!res.ok) throw new Error(`Failed to fetch pending previews: ${res.status}`);
+  return res.json();
+}

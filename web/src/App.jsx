@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import FileTree from './components/FileTree'
 import Terminal from './components/Terminal'
 import TabBar from './components/TabBar'
@@ -7,12 +7,13 @@ import DiffPreview from './components/DiffPreview'
 import PushPanel from './components/PushPanel'
 import CommitPanel from './components/CommitPanel'
 import PartnerHistory from './components/PartnerHistory'
+import EphemeralPreview from './components/EphemeralPreview'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
 import QuickActions from './components/QuickActions'
 import ChatInput from './components/ChatInput'
-import { sendToProcess } from './api'
+import { sendToProcess, fetchPendingPreviews } from './api'
 
 // Panel constraints
 const MIN_LEFT = 120
@@ -291,6 +292,35 @@ export default function App() {
     setActiveTab(tabId)
   }, [tabs])
 
+  const handleCreatePreview = useCallback((content, title, language = 'markdown') => {
+    const tabId = `preview:${Date.now()}`
+    setTabs(prev => [...prev, {
+      id: tabId,
+      label: title || 'Preview',
+      type: 'preview',
+      content: content,
+      language: language
+    }])
+    setActiveTab(tabId)
+  }, [])
+
+  // Poll for pending previews from API
+  useEffect(() => {
+    const pollPreviews = async () => {
+      try {
+        const { previews } = await fetchPendingPreviews()
+        for (const preview of previews) {
+          handleCreatePreview(preview.content, preview.title, preview.language)
+        }
+      } catch (err) {
+        // Silently ignore polling errors
+      }
+    }
+
+    const interval = setInterval(pollPreviews, 1000)
+    return () => clearInterval(interval)
+  }, [handleCreatePreview])
+
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
@@ -330,6 +360,12 @@ export default function App() {
   const activePushTab = tabs.find(t => t.id === activeTab && t.type === 'push')
   const activeCommitTab = tabs.find(t => t.id === activeTab && t.type === 'commit')
   const activeHistoryTab = tabs.find(t => t.id === activeTab && t.type === 'history')
+  const activePreviewTab = tabs.find(t => t.id === activeTab && t.type === 'preview')
+
+  // Expose preview creation for testing and API integration
+  if (typeof window !== 'undefined') {
+    window.createPreview = handleCreatePreview
+  }
 
   return (
     <div
@@ -365,7 +401,11 @@ export default function App() {
           <div style={styles.centerContent}>
             {activeTerminalTab && (
               <div style={styles.terminalWrapper}>
-                <Terminal workerName={activeTerminalTab.workerName} fullHeight />
+                <Terminal
+                  workerName={activeTerminalTab.workerName}
+                  fullHeight
+                  onPreview={handleCreatePreview}
+                />
               </div>
             )}
             {activeFileTab && (
@@ -387,6 +427,12 @@ export default function App() {
             )}
             {activeHistoryTab && (
               <PartnerHistory />
+            )}
+            {activePreviewTab && (
+              <EphemeralPreview
+                content={activePreviewTab.content}
+                language={activePreviewTab.language}
+              />
             )}
           </div>
         </main>
@@ -432,7 +478,7 @@ export default function App() {
       {/* Bottom: Input Bar */}
       <footer style={{ ...styles.inputBar, height: inputHeight }}>
         <div style={styles.quickActionsWrapper}>
-          <QuickActions onSend={handleSend} onSendRaw={handleSendRaw} onPopulate={handlePopulate} disabled={sending} />
+          <QuickActions onSend={handleSend} onSendRaw={handleSendRaw} onPopulate={handlePopulate} onPreview={handleCreatePreview} disabled={sending} />
         </div>
         <div style={styles.inputWrapper}>
           <ChatInput

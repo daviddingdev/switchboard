@@ -46,6 +46,7 @@ def index():
             "DELETE /api/processes/<name>",
             "POST /api/processes/<name>/send",
             "GET /api/processes/<name>/output",
+            "POST /api/preview",
             "GET /api/proposals",
             "POST /api/proposals",
             "PATCH /api/proposals/<id>",
@@ -134,6 +135,115 @@ def get_output(name):
     lines = request.args.get('lines', 100, type=int)
     output = tmux.capture_output(name, lines)
     return {"output": output}
+
+
+# In-memory queue for pending previews (simple approach)
+pending_previews = []
+preview_counter = [0]  # Use list to allow mutation in nested function
+
+# Track seen plan files to avoid re-queueing
+PLANS_DIR = os.path.expanduser('~/.claude/plans')
+seen_plan_mtimes = {}  # filename -> mtime
+
+def init_seen_plans():
+    """Initialize seen_plan_mtimes with existing files on startup."""
+    if not os.path.isdir(PLANS_DIR):
+        return
+    for filename in os.listdir(PLANS_DIR):
+        if filename.endswith('.md'):
+            filepath = os.path.join(PLANS_DIR, filename)
+            try:
+                seen_plan_mtimes[filename] = os.path.getmtime(filepath)
+            except OSError:
+                pass
+
+init_seen_plans()
+
+@app.route('/api/preview', methods=['POST'])
+def create_preview():
+    """Queue a preview for the UI to pick up."""
+    data = request.json or {}
+    content = data.get('content', '')
+    title = data.get('title', 'Preview')
+    language = data.get('language', 'markdown')
+
+    if not content:
+        return {"error": "content required"}, 400
+
+    preview_counter[0] += 1
+    preview = {
+        'id': preview_counter[0],
+        'content': content,
+        'title': title,
+        'language': language
+    }
+    pending_previews.append(preview)
+
+    return jsonify({'status': 'queued', 'id': preview['id']})
+
+
+def check_plan_files():
+    """Check for new/updated plan files and queue them as previews."""
+    global seen_plan_mtimes
+
+    if not os.path.isdir(PLANS_DIR):
+        return
+
+    try:
+        for filename in os.listdir(PLANS_DIR):
+            if not filename.endswith('.md'):
+                continue
+
+            filepath = os.path.join(PLANS_DIR, filename)
+            try:
+                mtime = os.path.getmtime(filepath)
+            except OSError:
+                continue
+
+            # Check if this is new or updated
+            if filename in seen_plan_mtimes and seen_plan_mtimes[filename] >= mtime:
+                continue
+
+            # Read and queue the plan
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                if content.strip():
+                    # Extract title from first heading or use filename
+                    lines = content.strip().split('\n')
+                    title = filename.replace('.md', '')
+                    for line in lines[:5]:
+                        if line.startswith('# '):
+                            title = line[2:].strip()
+                            break
+
+                    preview_counter[0] += 1
+                    pending_previews.append({
+                        'id': preview_counter[0],
+                        'content': content,
+                        'title': f"Plan: {title}",
+                        'language': 'markdown'
+                    })
+
+                seen_plan_mtimes[filename] = mtime
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+@app.route('/api/preview/pending')
+def get_pending_previews():
+    """Get and clear pending previews. Also checks for new plan files."""
+    global pending_previews
+
+    # Check for new/updated plan files
+    check_plan_files()
+
+    previews = pending_previews[:]
+    pending_previews = []
+    return jsonify({'previews': previews})
 
 
 @app.route('/api/proposals')
