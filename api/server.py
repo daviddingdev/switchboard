@@ -1147,16 +1147,15 @@ def get_project_session_dir(directory):
 def find_latest_session_file(session_dir):
     """
     Find the most likely active session file in a session directory.
-    Uses file size as primary heuristic (active sessions grow larger),
-    with modification time as tiebreaker.
+    Uses modification time as primary heuristic (most recent = active).
     """
     if not os.path.isdir(session_dir):
         return None
     jsonl_files = glob_module.glob(os.path.join(session_dir, '*.jsonl'))
     if not jsonl_files:
         return None
-    # Sort by size (descending), then by mtime (descending) as tiebreaker
-    return max(jsonl_files, key=lambda f: (os.path.getsize(f), os.path.getmtime(f)))
+    # Most recently modified file is likely the active session
+    return max(jsonl_files, key=lambda f: os.path.getmtime(f))
 
 
 def parse_session_usage(session_file):
@@ -1340,18 +1339,30 @@ def get_partner_history():
 def reset_partner():
     """
     Soft reset the partner session.
-    Sends Ctrl-C to interrupt, then restarts claude.
+    Sends Ctrl-C to interrupt, waits for shell, then restarts claude.
     """
     import time
 
     try:
         # Send Ctrl-C to interrupt any running operation
         tmux.send_keys('partner', 'C-c', raw=True)
-        time.sleep(0.5)
+        time.sleep(0.3)
 
-        # Send another Ctrl-C in case first was absorbed
+        # Send another Ctrl-C in case first was absorbed by a prompt
         tmux.send_keys('partner', 'C-c', raw=True)
-        time.sleep(0.5)
+        time.sleep(0.3)
+
+        # Send Escape to exit any prompt/menu state
+        tmux.send_keys('partner', 'Escape', raw=True)
+        time.sleep(0.3)
+
+        # Third Ctrl-C to ensure we're back at shell
+        tmux.send_keys('partner', 'C-c', raw=True)
+        time.sleep(1.0)  # Wait longer for Claude to fully exit
+
+        # Clear any partial input
+        tmux.send_keys('partner', 'C-u', raw=True)
+        time.sleep(0.1)
 
         # Start a new claude session
         tmux.send_keys('partner', 'claude', raw=False)
