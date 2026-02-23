@@ -33,6 +33,14 @@ const styles = {
     fontSize: '9px',
     fontWeight: 600,
   },
+  countPush: {
+    background: '#1e3a5f',
+    color: '#93c5fd',
+    padding: '1px 6px',
+    borderRadius: '8px',
+    fontSize: '9px',
+    fontWeight: 600,
+  },
   scrollArea: {
     flex: 1,
     overflow: 'auto',
@@ -179,6 +187,27 @@ const styles = {
     fontSize: '12px',
     color: 'var(--text-secondary)',
     padding: '4px 0',
+  },
+  commit: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    padding: '3px 6px',
+    marginLeft: '8px',
+    fontSize: '12px',
+    color: 'var(--text-primary)',
+  },
+  commitHash: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    color: '#93c5fd',
+    flexShrink: 0,
+  },
+  commitMessage: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: 'var(--text-secondary)',
   },
 }
 
@@ -329,6 +358,33 @@ export default function Activity({ onFileClick }) {
             ))
           )}
         </div>
+
+        {/* Unpushed Commits */}
+        {activity.unpushed?.length > 0 && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionIcon}>⬆</span>
+              <span>Unpushed</span>
+              <span style={styles.countPush}>
+                {activity.unpushed.reduce((sum, p) => sum + p.commits.length, 0)}
+              </span>
+            </div>
+            {activity.unpushed.map(project => (
+              <div key={project.project} style={{ marginBottom: '10px' }}>
+                <div style={styles.changeProject}>
+                  <span style={styles.projectIcon}>📁</span>
+                  <span>{project.project}</span>
+                </div>
+                {project.commits.map((commit, i) => (
+                  <div key={i} style={styles.commit}>
+                    <span style={styles.commitHash}>{commit.hash}</span>
+                    <span style={styles.commitMessage}>{commit.message}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Recent Proposals */}
         <div style={styles.section}>

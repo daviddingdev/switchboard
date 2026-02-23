@@ -404,6 +404,44 @@ def get_git_status(directory):
         return None
 
 
+def get_unpushed_commits(directory):
+    """Get commits ahead of origin for a git repo."""
+    try:
+        # First check if there's a remote tracking branch
+        result = subprocess.run(
+            ['git', '-C', directory, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None  # No upstream tracking branch
+
+        upstream = result.stdout.strip()
+
+        # Get commits ahead of upstream
+        result = subprocess.run(
+            ['git', '-C', directory, 'log', f'{upstream}..HEAD', '--oneline'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+
+        commits = []
+        for line in result.stdout.strip().splitlines():
+            if line:
+                parts = line.split(' ', 1)
+                commits.append({
+                    'hash': parts[0],
+                    'message': parts[1] if len(parts) > 1 else ''
+                })
+        return commits
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
 @app.route('/api/projects')
 def list_projects():
     """Auto-discover projects with CLAUDE.md files."""
@@ -690,8 +728,8 @@ def get_diff():
 
 @app.route('/api/activity')
 def get_activity():
-    """Get combined activity feed: pending proposals + changes + recent."""
-    result = {'pending': [], 'changes': [], 'recent': []}
+    """Get combined activity feed: pending proposals + changes + unpushed + recent."""
+    result = {'pending': [], 'changes': [], 'unpushed': [], 'recent': []}
 
     # Pending proposals
     try:
@@ -717,7 +755,7 @@ def get_activity():
     except Exception:
         pass
 
-    # Git changes
+    # Git changes and unpushed commits
     try:
         projects = load_projects()
         for p in projects:
@@ -725,11 +763,20 @@ def get_activity():
             if not os.path.isdir(directory):
                 continue
 
+            # Uncommitted changes
             status = get_git_status(directory)
-            if status:  # Only include if has changes
+            if status:
                 result['changes'].append({
                     'project': p.get('name'),
                     'files': status
+                })
+
+            # Unpushed commits
+            commits = get_unpushed_commits(directory)
+            if commits:
+                result['unpushed'].append({
+                    'project': p.get('name'),
+                    'commits': commits
                 })
     except Exception:
         pass
