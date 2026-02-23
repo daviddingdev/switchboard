@@ -5,6 +5,7 @@ import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
 import DiffPreview from './components/DiffPreview'
 import PushPanel from './components/PushPanel'
+import CommitPanel from './components/CommitPanel'
 import PartnerHistory from './components/PartnerHistory'
 import WorkerList from './components/WorkerList'
 import Activity from './components/Activity'
@@ -262,6 +263,20 @@ export default function App() {
     setActiveTab(tabId)
   }, [tabs])
 
+  const handleCommitClick = useCallback(() => {
+    const tabId = 'commit'
+
+    if (!tabs.find(t => t.id === tabId)) {
+      setTabs(prev => [...prev, {
+        id: tabId,
+        label: 'Commit',
+        type: 'commit'
+      }])
+    }
+
+    setActiveTab(tabId)
+  }, [tabs])
+
   const handleHistoryClick = useCallback(() => {
     const tabId = 'history'
 
@@ -313,6 +328,7 @@ export default function App() {
   const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
   const activeDiffTab = tabs.find(t => t.id === activeTab && t.type === 'diff')
   const activePushTab = tabs.find(t => t.id === activeTab && t.type === 'push')
+  const activeCommitTab = tabs.find(t => t.id === activeTab && t.type === 'commit')
   const activeHistoryTab = tabs.find(t => t.id === activeTab && t.type === 'history')
 
   return (
@@ -364,6 +380,9 @@ export default function App() {
                 <PushPanel />
               </div>
             )}
+            {activeCommitTab && (
+              <CommitPanel />
+            )}
             {activeHistoryTab && (
               <PartnerHistory />
             )}
@@ -395,7 +414,7 @@ export default function App() {
             onSelect={handleWorkerSelect}
             onRefresh={() => setRefreshKey(k => k + 1)}
           />
-          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} onHistoryClick={handleHistoryClick} />
+          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} onCommitClick={handleCommitClick} onHistoryClick={handleHistoryClick} />
         </aside>
       </div>
 

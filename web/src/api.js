@@ -170,6 +170,19 @@ export async function pushProject(project) {
   return res.json();
 }
 
+export async function commitProject(project, message) {
+  const res = await fetch(`${API_BASE}/commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, message })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to commit: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Partner context management
 
 export async function fetchWorkersUsage() {

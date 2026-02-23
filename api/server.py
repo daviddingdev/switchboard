@@ -1073,6 +1073,65 @@ def push_project():
     return jsonify(results)
 
 
+@app.route('/api/commit', methods=['POST'])
+def commit_project():
+    """
+    Stage all changes and commit with the provided message.
+    """
+    data = request.json or {}
+    project_name = data.get('project')
+    message = data.get('message')
+
+    if not project_name:
+        return {"error": "project required"}, 400
+    if not message:
+        return {"error": "message required"}, 400
+
+    directory = get_project_directory(project_name)
+    if not directory:
+        return {"error": f"project '{project_name}' not found"}, 404
+
+    try:
+        # Stage all changes
+        add_result = subprocess.run(
+            ['git', '-C', directory, 'add', '-A'],
+            capture_output=True, text=True, timeout=10
+        )
+        if add_result.returncode != 0:
+            return {"error": f"git add failed: {add_result.stderr.strip()}", "success": False}, 500
+
+        # Check if there are staged changes
+        diff_result = subprocess.run(
+            ['git', '-C', directory, 'diff', '--cached', '--quiet'],
+            capture_output=True, timeout=5
+        )
+
+        if diff_result.returncode == 0:
+            return {"error": "No changes to commit", "success": False}, 400
+
+        # Commit with message
+        commit_result = subprocess.run(
+            ['git', '-C', directory, 'commit', '-m', message],
+            capture_output=True, text=True, timeout=30
+        )
+
+        if commit_result.returncode == 0:
+            return jsonify({
+                "success": True,
+                "output": commit_result.stdout.strip()
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": commit_result.stderr.strip() or commit_result.stdout.strip()
+            })
+
+    except subprocess.TimeoutExpired:
+        return {"error": "commit timed out", "success": False}, 500
+    except Exception as e:
+        return {"error": str(e), "success": False}, 500
+
+
 # =============================================================================
 # Partner Context Management endpoints
 # =============================================================================

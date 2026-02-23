@@ -285,7 +285,7 @@ function getStatusStyle(status) {
   return styles.statusM // default
 }
 
-export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
+export default function Activity({ onFileClick, onPushClick, onCommitClick, onHistoryClick }) {
   const [activity, setActivity] = useState({ pending: [], changes: [], recent: [] })
   const [usage, setUsage] = useState({ workers: [] })
   const [updating, setUpdating] = useState(null)
@@ -486,6 +486,11 @@ export default function Activity({ onFileClick, onPushClick, onHistoryClick }) {
           <div style={styles.sectionHeader}>
             <span style={styles.sectionIcon}>📝</span>
             <span>Changes</span>
+            {activity.changes?.length > 0 && (
+              <button style={styles.pushBtn} onClick={onCommitClick}>
+                Commit
+              </button>
+            )}
           </div>
           {activity.changes?.length === 0 ? (
             <div style={styles.empty}>No uncommitted changes</div>
