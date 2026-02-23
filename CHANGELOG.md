@@ -2,6 +2,14 @@
 
 ## 2026-02-23
 
+### Push Tab Improvements
+
+- **Push tab close button** — Push tab now closable like file/diff tabs
+- **Always commit docs before push** — Removed `commit_docs` flag, API now always stages and commits modified doc files (CHANGELOG.md, TODO.md, USAGE.md) before pushing
+- **Push tab icon** — Blue arrow (⬆) icon for push tabs in TabBar
+
+---
+
 ### Push Workflow with Auto Doc Updates
 
 - **PushDialog.jsx** — Modal workflow for pushing changes across projects

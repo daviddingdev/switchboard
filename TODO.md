@@ -30,6 +30,11 @@ cd ~/orchestrator
 
 ## Completed
 
+### Push Tab Improvements (Feb 23, 2026)
+- [x] Push tab close button — closable like file/diff tabs
+- [x] Always commit docs before push — removed commit_docs flag from API
+- [x] Push tab icon styling — blue arrow icon in TabBar
+
 ### Push Workflow with Auto Doc Updates (Feb 23, 2026)
 - [x] PushDialog.jsx — 3-step modal (select → update docs → push)
 - [x] `POST /api/update-docs` — Run claude -p to update CHANGELOG/TODO/USAGE
