@@ -20,9 +20,11 @@ import tmux_manager as tmux
 CLAUDE_PROJECTS_DIR = os.path.expanduser('~/.claude/projects')
 CLAUDE_CONFIG_FILE = os.path.expanduser('~/.claude.json')
 
-STATE_DIR = Path(__file__).parent.parent / 'state'
+PROJECT_ROOT = Path(__file__).parent.parent
+STATE_DIR = PROJECT_ROOT / 'state'
 PROPOSALS_DIR = STATE_DIR / 'proposals'
 PROJECTS_FILE = STATE_DIR / 'projects.yaml'
+LOGS_DIR = PROJECT_ROOT / 'logs' / 'workers'
 
 # Directories to exclude from file listings
 EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', '.next', '.cache'}
@@ -838,7 +840,7 @@ def get_doc_context():
     Returns commit messages, diff stats, and worker logs (if available).
     """
     result = []
-    logs_dir = os.path.expanduser("~/orchestrator/logs/workers")
+    logs_dir = str(LOGS_DIR)
 
     try:
         projects = load_projects()
@@ -913,7 +915,7 @@ def update_docs():
         return {"error": f"project '{project_name}' not found"}, 404
 
     # Get context for this project
-    logs_dir = os.path.expanduser("~/orchestrator/logs/workers")
+    logs_dir = str(LOGS_DIR)
     commits = get_unpushed_commits(directory)
 
     if not commits:
@@ -1304,9 +1306,9 @@ def get_workers_usage():
         name = window.get('name', '')
 
         # Find the project directory for this worker
-        # For partner, it's ~/orchestrator. For others, we need to determine.
+        # For partner, it's the orchestrator project root. For others, we need to determine.
         if name == 'partner':
-            proj_dir = os.path.expanduser('~/orchestrator')
+            proj_dir = str(PROJECT_ROOT)
         else:
             # Check if it matches a known project
             projects = load_projects()
@@ -1358,8 +1360,8 @@ def get_partner_history():
     """
     limit = request.args.get('limit', 100, type=int)
 
-    # Partner is always ~/orchestrator
-    proj_dir = os.path.expanduser('~/orchestrator')
+    # Partner is the orchestrator project root
+    proj_dir = str(PROJECT_ROOT)
     session_dir = get_project_session_dir(proj_dir)
     session_file = find_latest_session_file(session_dir)
 

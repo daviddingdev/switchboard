@@ -12,7 +12,8 @@ from datetime import datetime
 
 SOCKET_NAME = "orchestrator"
 SESSION_NAME = "orchestrator"
-LOGS_DIR = os.path.expanduser("~/orchestrator/logs/workers")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs", "workers")
 
 
 def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -35,7 +36,7 @@ def ensure_session() -> bool:
     # Create session with partner window
     result = _run_tmux(
         "new-session", "-d", "-s", SESSION_NAME, "-n", "partner",
-        "-c", os.path.expanduser("~/orchestrator"),
+        "-c", PROJECT_ROOT,
         check=False
     )
     if result.returncode != 0:

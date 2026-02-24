@@ -7,10 +7,10 @@ mkdir -p logs
 
 echo "Starting Orchestrator..."
 
-# Create tmux session if not exists
-if ! tmux has-session -t orchestrator 2>/dev/null; then
-  tmux new-session -d -s orchestrator -n partner -c "$(pwd)"
-  tmux send-keys -t orchestrator:partner "claude" Enter
+# Create tmux session if not exists (using -L orchestrator socket)
+if ! tmux -L orchestrator has-session -t orchestrator 2>/dev/null; then
+  tmux -L orchestrator new-session -d -s orchestrator -n partner -c "$(pwd)"
+  tmux -L orchestrator send-keys -t orchestrator:partner "claude" Enter
   echo "  Created tmux session with partner"
 fi
 
@@ -48,6 +48,6 @@ echo "  Web UI:  http://localhost:3000"
 echo "  API:     http://localhost:5001"
 echo ""
 echo "To attach to partner session:"
-echo "  tmux attach -t orchestrator:partner"
+echo "  tmux -L orchestrator attach -t orchestrator:partner"
 echo ""
 echo "To stop: ./stop.sh"

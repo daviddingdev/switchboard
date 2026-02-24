@@ -11,7 +11,7 @@ Personal AI operating system for managing Claude Code sessions across projects.
 
 ## Requirements
 
-- Linux/macOS
+- Linux or macOS
 - Python 3.10+
 - Node.js 18+
 - tmux
@@ -22,16 +22,12 @@ Personal AI operating system for managing Claude Code sessions across projects.
 
 ```bash
 # Clone
-git clone https://github.com/daviddingstudent-create/orchestrator.git
+git clone https://github.com/yourusername/orchestrator.git
 cd orchestrator
 
-# Setup
+# Setup (installs Python + Node dependencies)
 chmod +x setup.sh start.sh stop.sh
 ./setup.sh
-
-# Configure your projects
-cp state/projects.example.yaml state/projects.yaml
-# Edit state/projects.yaml with your project paths
 
 # Run
 ./start.sh
@@ -39,9 +35,11 @@ cp state/projects.example.yaml state/projects.yaml
 
 Open http://localhost:3000
 
-## Optional: SOUL.md
+## How Projects Are Discovered
 
-Create `~/SOUL.md` with working style preferences for Claude. See `docs/SOUL.example.md` for format. If not present, orchestrator runs without it.
+Orchestrator auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file. No manual configuration needed.
+
+To add a project: create a `CLAUDE.md` file in its root directory.
 
 ## Usage
 
@@ -57,6 +55,22 @@ Create `~/SOUL.md` with working style preferences for Claude. See `docs/SOUL.exa
 ./stop.sh
 ```
 
+To fully kill the tmux session:
+```bash
+tmux -L orchestrator kill-session -t orchestrator
+```
+
+## Ports
+
+| Service | Default Port |
+|---------|--------------|
+| Web UI  | 3000         |
+| API     | 5001         |
+
+To change ports, edit:
+- `web/vite.config.js` for web UI port
+- `api/server.py` (bottom of file) for API port
+
 ## Architecture
 
 See `docs/architecture.md` for technical design.
@@ -71,7 +85,6 @@ orchestrator/
 ├── web/              # React frontend
 │   └── src/
 ├── state/            # Runtime state
-│   ├── projects.yaml # Your project config
 │   └── proposals/    # Worker proposals
 ├── docs/             # Documentation
 ├── logs/             # Runtime logs
@@ -79,6 +92,12 @@ orchestrator/
 ├── start.sh          # Launch orchestrator
 └── stop.sh           # Stop orchestrator
 ```
+
+## macOS Notes
+
+- Install tmux: `brew install tmux`
+- Python 3 comes with Xcode CLI tools, or install via `brew install python`
+- Node.js: `brew install node` or use nvm
 
 ## License
 

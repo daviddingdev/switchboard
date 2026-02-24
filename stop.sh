@@ -29,4 +29,4 @@ lsof -ti:3000 2>/dev/null | xargs -r kill 2>/dev/null
 echo "Done"
 echo ""
 echo "Note: tmux session 'orchestrator' still running."
-echo "To kill it: tmux kill-session -t orchestrator"
+echo "To kill it: tmux -L orchestrator kill-session -t orchestrator"
