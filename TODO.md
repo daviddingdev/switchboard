@@ -111,6 +111,11 @@ cd ~/orchestrator
 - [x] `GET /api/home` — Unified file tree with git status
 - [x] `GET /api/file` — File content with language detection
 
+### Portable Paths (Feb 24, 2026)
+- [x] Made paths portable — PROJECT_ROOT instead of hardcoded `~/orchestrator`
+- [x] Added `docs/SETUP.md` — Comprehensive setup guide for Linux/macOS
+- [x] Updated README with macOS notes, ports table, project discovery docs
+
 ### Made Shareable (Feb 23, 2026)
 - [x] `setup.sh` — Install dependencies, create directories
 - [x] `start.sh` — Launch API, web, tmux
@@ -184,4 +189,4 @@ cd ~/orchestrator
 
 ---
 
-*Last updated: February 23, 2026*
+*Last updated: February 24, 2026*

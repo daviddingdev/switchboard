@@ -1,5 +1,26 @@
 # Orchestrator Changelog
 
+## 2026-02-24
+
+### Portable Paths
+
+- **Made paths portable for cross-machine usage** — Hardcoded `~/orchestrator` paths replaced with dynamic `PROJECT_ROOT` resolution
+  - `api/server.py` — Uses `Path(__file__).parent.parent` for STATE_DIR, LOGS_DIR
+  - `api/tmux_manager.py` — Uses `os.path.dirname(__file__)` for LOGS_DIR and session working directory
+  - `start.sh` / `stop.sh` — Uses `-L orchestrator` socket flag consistently
+  - `setup.sh` — Simplified setup instructions, removed projects.yaml copy step
+- **New `docs/SETUP.md`** — Comprehensive setup guide for Linux and macOS
+  - Prerequisites for both platforms
+  - Port conflict resolution instructions
+  - Troubleshooting section
+- **README updates**:
+  - Added macOS notes section
+  - Added ports table
+  - Documented how to fully kill tmux session
+  - Clarified project auto-discovery (no manual config needed)
+
+---
+
 ## 2026-02-23
 
 ### Auto-Preview for Plan Files
@@ -473,4 +494,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: February 23, 2026*
+*Last updated: February 24, 2026*
