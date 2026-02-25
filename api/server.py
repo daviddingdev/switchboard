@@ -1000,14 +1000,16 @@ RULES:
 CONTEXT:
 {context}"""
 
-    # Run claude -p
+    # Run claude -p (strip CLAUDECODE to avoid nested session error)
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
         result = subprocess.run(
             ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write,Glob'],
             cwd=directory,
             capture_output=True,
             text=True,
-            timeout=120  # 2 min timeout
+            timeout=120,  # 2 min timeout
+            env=env
         )
 
         # Get the updated files status
