@@ -1,5 +1,15 @@
 # Orchestrator Changelog
 
+## 2026-02-25
+
+### Nested Session Support
+
+- **Fixed spawning workers from within Claude Code** — Stripped `CLAUDECODE` environment variable when running tmux commands to avoid nested session detection errors
+  - `api/tmux_manager.py` — Filter out `CLAUDECODE` from subprocess env
+  - `start.sh` — Unset `CLAUDECODE` before starting orchestrator
+
+---
+
 ## 2026-02-24
 
 ### Portable Paths
