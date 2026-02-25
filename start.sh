@@ -10,7 +10,7 @@ echo "Starting Orchestrator..."
 # Create tmux session if not exists (using -L orchestrator socket)
 if ! tmux -L orchestrator has-session -t orchestrator 2>/dev/null; then
   tmux -L orchestrator new-session -d -s orchestrator -n partner -c "$(pwd)"
-  tmux -L orchestrator send-keys -t orchestrator:partner "claude" Enter
+  tmux -L orchestrator send-keys -t orchestrator:partner "unset CLAUDECODE && claude" Enter
   echo "  Created tmux session with partner"
 fi
 

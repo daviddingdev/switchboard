@@ -61,7 +61,8 @@ def index():
             "GET /api/activity",
             "GET /api/workers/usage",
             "GET /api/partner/history",
-            "POST /api/partner/reset"
+            "POST /api/partner/reset",
+            "POST /api/partner/hard-reset"
         ]
     }
 
@@ -1403,9 +1404,43 @@ def reset_partner():
         time.sleep(0.1)
 
         # Start a new claude session
-        tmux.send_keys('partner', 'claude', raw=False)
+        tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
 
         return jsonify({'status': 'reset', 'message': 'Partner session restarting'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/partner/hard-reset', methods=['POST'])
+def hard_reset_partner():
+    """
+    Hard reset: kill the partner window and recreate it.
+    Use when soft reset doesn't work (e.g., after Claude Code version update).
+    """
+    import time
+
+    try:
+        # Kill the partner window (may kill entire session if it's the only window)
+        tmux.kill_worker('partner')
+        time.sleep(0.5)
+
+        # ensure_session recreates the session with partner window if needed
+        tmux.ensure_session()
+        time.sleep(0.3)
+
+        # If session existed but partner was killed, recreate partner window
+        windows = tmux.list_windows()
+        if not any(w['name'] == 'partner' for w in windows):
+            subprocess.run(
+                ["tmux", "-L", "orchestrator", "new-window", "-t", "orchestrator",
+                 "-n", "partner", "-c", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
+                capture_output=True, check=True
+            )
+            time.sleep(0.3)
+            # Start Claude
+            tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
+
+        return jsonify({'status': 'hard_reset', 'message': 'Partner window recreated'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

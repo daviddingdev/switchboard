@@ -208,6 +208,17 @@ export async function resetPartner() {
   return res.json();
 }
 
+export async function hardResetPartner() {
+  const res = await fetch(`${API_BASE}/partner/hard-reset`, {
+    method: 'POST'
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to hard reset partner: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Preview
 
 export async function createPreview(content, title = 'Preview', language = 'markdown') {

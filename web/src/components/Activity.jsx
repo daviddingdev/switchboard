@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchActivity, updateProposal, deleteProposal, fetchWorkersUsage, resetPartner } from '../api'
+import { fetchActivity, updateProposal, deleteProposal, fetchWorkersUsage, resetPartner, hardResetPartner } from '../api'
 
 const styles = {
   container: {
@@ -291,6 +291,7 @@ export default function Activity({ onFileClick, onPushClick, onCommitClick, onHi
   const [updating, setUpdating] = useState(null)
   const [hoveredFile, setHoveredFile] = useState(null)
   const [resetting, setResetting] = useState(false)
+  const [hardResetting, setHardResetting] = useState(false)
 
   const loadActivity = async () => {
     try {
@@ -332,6 +333,20 @@ export default function Activity({ onFileClick, onPushClick, onCommitClick, onHi
       alert(`Failed to reset: ${err.message}`)
     } finally {
       setTimeout(() => setResetting(false), 2000)
+    }
+  }
+
+  const handleHardReset = async () => {
+    if (!confirm('Hard reset partner? This kills and recreates the tmux window. Use when soft reset fails.')) {
+      return
+    }
+    setHardResetting(true)
+    try {
+      await hardResetPartner()
+    } catch (err) {
+      alert(`Failed to hard reset: ${err.message}`)
+    } finally {
+      setTimeout(() => setHardResetting(false), 3000)
     }
   }
 
@@ -430,10 +445,22 @@ export default function Activity({ onFileClick, onPushClick, onCommitClick, onHi
                         ...(resetting ? styles.usageBtnActive : {}),
                       }}
                       onClick={handleReset}
-                      disabled={resetting}
-                      title="Reset partner session"
+                      disabled={resetting || hardResetting}
+                      title="Soft reset: interrupt and restart claude"
                     >
                       {resetting ? '...' : 'Reset'}
+                    </button>
+                    <button
+                      style={{
+                        ...styles.usageBtn,
+                        ...(hardResetting ? styles.usageBtnActive : {}),
+                        marginLeft: '4px',
+                      }}
+                      onClick={handleHardReset}
+                      disabled={resetting || hardResetting}
+                      title="Hard reset: kill and recreate tmux window"
+                    >
+                      {hardResetting ? '...' : 'Hard'}
                     </button>
                   </div>
                 )}

@@ -42,8 +42,8 @@ def ensure_session() -> bool:
     if result.returncode != 0:
         return False
 
-    # Start Claude Code in partner window
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:partner", "claude", "Enter", check=False)
+    # Start Claude Code in partner window (unset CLAUDECODE to avoid nested session error)
+    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:partner", "unset CLAUDECODE && claude", "Enter", check=False)
     return True
 
 
@@ -118,7 +118,7 @@ def spawn_worker(name: str, directory: str) -> dict:
     _run_tmux("pipe-pane", "-t", f"{SESSION_NAME}:{name}", f"cat > {log_file}", check=False)
 
     # Start Claude Code
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "claude", "Enter", check=False)
+    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "unset CLAUDECODE && claude", "Enter", check=False)
 
     # Wait for Claude to start and show trust prompt
     time.sleep(2)
