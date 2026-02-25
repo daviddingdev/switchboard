@@ -2,6 +2,9 @@
 
 cd "$(dirname "$0")"
 
+# Unset CLAUDECODE to allow spawning Claude Code sessions from within Claude Code
+unset CLAUDECODE
+
 # Create logs dir if needed
 mkdir -p logs
 

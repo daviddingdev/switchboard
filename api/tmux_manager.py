@@ -19,7 +19,9 @@ LOGS_DIR = os.path.join(PROJECT_ROOT, "logs", "workers")
 def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     """Run a tmux command with the orchestrator socket."""
     cmd = ["tmux", "-L", SOCKET_NAME] + list(args)
-    return subprocess.run(cmd, capture_output=True, text=True, check=check)
+    # Strip CLAUDECODE from env to avoid nested session detection
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    return subprocess.run(cmd, capture_output=True, text=True, check=check, env=env)
 
 
 def ensure_session() -> bool:
