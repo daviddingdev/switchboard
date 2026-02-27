@@ -1,0 +1,15 @@
+[Unit]
+Description=Orchestrator Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/davidding/orchestrator/bot
+ExecStart=/usr/bin/python3 /home/davidding/orchestrator/bot/telegram_bot.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

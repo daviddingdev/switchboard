@@ -16,6 +16,7 @@ logs/
 state/projects.yaml
 state/processes.yaml
 config.yaml
+bot/config.env
 
 # State content (keep structure)
 state/proposals/*.yaml
