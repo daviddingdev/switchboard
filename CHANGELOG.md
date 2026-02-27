@@ -1,5 +1,13 @@
 # Orchestrator Changelog
 
+## 2026-02-27
+
+### Output Capture Improvements
+
+- **Fixed blank line handling in capture_output** — Remote-control mode produces many blank lines that consumed the output buffer. Now captures 5x the requested lines, filters out empty lines, and returns only the last N non-empty lines.
+
+---
+
 ## 2026-02-25
 
 ### Nested Session Support
