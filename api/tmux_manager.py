@@ -198,12 +198,22 @@ def capture_output(name: str, lines: int = 100) -> str:
     Returns:
         Captured terminal output as string
     """
+    # Capture more than requested to handle remote-control mode blank lines
+    capture_lines = max(lines * 5, 1000)
     result = _run_tmux(
         "capture-pane", "-t", f"{SESSION_NAME}:{name}",
-        "-p", f"-S", f"-{lines}",
+        "-p", f"-S", f"-{capture_lines}",
         check=False
     )
-    return result.stdout if result.returncode == 0 else ""
+    if result.returncode != 0:
+        return ""
+
+    # Strip trailing empty lines and return last N non-trivial lines
+    output_lines = result.stdout.rstrip('\n').split('\n')
+    # Filter to non-empty lines
+    non_empty = [l for l in output_lines if l.strip()]
+    # Return the last 'lines' worth, rejoined
+    return '\n'.join(non_empty[-lines:])
 
 
 def get_pane_pid(name: str) -> int | None:
