@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Telegram bot for orchestrator — mobile control interface with button-based UI."""
 
+__version__ = "0.5.0"
+
 import asyncio
 import html
 import logging
@@ -42,6 +44,7 @@ CONTEXT_WARN_PCT = int(os.getenv("CONTEXT_WARN_PCT", "80"))
 CONTEXT_COMPACT_PCT = int(os.getenv("CONTEXT_COMPACT_PCT", "90"))
 CONTEXT_CRITICAL_PCT = int(os.getenv("CONTEXT_CRITICAL_PCT", "95"))
 CONTEXT_CHECK_INTERVAL = int(os.getenv("CONTEXT_CHECK_INTERVAL", "300"))
+RESPONSE_POLL_TIMEOUT = int(os.getenv("RESPONSE_POLL_TIMEOUT", "30"))
 
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -608,25 +611,46 @@ async def _send_output(message, name: str, lines: int = 100):
         await message.reply_text(f"Failed to get output from {name}.")
 
 
-async def _poll_for_response(last_before: str | None, timeout: int = 30) -> str | None:
-    """Poll partner history until a new assistant response appears."""
+async def _poll_for_response(last_before: str | None, timeout: int = 60) -> str | None:
+    """Poll until partner finishes responding, then fetch the message."""
     start = time.time()
-    poll_interval = 2  # seconds between checks
+    poll_interval = 3
+    stable_count = 0
+    last_output = ""
 
+    # Phase 1: Wait for output to stabilize (stop changing)
     while time.time() - start < timeout:
         await asyncio.sleep(poll_interval)
-        history = await api_get("/api/partner/history", limit=5)
-        if not history or "messages" not in history:
+
+        result = await api_get("/api/processes/partner/output", lines=20)
+        if not result or "output" not in result:
             continue
 
-        assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
-        if not assistant_msgs:
-            continue
+        current_output = result["output"]
 
-        last_now = assistant_msgs[-1].get("content", "")
-        # Check if this is a new/different response
-        if last_before is None or last_now[:100] != last_before:
-            return last_now
+        # Check if output stopped changing (Claude finished typing)
+        if current_output == last_output:
+            stable_count += 1
+            if stable_count >= 2:  # Stable for 2 consecutive checks (~6s)
+                break
+        else:
+            stable_count = 0
+            last_output = current_output
+
+    # Phase 2: Fetch the clean message from history
+    await asyncio.sleep(1)  # Brief pause for session file to flush
+    history = await api_get("/api/partner/history", limit=5)
+    if not history or "messages" not in history:
+        return None
+
+    assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
+    if not assistant_msgs:
+        return None
+
+    last_now = assistant_msgs[-1].get("content", "")
+    # Return if it's different from before
+    if last_before is None or last_now[:100] != last_before:
+        return last_now
 
     return None
 
@@ -1340,7 +1364,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Sent ✓")
         # Poll for new response with typing indicator
         await update.message.chat.send_action("typing")
-        new_response = await _poll_for_response(last_before, timeout=30)
+        new_response = await _poll_for_response(last_before, timeout=RESPONSE_POLL_TIMEOUT)
         if new_response:
             if len(new_response) > 3000:
                 new_response = new_response[:3000] + "\n\n... (truncated)"
