@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Telegram bot for orchestrator — mobile control interface with button-based UI."""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 import asyncio
 import html
+import json
 import logging
 import os
+import re
 import time
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
@@ -58,6 +61,33 @@ _recently_compacted: dict[str, float] = {}
 _seen_proposals: set[str] = set()
 # Shared HTTP client for connection pooling
 _http_client: httpx.AsyncClient | None = None
+# Command history (most recent last)
+_command_history: list[str] = []
+MAX_HISTORY = 20
+# Conversation mode flag
+_conversation_mode: bool = False
+# Scheduled commands: list of (run_at_timestamp, command, target)
+_scheduled_commands: list[tuple[float, str, str]] = []
+# State directory for persistence
+STATE_DIR = Path(__file__).parent / "state"
+STATE_DIR.mkdir(exist_ok=True)
+PINS_FILE = STATE_DIR / "pins.json"
+SNAPSHOTS_FILE = STATE_DIR / "snapshots.json"
+
+
+def _load_json(path: Path) -> list:
+    """Load JSON list from file."""
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            return []
+    return []
+
+
+def _save_json(path: Path, data: list):
+    """Save list to JSON file."""
+    path.write_text(json.dumps(data, indent=2))
 
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -629,15 +659,24 @@ async def _send_output(message, name: str, lines: int = 100):
         await message.reply_text(f"Failed to get output from {name}.")
 
 
-async def _wait_and_get_response(last_msg_before: str | None, timeout: int = 60) -> str | None:
+async def _wait_and_get_response(last_msg_before: str | None, chat=None, timeout: int = 60) -> str | None:
     """Wait for partner to finish responding, then return the NEW message."""
     start = time.time()
     poll_interval = 2
     stable_count = 0
     last_output = ""
+    last_typing = start
 
     while time.time() - start < timeout:
         await asyncio.sleep(poll_interval)
+
+        # Refresh typing indicator every 4 seconds
+        if chat and time.time() - last_typing > 4:
+            try:
+                await chat.send_action("typing")
+            except Exception:
+                pass
+            last_typing = time.time()
 
         result = await api_get("/api/processes/partner/output", lines=30)
         current_output = result.get("output", "") if result else ""
@@ -908,6 +947,188 @@ async def cmd_last(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _send_last(update.message, "partner", count)
 
 
+@auth
+async def cmd_pinned(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/pinned — View pinned messages."""
+    pins = _load_json(PINS_FILE)
+    if not pins:
+        await update.message.reply_text("No pinned messages.")
+        return
+    lines = ["<b>📌 Pinned:</b>\n"]
+    for i, p in enumerate(reversed(pins[-10:]), 1):
+        ts = p.get("ts", "?")[:16]
+        content = p.get("content", "")[:200]
+        lines.append(f"<b>{i}.</b> <i>{ts}</i>\n{esc(content)}\n")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/history — View command history."""
+    if not _command_history:
+        await update.message.reply_text("No command history.")
+        return
+    lines = ["<b>Command History:</b>\n"]
+    for i, cmd in enumerate(reversed(_command_history[-10:]), 1):
+        lines.append(f"<b>!{i}</b> {esc(cmd[:50])}")
+    lines.append("\nUse /! or /!N to repeat")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_repeat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/! or /!N — Repeat last or Nth command."""
+    if not _command_history:
+        await update.message.reply_text("No command history.")
+        return
+    # Get index from command text (e.g., /!3)
+    text = update.message.text or ""
+    match = re.match(r"/!(\d+)?", text)
+    idx = int(match.group(1)) if match and match.group(1) else 1
+    if idx > len(_command_history):
+        await update.message.reply_text(f"Only {len(_command_history)} commands in history.")
+        return
+    cmd = _command_history[-idx]
+    await update.message.reply_text(f"Repeating: {cmd[:50]}")
+    await api_post("/api/processes/partner/send", {"text": cmd})
+
+
+@auth
+async def cmd_p(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/p <action> — Partner shortcut. Actions: out, rc, compact, reset, hrst"""
+    if not context.args:
+        await update.message.reply_text("Usage: /p <out|rc|compact|reset|hrst|send ...>")
+        return
+    action = context.args[0].lower()
+    if action == "out":
+        await _send_output(update.message, "partner")
+    elif action == "rc":
+        await api_post("/api/processes/partner/send", {"text": "/rc"})
+        await update.message.reply_text("Sent /rc to partner")
+    elif action == "compact":
+        await _do_compact(update.message, "partner")
+    elif action == "reset":
+        await _do_reset(update.message, "partner")
+    elif action == "hrst":
+        await _do_hard_reset(update.message, "partner")
+    elif action == "send" and len(context.args) > 1:
+        text = " ".join(context.args[1:])
+        await api_post("/api/processes/partner/send", {"text": text})
+        await update.message.reply_text("Sent ✓")
+    else:
+        await update.message.reply_text(f"Unknown action: {action}")
+
+
+@auth
+async def cmd_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/conversation — Toggle conversation mode."""
+    global _conversation_mode
+    _conversation_mode = not _conversation_mode
+    status = "ON" if _conversation_mode else "OFF"
+    await update.message.reply_text(f"Conversation mode: <b>{status}</b>", parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_later(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/later <time> <command> — Schedule command. Time: 5m, 1h, 30s"""
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /later <time> <command>\nExample: /later 30m compact partner")
+        return
+    time_str = context.args[0]
+    command = " ".join(context.args[1:])
+
+    # Parse time
+    match = re.match(r"(\d+)([smh])", time_str.lower())
+    if not match:
+        await update.message.reply_text("Invalid time. Use: 30s, 5m, 1h")
+        return
+    amount, unit = int(match.group(1)), match.group(2)
+    seconds = amount * {"s": 1, "m": 60, "h": 3600}[unit]
+
+    run_at = time.time() + seconds
+    _scheduled_commands.append((run_at, command, "partner"))
+    await update.message.reply_text(f"Scheduled in {time_str}: <code>{esc(command)}</code>", parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/snapshot [label] — Save context snapshot before compacting."""
+    label = " ".join(context.args) if context.args else "unnamed"
+
+    # Get recent conversation summary
+    history = await api_get("/api/partner/history", limit=10)
+    summary = ""
+    if history and "messages" in history:
+        msgs = history["messages"][-5:]
+        for m in msgs:
+            role = m.get("role", "?")[0].upper()
+            content = m.get("content", "")[:100]
+            summary += f"{role}: {content}\n"
+
+    snapshots = _load_json(SNAPSHOTS_FILE)
+    snapshots.append({
+        "ts": datetime.now().isoformat(),
+        "label": label,
+        "summary": summary
+    })
+    _save_json(SNAPSHOTS_FILE, snapshots[-50:])  # Keep last 50
+    await update.message.reply_text(f"📸 Snapshot saved: <b>{esc(label)}</b>", parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_snapshots(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/snapshots — View saved snapshots."""
+    snapshots = _load_json(SNAPSHOTS_FILE)
+    if not snapshots:
+        await update.message.reply_text("No snapshots.")
+        return
+    lines = ["<b>📸 Snapshots:</b>\n"]
+    for s in reversed(snapshots[-10:]):
+        ts = s.get("ts", "?")[:16]
+        label = s.get("label", "?")
+        lines.append(f"• <i>{ts}</i> — <b>{esc(label)}</b>")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@auth
+async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/dashboard — Multi-worker status dashboard."""
+    procs, usage = await asyncio.gather(
+        api_get("/api/processes"),
+        api_get("/api/workers/usage"),
+    )
+    if not procs:
+        await update.message.reply_text("No workers or API unreachable.")
+        return
+
+    workers_usage = {w["name"]: w for w in (usage or {}).get("workers", [])}
+
+    lines = ["<b>📊 Worker Dashboard</b>\n"]
+    for p in procs:
+        name = p["name"]
+        u = workers_usage.get(name, {})
+        pct = u.get("pct", 0)
+        bar = _progress_bar(pct, 8)
+
+        # Status indicator
+        if pct >= 90:
+            indicator = "🔴"
+        elif pct >= 70:
+            indicator = "🟡"
+        else:
+            indicator = "🟢"
+
+        lines.append(f"{indicator} <b>{esc(name)}</b>  {bar} {pct}%")
+
+    markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Refresh", callback_data="dash:refresh"),
+            InlineKeyboardButton("Compact All", callback_data="dash:compactall"),
+        ]
+    ])
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=markup)
+
+
 # --- Callback router ---
 
 @auth_callback
@@ -1174,6 +1395,81 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     raise
             return
 
+        # --- Dashboard ---
+        if data == "dash:refresh":
+            await query.answer("Refreshing...")
+            procs, usage = await asyncio.gather(
+                api_get("/api/processes"),
+                api_get("/api/workers/usage"),
+            )
+            if not procs:
+                await query.edit_message_text("No workers.")
+                return
+            workers_usage = {w["name"]: w for w in (usage or {}).get("workers", [])}
+            lines = ["<b>📊 Worker Dashboard</b>\n"]
+            for p in procs:
+                name = p["name"]
+                u = workers_usage.get(name, {})
+                pct = u.get("pct", 0)
+                bar = _progress_bar(pct, 8)
+                indicator = "🔴" if pct >= 90 else "🟡" if pct >= 70 else "🟢"
+                lines.append(f"{indicator} <b>{esc(name)}</b>  {bar} {pct}%")
+            markup = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("Refresh", callback_data="dash:refresh"),
+                    InlineKeyboardButton("Compact All", callback_data="dash:compactall"),
+                ]
+            ])
+            await query.edit_message_text("\n".join(lines), parse_mode=ParseMode.HTML, reply_markup=markup)
+            return
+
+        if data == "dash:compactall":
+            await query.answer("Compacting all...")
+            procs = await api_get("/api/processes")
+            if procs:
+                for p in procs:
+                    await api_post(f"/api/processes/{p['name']}/send", {"text": "/compact"})
+                await query.edit_message_text(f"Sent /compact to {len(procs)} workers.")
+            return
+
+        # --- Quick replies ---
+        if data.startswith("qr:"):
+            action = data[3:]
+            if action == "continue":
+                await query.answer("Sending...")
+                await query.edit_message_text("→ Continue")
+                await api_post("/api/processes/partner/send", {"text": "Continue"})
+            elif action == "yes":
+                await query.answer("Sending...")
+                await query.edit_message_text("→ Yes")
+                await api_post("/api/processes/partner/send", {"text": "Yes"})
+            elif action == "no":
+                await query.answer("Sending...")
+                await query.edit_message_text("→ No")
+                await api_post("/api/processes/partner/send", {"text": "No"})
+            elif action == "more":
+                await query.answer("Fetching...")
+                await query.edit_message_text("→ Show more")
+                await api_post("/api/processes/partner/send", {"text": "Show more details"})
+            elif action == "pin":
+                await query.answer("Pinning...")
+                # Get last assistant message and pin it
+                history = await api_get("/api/partner/history", limit=5)
+                if history and "messages" in history:
+                    msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
+                    if msgs:
+                        content = msgs[-1].get("content", "")[:500]
+                        pins = _load_json(PINS_FILE)
+                        pins.append({
+                            "ts": datetime.now().isoformat(),
+                            "content": content
+                        })
+                        _save_json(PINS_FILE, pins[-20:])  # Keep last 20
+                        await query.edit_message_text("📌 Pinned")
+                        return
+                await query.edit_message_text("Nothing to pin")
+            return
+
         # --- Stale spawn buttons ---
         if data.startswith("sp:"):
             await query.answer("Session expired — tap Spawn to start.", show_alert=True)
@@ -1364,6 +1660,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Default: forward to partner
+    # Track command history
+    _command_history.append(text)
+    if len(_command_history) > MAX_HISTORY:
+        _command_history.pop(0)
+
     # Capture last message before sending to detect new response
     history_before = await api_get("/api/partner/history", limit=5)
     last_msg_before = None
@@ -1376,12 +1677,27 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if result and result.get("status") == "sent":
         await update.message.reply_text("Sent ✓")
         await update.message.chat.send_action("typing")
-        # Wait for NEW response and send it
-        response = await _wait_and_get_response(last_msg_before, timeout=RESPONSE_POLL_TIMEOUT)
+        # Wait for NEW response and send it (with typing refresh)
+        response = await _wait_and_get_response(
+            last_msg_before, chat=update.message.chat, timeout=RESPONSE_POLL_TIMEOUT
+        )
         if response:
             if len(response) > 3000:
                 response = response[:3000] + "\n\n... (truncated)"
             await send_chunked(update.message, response, parse_mode=None)
+            # Quick reply buttons
+            markup = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("Continue", callback_data="qr:continue"),
+                    InlineKeyboardButton("Yes", callback_data="qr:yes"),
+                    InlineKeyboardButton("No", callback_data="qr:no"),
+                ],
+                [
+                    InlineKeyboardButton("📌 Pin", callback_data="qr:pin"),
+                    InlineKeyboardButton("More", callback_data="qr:more"),
+                ]
+            ])
+            await update.message.reply_text("⌁", reply_markup=markup)
         else:
             await update.message.reply_text("(no new response — check /output)")
     else:
@@ -1474,6 +1790,121 @@ async def proposal_check(context: ContextTypes.DEFAULT_TYPE):
         await send_chunked_to_chat(bot, chat_id, "\n".join(lines), reply_markup=markup)
 
 
+async def scheduled_commands_check(context: ContextTypes.DEFAULT_TYPE):
+    """Execute scheduled commands when their time comes."""
+    now = time.time()
+    bot = context.bot
+    chat_id = ALLOWED_USER_ID
+
+    to_remove = []
+    for i, (run_at, command, target) in enumerate(_scheduled_commands):
+        if now >= run_at:
+            to_remove.append(i)
+            # Execute the command
+            parts = command.split()
+            if parts:
+                action = parts[0].lower()
+                if action == "compact":
+                    target_name = parts[1] if len(parts) > 1 else "partner"
+                    await api_post(f"/api/processes/{target_name}/send", {"text": "/compact"})
+                    await bot.send_message(chat_id, f"⏰ Scheduled: /compact {target_name}")
+                elif action == "kill":
+                    target_name = parts[1] if len(parts) > 1 else "partner"
+                    await api_delete(f"/api/processes/{target_name}")
+                    await bot.send_message(chat_id, f"⏰ Scheduled: killed {target_name}")
+                elif action == "send":
+                    text = " ".join(parts[1:])
+                    await api_post("/api/processes/partner/send", {"text": text})
+                    await bot.send_message(chat_id, f"⏰ Scheduled: sent to partner")
+                else:
+                    await bot.send_message(chat_id, f"⏰ Unknown scheduled command: {command}")
+
+    # Remove executed commands (reverse order to preserve indices)
+    for i in reversed(to_remove):
+        _scheduled_commands.pop(i)
+
+
+async def conversation_mode_check(context: ContextTypes.DEFAULT_TYPE):
+    """In conversation mode, auto-send new responses."""
+    if not _conversation_mode:
+        return
+
+    bot = context.bot
+    chat_id = ALLOWED_USER_ID
+
+    # Check for new output from partner
+    result = await api_get("/api/processes/partner/output", lines=10)
+    if not result or "output" not in result:
+        return
+
+    output = result["output"]
+    # Check if idle (has prompt)
+    if "❯" in output[-50:] or "───" in output[-80:]:
+        # Get last message and send if new
+        history = await api_get("/api/partner/history", limit=3)
+        if history and "messages" in history:
+            msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
+            if msgs:
+                content = msgs[-1].get("content", "")
+                # Use a simple hash to detect if it's new
+                content_hash = hash(content[:200])
+                last_hash = getattr(conversation_mode_check, "_last_hash", None)
+                if content_hash != last_hash:
+                    conversation_mode_check._last_hash = content_hash
+                    if len(content) > 2000:
+                        content = content[:2000] + "\n... (truncated)"
+                    await bot.send_message(chat_id, f"💬 {content[:4000]}")
+
+
+@auth
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle voice messages — transcribe via Whisper and send to partner."""
+    voice = update.message.voice
+    if not voice:
+        return
+
+    await update.message.reply_text("🎤 Transcribing...")
+
+    try:
+        # Download voice file
+        file = await context.bot.get_file(voice.file_id)
+        voice_path = STATE_DIR / f"voice_{voice.file_id}.ogg"
+        await file.download_to_drive(voice_path)
+
+        # Transcribe via Ollama Whisper or fallback
+        # Try Whisper API first
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                with open(voice_path, "rb") as f:
+                    files = {"file": ("voice.ogg", f, "audio/ogg")}
+                    r = await client.post(
+                        f"{OLLAMA_URL}/v1/audio/transcriptions",
+                        files=files,
+                        data={"model": "whisper"}
+                    )
+                    if r.status_code == 200:
+                        text = r.json().get("text", "")
+                    else:
+                        # Fallback: describe that we received voice
+                        text = "(voice message - transcription unavailable)"
+        except Exception:
+            text = "(voice message - transcription unavailable)"
+
+        # Clean up
+        voice_path.unlink(missing_ok=True)
+
+        if text and text != "(voice message - transcription unavailable)":
+            await update.message.reply_text(f"🎤 \"{text}\"")
+            await api_post("/api/processes/partner/send", {"text": text})
+            await update.message.reply_text("Sent ✓")
+        else:
+            await update.message.reply_text("Could not transcribe voice. Try typing instead.")
+
+    except Exception as e:
+        log.error("Voice handling error: %s", e)
+        await update.message.reply_text(f"Voice error: {e}")
+
+
 # --- Cancel handler (shared by ConversationHandlers) ---
 
 async def _conv_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1555,8 +1986,22 @@ def main():
     app.add_handler(CommandHandler("restart", cmd_restart))
     app.add_handler(CommandHandler("last", cmd_last))
 
+    # New commands
+    app.add_handler(CommandHandler("pinned", cmd_pinned))
+    app.add_handler(CommandHandler("history", cmd_history))
+    app.add_handler(MessageHandler(filters.Regex(r"^/!\d*$"), cmd_repeat))
+    app.add_handler(CommandHandler("p", cmd_p))
+    app.add_handler(CommandHandler("conversation", cmd_conversation))
+    app.add_handler(CommandHandler("later", cmd_later))
+    app.add_handler(CommandHandler("snapshot", cmd_snapshot))
+    app.add_handler(CommandHandler("snapshots", cmd_snapshots))
+    app.add_handler(CommandHandler("dashboard", cmd_dashboard))
+
     # Callback queries (inline buttons — global router)
     app.add_handler(CallbackQueryHandler(callback_router))
+
+    # Voice messages → transcribe → send to partner
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     # Plain text → button router → partner fallback
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
@@ -1574,7 +2019,17 @@ def main():
             interval=30,
             first=10,
         )
-        log.info("Background jobs enabled (context: %ds, proposals: 30s)", CONTEXT_CHECK_INTERVAL)
+        job_queue.run_repeating(
+            scheduled_commands_check,
+            interval=10,
+            first=5,
+        )
+        job_queue.run_repeating(
+            conversation_mode_check,
+            interval=5,
+            first=15,
+        )
+        log.info("Background jobs enabled (context: %ds, proposals: 30s, scheduled: 10s)", CONTEXT_CHECK_INTERVAL)
     else:
         log.warning("JobQueue not available — background jobs disabled. "
                      "Install: pip3 install 'python-telegram-bot[job-queue]'")
