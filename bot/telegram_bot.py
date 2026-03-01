@@ -60,7 +60,7 @@ _seen_proposals: set[str] = set()
 REPLY_KEYBOARD = ReplyKeyboardMarkup(
     [["Status", "Workers", "Proposals"],
      ["Spawn", "Output", "Ask"],
-     ["Git"]],
+     ["Git", "Services", "Enable RC"]],
     resize_keyboard=True,
 )
 
@@ -323,14 +323,17 @@ async def build_worker_actions(name: str) -> tuple[str, InlineKeyboardMarkup]:
         ],
         [
             InlineKeyboardButton("Compact", callback_data=f"wk:{name}:cmp"),
+            InlineKeyboardButton("Enable RC", callback_data=f"wk:{name}:rc"),
+        ],
+        [
             InlineKeyboardButton("Reset", callback_data=f"wk:{name}:reset"),
-        ],
-        [
             InlineKeyboardButton("Hard Reset", callback_data=f"wk:{name}:hrst"),
-            InlineKeyboardButton("Restart", callback_data=f"wk:{name}:rst"),
         ],
         [
+            InlineKeyboardButton("Restart", callback_data=f"wk:{name}:rst"),
             InlineKeyboardButton("Kill", callback_data=f"wk:{name}:kill"),
+        ],
+        [
             InlineKeyboardButton("Kill NOW", callback_data=f"wk:{name}:nuke"),
         ],
         [InlineKeyboardButton("<< Back", callback_data="wk:list")],
@@ -433,6 +436,42 @@ async def build_git_detail(project: str) -> tuple[str, InlineKeyboardMarkup]:
         row.append(InlineKeyboardButton("Push", callback_data=f"git:{project}:push"))
     row.append(InlineKeyboardButton("<< Back", callback_data="git:list"))
     return "\n".join(lines), InlineKeyboardMarkup([row])
+
+
+# Known services to check
+SERVICES = {
+    "orchestrator": ("http://localhost:5001/api/health", 5001),
+    "family-vault": ("http://localhost:5000/health", 5000),
+    "research-pipeline": ("http://localhost:8085/health", 8085),
+    "ollama": ("http://localhost:11434/api/tags", 11434),
+    "open-webui": ("http://localhost:8080/health", 8080),
+}
+
+
+async def build_services_view() -> tuple[str, InlineKeyboardMarkup]:
+    """Build services status overview."""
+    lines = ["<b>Services:</b>\n"]
+
+    async with httpx.AsyncClient(timeout=3) as client:
+        for name, (url, port) in SERVICES.items():
+            try:
+                r = await client.get(url)
+                if r.status_code < 400:
+                    status = "✅"
+                else:
+                    status = f"⚠️ {r.status_code}"
+            except httpx.ConnectError:
+                status = "❌ offline"
+            except httpx.TimeoutException:
+                status = "⏱️ timeout"
+            except Exception as e:
+                status = f"❌ {type(e).__name__}"
+            lines.append(f"  {status} <b>{esc(name)}</b> (:{port})")
+
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Refresh", callback_data="svc:refresh")]
+    ])
+    return "\n".join(lines), markup
 
 
 # --- Shared action helpers ---
@@ -862,6 +901,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await _do_compact(query.message, name)
                     return
 
+                if action == "rc":
+                    await query.answer("Enabling remote control...")
+                    result = await api_post(f"/api/processes/{name}/send", {"text": "/rc"})
+                    if result and result.get("status") == "sent":
+                        await query.message.reply_text(f"Sent /rc to <b>{esc(name)}</b>.", parse_mode=ParseMode.HTML)
+                    else:
+                        await query.message.reply_text(f"Failed to send /rc to {name}.")
+                    return
+
                 if action == "rst":
                     await query.answer("Restarting...")
                     await _do_restart(query.message, name)
@@ -1040,6 +1088,19 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
+        # --- Services ---
+        if data == "svc:refresh":
+            await query.answer("Refreshing...")
+            text, markup = await build_services_view()
+            try:
+                await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
+            except BadRequest as e:
+                if "not modified" in str(e).lower():
+                    await query.answer("Already up to date")
+                else:
+                    raise
+            return
+
         # --- Stale spawn buttons ---
         if data.startswith("sp:"):
             await query.answer("Session expired — tap Spawn to start.", show_alert=True)
@@ -1217,10 +1278,25 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text_out, parse_mode=ParseMode.HTML, reply_markup=markup)
         return
 
+    if text == "Services":
+        text_out, markup = await build_services_view()
+        await update.message.reply_text(text_out, parse_mode=ParseMode.HTML, reply_markup=markup)
+        return
+    if text == "Enable RC":
+        result = await api_post("/api/processes/partner/send", {"text": "/rc"})
+        if result and result.get("status") == "sent":
+            await update.message.reply_text("Sent /rc to partner.")
+        else:
+            await update.message.reply_text("Failed to send /rc to partner.")
+        return
+
     # Default: forward to partner
     result = await api_post("/api/processes/partner/send", {"text": text})
     if result and result.get("status") == "sent":
         await update.message.reply_text("Sent to partner.")
+        # Auto-fetch last response after a delay
+        await asyncio.sleep(4)
+        await _send_last(update.message, "partner", 1)
     else:
         await update.message.reply_text("Failed to send to partner.")
 

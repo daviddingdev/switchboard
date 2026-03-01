@@ -1408,7 +1408,11 @@ def reset_partner():
         # Start a new claude session
         tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
 
-        return jsonify({'status': 'reset', 'message': 'Partner session restarting'})
+        # Auto-enable remote control after Claude starts
+        time.sleep(5)
+        tmux.send_keys('partner', '/rc', raw=False)
+
+        return jsonify({'status': 'reset', 'message': 'Partner session restarting with /rc'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1442,7 +1446,11 @@ def hard_reset_partner():
             # Start Claude
             tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
 
-        return jsonify({'status': 'hard_reset', 'message': 'Partner window recreated'})
+            # Auto-enable remote control after Claude starts
+            time.sleep(5)
+            tmux.send_keys('partner', '/rc', raw=False)
+
+        return jsonify({'status': 'hard_reset', 'message': 'Partner window recreated with /rc'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
