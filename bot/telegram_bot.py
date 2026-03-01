@@ -662,10 +662,11 @@ async def _send_output(message, name: str, lines: int = 100):
 async def _wait_and_get_response(last_msg_before: str | None, chat=None, timeout: int = 60) -> str | None:
     """Wait for partner to finish responding, then return the NEW message."""
     start = time.time()
-    poll_interval = 2
+    poll_interval = 1.5
     stable_count = 0
     last_output = ""
     last_typing = start
+    last_hash = hash(last_msg_before) if last_msg_before else 0
 
     while time.time() - start < timeout:
         await asyncio.sleep(poll_interval)
@@ -681,28 +682,31 @@ async def _wait_and_get_response(last_msg_before: str | None, chat=None, timeout
         result = await api_get("/api/processes/partner/output", lines=30)
         current_output = result.get("output", "") if result else ""
 
-        # Check for idle indicators
-        is_idle = "❯" in current_output[-50:] or "───" in current_output[-80:]
+        # Check for idle indicators (prompt visible = done responding)
+        is_idle = "❯" in current_output[-100:] or ("───" in current_output[-100:] and "❯" not in current_output[-200:-100])
 
         if current_output == last_output and current_output:
             stable_count += 1
+            # If output is stable AND looks idle, we're done
             if is_idle and stable_count >= 2:
                 break
-            elif stable_count >= 5:  # Fallback: stable for ~10s
+            # Even if not clearly idle, if stable for long enough assume done
+            elif stable_count >= 4:
                 break
         else:
             stable_count = 0
             last_output = current_output
 
     # Fetch the last assistant message
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(0.5)
     history = await api_get("/api/partner/history", limit=5)
     if history and "messages" in history:
         assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
         if assistant_msgs:
             new_msg = assistant_msgs[-1].get("content", "")
-            # Only return if different from before (it's actually new)
-            if last_msg_before is None or new_msg[:200] != last_msg_before[:200]:
+            new_hash = hash(new_msg)
+            # Return if it's a different message (by hash comparison)
+            if new_hash != last_hash:
                 return new_msg
     return None
 
@@ -2033,36 +2037,6 @@ def main():
     else:
         log.warning("JobQueue not available — background jobs disabled. "
                      "Install: pip3 install 'python-telegram-bot[job-queue]'")
-
-    # Set bot commands menu
-    async def post_init(application):
-        commands = [
-            ("status", "Health + worker dashboard"),
-            ("workers", "List active workers"),
-            ("output", "Partner terminal output"),
-            ("p", "Partner shortcut (out/rc/compact/reset)"),
-            ("dashboard", "Multi-worker status"),
-            ("send", "Send message to worker"),
-            ("spawn", "Spawn new worker"),
-            ("kill", "End-of-session then kill"),
-            ("compact", "Compact worker context"),
-            ("reset", "Soft reset worker"),
-            ("hard_reset", "Hard reset worker"),
-            ("restart", "Kill and respawn worker"),
-            ("proposals", "View pending proposals"),
-            ("conversation", "Toggle auto-response mode"),
-            ("history", "View command history"),
-            ("pinned", "View pinned messages"),
-            ("snapshot", "Save context snapshot"),
-            ("snapshots", "View saved snapshots"),
-            ("later", "Schedule command (e.g. 30m compact)"),
-            ("last", "Last assistant message"),
-            ("ask", "Ask Ollama"),
-        ]
-        await application.bot.set_my_commands(commands)
-        log.info("Bot commands menu updated")
-
-    app.post_init = post_init
 
     log.info("Starting bot (long-polling)...")
     app.run_polling(drop_pending_updates=True)
