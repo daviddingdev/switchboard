@@ -647,10 +647,13 @@ async def _stream_responses(message, msg_count_before: int, timeout: int = 60) -
         # Check if output stopped changing (idle)
         if current_output == last_output and current_output:
             stable_count += 1
-            # Check for idle indicators
-            out_lower = current_output.lower()
-            if stable_count >= 2 and (">" in current_output[-20:] or "waiting" in out_lower):
-                break
+            # Stable for 2 checks (~6s) = probably done
+            # Also check for prompt indicators: ❯ or ─── separator
+            if stable_count >= 2:
+                if "❯" in current_output[-50:] or "───" in current_output[-80:]:
+                    break
+                elif stable_count >= 3:  # Extra wait if no clear prompt
+                    break
         else:
             stable_count = 0
             last_output = current_output
