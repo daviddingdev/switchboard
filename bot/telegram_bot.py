@@ -44,7 +44,7 @@ CONTEXT_WARN_PCT = int(os.getenv("CONTEXT_WARN_PCT", "80"))
 CONTEXT_COMPACT_PCT = int(os.getenv("CONTEXT_COMPACT_PCT", "90"))
 CONTEXT_CRITICAL_PCT = int(os.getenv("CONTEXT_CRITICAL_PCT", "95"))
 CONTEXT_CHECK_INTERVAL = int(os.getenv("CONTEXT_CHECK_INTERVAL", "300"))
-RESPONSE_POLL_TIMEOUT = int(os.getenv("RESPONSE_POLL_TIMEOUT", "30"))
+RESPONSE_POLL_TIMEOUT = int(os.getenv("RESPONSE_POLL_TIMEOUT", "90"))
 
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -56,14 +56,24 @@ log = logging.getLogger("telegram_bot")
 _recently_compacted: dict[str, float] = {}
 # Track seen proposal IDs for background push
 _seen_proposals: set[str] = set()
+# Shared HTTP client for connection pooling
+_http_client: httpx.AsyncClient | None = None
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    """Get or create shared HTTP client with connection pooling."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=15)
+    return _http_client
 
 
 # --- Persistent reply keyboard ---
 
 REPLY_KEYBOARD = ReplyKeyboardMarkup(
-    [["Status", "Workers", "Proposals"],
-     ["Spawn", "Output", "Ask"],
-     ["Git", "Services", "Enable RC"]],
+    [["Output", "Status", "Workers"],
+     ["Enable RC", "Git", "Proposals"],
+     ["Spawn", "Services", "Ask"]],
     resize_keyboard=True,
 )
 
@@ -174,10 +184,10 @@ def _progress_bar(pct: int, width: int = 10) -> str:
 
 async def api_get(path: str, **params) -> dict | list | None:
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(f"{API_URL}{path}", params=params)
-            r.raise_for_status()
-            return r.json()
+        client = await get_http_client()
+        r = await client.get(f"{API_URL}{path}", params=params)
+        r.raise_for_status()
+        return r.json()
     except Exception as e:
         log.error("API GET %s failed: %s", path, e)
         return None
@@ -185,10 +195,10 @@ async def api_get(path: str, **params) -> dict | list | None:
 
 async def api_post(path: str, data: dict = None) -> dict | None:
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(f"{API_URL}{path}", json=data)
-            r.raise_for_status()
-            return r.json()
+        client = await get_http_client()
+        r = await client.post(f"{API_URL}{path}", json=data, timeout=30)
+        r.raise_for_status()
+        return r.json()
     except Exception as e:
         log.error("API POST %s failed: %s", path, e)
         return None
@@ -196,10 +206,10 @@ async def api_post(path: str, data: dict = None) -> dict | None:
 
 async def api_patch(path: str, data: dict = None) -> dict | None:
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.patch(f"{API_URL}{path}", json=data)
-            r.raise_for_status()
-            return r.json()
+        client = await get_http_client()
+        r = await client.patch(f"{API_URL}{path}", json=data)
+        r.raise_for_status()
+        return r.json()
     except Exception as e:
         log.error("API PATCH %s failed: %s", path, e)
         return None
@@ -207,10 +217,10 @@ async def api_patch(path: str, data: dict = None) -> dict | None:
 
 async def api_delete(path: str) -> dict | None:
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.delete(f"{API_URL}{path}")
-            r.raise_for_status()
-            return r.json()
+        client = await get_http_client()
+        r = await client.delete(f"{API_URL}{path}")
+        r.raise_for_status()
+        return r.json()
     except Exception as e:
         log.error("API DELETE %s failed: %s", path, e)
         return None
@@ -311,14 +321,18 @@ async def build_worker_list() -> tuple[str, InlineKeyboardMarkup]:
 
 async def build_worker_actions(name: str) -> tuple[str, InlineKeyboardMarkup]:
     """Build action menu for a specific worker."""
-    procs = await api_get("/api/processes")
+    # Fetch both in parallel
+    procs, usage = await asyncio.gather(
+        api_get("/api/processes"),
+        api_get("/api/workers/usage"),
+    )
+
     found = any(p["name"] == name for p in (procs or []))
     if not found:
         return f"Worker <b>{esc(name)}</b> not found.", InlineKeyboardMarkup([
             [InlineKeyboardButton("<< Back", callback_data="wk:list")]
         ])
 
-    usage = await api_get("/api/workers/usage")
     workers_usage = {}
     if usage and "workers" in usage:
         for w in usage["workers"]:
@@ -464,26 +478,30 @@ SERVICES = {
 }
 
 
+async def _check_service(client: httpx.AsyncClient, name: str, url: str, port: int) -> str:
+    """Check a single service health."""
+    try:
+        r = await client.get(url, timeout=3)
+        if r.status_code < 400:
+            return f"  ✅ <b>{esc(name)}</b> (:{port})"
+        return f"  ⚠️ <b>{esc(name)}</b> (:{port}) — {r.status_code}"
+    except httpx.ConnectError:
+        return f"  ❌ <b>{esc(name)}</b> (:{port}) — offline"
+    except httpx.TimeoutException:
+        return f"  ⏱️ <b>{esc(name)}</b> (:{port}) — timeout"
+    except Exception as e:
+        return f"  ❌ <b>{esc(name)}</b> (:{port}) — {type(e).__name__}"
+
+
 async def build_services_view() -> tuple[str, InlineKeyboardMarkup]:
-    """Build services status overview."""
-    lines = ["<b>Services:</b>\n"]
+    """Build services status overview (parallel checks)."""
+    client = await get_http_client()
 
-    async with httpx.AsyncClient(timeout=3) as client:
-        for name, (url, port) in SERVICES.items():
-            try:
-                r = await client.get(url)
-                if r.status_code < 400:
-                    status = "✅"
-                else:
-                    status = f"⚠️ {r.status_code}"
-            except httpx.ConnectError:
-                status = "❌ offline"
-            except httpx.TimeoutException:
-                status = "⏱️ timeout"
-            except Exception as e:
-                status = f"❌ {type(e).__name__}"
-            lines.append(f"  {status} <b>{esc(name)}</b> (:{port})")
+    # Check all services in parallel
+    tasks = [_check_service(client, name, url, port) for name, (url, port) in SERVICES.items()]
+    results = await asyncio.gather(*tasks)
 
+    lines = ["<b>Services:</b>\n"] + list(results)
     markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("Refresh", callback_data="svc:refresh")]
     ])
@@ -611,10 +629,10 @@ async def _send_output(message, name: str, lines: int = 100):
         await message.reply_text(f"Failed to get output from {name}.")
 
 
-async def _wait_and_get_response(timeout: int = 60) -> str | None:
-    """Wait for partner to finish responding, then return the last message."""
+async def _wait_and_get_response(last_msg_before: str | None, timeout: int = 60) -> str | None:
+    """Wait for partner to finish responding, then return the NEW message."""
     start = time.time()
-    poll_interval = 3
+    poll_interval = 2
     stable_count = 0
     last_output = ""
 
@@ -624,24 +642,29 @@ async def _wait_and_get_response(timeout: int = 60) -> str | None:
         result = await api_get("/api/processes/partner/output", lines=30)
         current_output = result.get("output", "") if result else ""
 
+        # Check for idle indicators
+        is_idle = "❯" in current_output[-50:] or "───" in current_output[-80:]
+
         if current_output == last_output and current_output:
             stable_count += 1
-            # Idle: prompt ❯ or separator ───
-            if stable_count >= 2 and ("❯" in current_output[-50:] or "───" in current_output[-80:]):
+            if is_idle and stable_count >= 2:
                 break
-            elif stable_count >= 4:  # Fallback: stable for ~12s
+            elif stable_count >= 5:  # Fallback: stable for ~10s
                 break
         else:
             stable_count = 0
             last_output = current_output
 
     # Fetch the last assistant message
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(0.3)
     history = await api_get("/api/partner/history", limit=5)
     if history and "messages" in history:
         assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
         if assistant_msgs:
-            return assistant_msgs[-1].get("content", "")
+            new_msg = assistant_msgs[-1].get("content", "")
+            # Only return if different from before (it's actually new)
+            if last_msg_before is None or new_msg[:200] != last_msg_before[:200]:
+                return new_msg
     return None
 
 
@@ -1341,18 +1364,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Default: forward to partner
+    # Capture last message before sending to detect new response
+    history_before = await api_get("/api/partner/history", limit=5)
+    last_msg_before = None
+    if history_before and "messages" in history_before:
+        assistant_msgs = [m for m in history_before["messages"] if m.get("role") == "assistant"]
+        if assistant_msgs:
+            last_msg_before = assistant_msgs[-1].get("content", "")
+
     result = await api_post("/api/processes/partner/send", {"text": text})
     if result and result.get("status") == "sent":
         await update.message.reply_text("Sent ✓")
         await update.message.chat.send_action("typing")
-        # Wait for response and send it
-        response = await _wait_and_get_response(timeout=RESPONSE_POLL_TIMEOUT)
+        # Wait for NEW response and send it
+        response = await _wait_and_get_response(last_msg_before, timeout=RESPONSE_POLL_TIMEOUT)
         if response:
             if len(response) > 3000:
                 response = response[:3000] + "\n\n... (truncated)"
             await send_chunked(update.message, response, parse_mode=None)
         else:
-            await update.message.reply_text("(no response yet — check /output)")
+            await update.message.reply_text("(no new response — check /output)")
     else:
         await update.message.reply_text("Failed to send to partner.")
 
