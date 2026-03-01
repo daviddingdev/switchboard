@@ -611,58 +611,38 @@ async def _send_output(message, name: str, lines: int = 100):
         await message.reply_text(f"Failed to get output from {name}.")
 
 
-async def _stream_responses(message, msg_count_before: int, timeout: int = 60) -> int:
-    """Stream assistant responses as they appear. Returns count of messages sent."""
+async def _wait_and_get_response(timeout: int = 60) -> str | None:
+    """Wait for partner to finish responding, then return the last message."""
     start = time.time()
     poll_interval = 3
     stable_count = 0
     last_output = ""
-    sent_count = 0
-    last_sent_idx = msg_count_before  # Index of last message we've sent
 
     while time.time() - start < timeout:
         await asyncio.sleep(poll_interval)
 
-        # Check terminal output for activity
-        result = await api_get("/api/processes/partner/output", lines=20)
+        result = await api_get("/api/processes/partner/output", lines=30)
         current_output = result.get("output", "") if result else ""
 
-        # Check for new messages in history
-        history = await api_get("/api/partner/history", limit=20)
-        if history and "messages" in history:
-            assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
-
-            # Send any new messages we haven't sent yet
-            for i, msg in enumerate(assistant_msgs):
-                if i >= last_sent_idx:
-                    content = msg.get("content", "")
-                    if content and len(content) > 20:  # Skip tiny messages
-                        if len(content) > 3000:
-                            content = content[:3000] + "\n\n... (truncated)"
-                        await send_chunked(message, content, parse_mode=None)
-                        sent_count += 1
-                        last_sent_idx = i + 1
-                        stable_count = 0  # Reset stability on new message
-
-        # Check if output stopped changing (idle)
         if current_output == last_output and current_output:
             stable_count += 1
-            # Stable for 2 checks (~6s) = probably done
-            # Also check for prompt indicators: ❯ or ─── separator
-            if stable_count >= 2:
-                if "❯" in current_output[-50:] or "───" in current_output[-80:]:
-                    break
-                elif stable_count >= 3:  # Extra wait if no clear prompt
-                    break
+            # Idle: prompt ❯ or separator ───
+            if stable_count >= 2 and ("❯" in current_output[-50:] or "───" in current_output[-80:]):
+                break
+            elif stable_count >= 4:  # Fallback: stable for ~12s
+                break
         else:
             stable_count = 0
             last_output = current_output
 
-        # Refresh typing indicator
-        if sent_count == 0:
-            await message.chat.send_action("typing")
-
-    return sent_count
+    # Fetch the last assistant message
+    await asyncio.sleep(0.5)
+    history = await api_get("/api/partner/history", limit=5)
+    if history and "messages" in history:
+        assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
+        if assistant_msgs:
+            return assistant_msgs[-1].get("content", "")
+    return None
 
 
 async def _send_last(message, name: str, count: int = 1):
@@ -1361,19 +1341,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Default: forward to partner
-    # Count existing assistant messages to detect new ones
-    history_before = await api_get("/api/partner/history", limit=20)
-    msg_count_before = 0
-    if history_before and "messages" in history_before:
-        msg_count_before = len([m for m in history_before["messages"] if m.get("role") == "assistant"])
-
     result = await api_post("/api/processes/partner/send", {"text": text})
     if result and result.get("status") == "sent":
         await update.message.reply_text("Sent ✓")
         await update.message.chat.send_action("typing")
-        # Stream responses as they appear
-        sent = await _stream_responses(update.message, msg_count_before, timeout=RESPONSE_POLL_TIMEOUT)
-        if sent == 0:
+        # Wait for response and send it
+        response = await _wait_and_get_response(timeout=RESPONSE_POLL_TIMEOUT)
+        if response:
+            if len(response) > 3000:
+                response = response[:3000] + "\n\n... (truncated)"
+            await send_chunked(update.message, response, parse_mode=None)
+        else:
             await update.message.reply_text("(no response yet — check /output)")
     else:
         await update.message.reply_text("Failed to send to partner.")
