@@ -37,9 +37,22 @@ case "$EVENT" in
             exit 0
         fi
 
-        LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // "(no message)"' | head -c 500)
-        TEXT="<b>${PROJECT}</b> session stopped.
+        LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // ""' | head -c 500)
 
+        # Skip noisy/generic messages
+        if [ ${#LAST_MSG} -lt 30 ]; then
+            exit 0
+        fi
+
+        # Skip generic "let me know" / "anything else" responses
+        LOWER_MSG=$(echo "$LAST_MSG" | tr '[:upper:]' '[:lower:]')
+        case "$LOWER_MSG" in
+            *"let me know"*|*"anything else"*|*"feel free to"*|*"happy to help"*)
+                exit 0
+                ;;
+        esac
+
+        TEXT="<b>${PROJECT}</b>:
 ${LAST_MSG}"
         ;;
 

@@ -217,11 +217,12 @@ async def api_delete(path: str) -> dict | None:
 
 async def build_status_view() -> tuple[str, InlineKeyboardMarkup]:
     """Build status dashboard text and inline keyboard."""
-    health, procs, usage, proposals = await asyncio.gather(
+    health, procs, usage, proposals, partner_out = await asyncio.gather(
         api_get("/api/health"),
         api_get("/api/processes"),
         api_get("/api/workers/usage"),
         api_get("/api/proposals"),
+        api_get("/api/processes/partner/output", lines=5),
     )
 
     lines = []
@@ -231,6 +232,18 @@ async def build_status_view() -> tuple[str, InlineKeyboardMarkup]:
         lines.append(f"<b>API:</b> {esc(status)}  |  <b>Session:</b> {session}")
     else:
         lines.append("<b>API:</b> unreachable")
+
+    # Partner state detection
+    partner_state = "unknown"
+    if partner_out and "output" in partner_out:
+        out = partner_out["output"].strip().lower()
+        if "waiting for input" in out or out.endswith(">") or "─" in out[-50:]:
+            partner_state = "🟢 idle"
+        elif "thinking" in out or "working" in out or "..." in out[-30:]:
+            partner_state = "🔄 working"
+        else:
+            partner_state = "🟡 active"
+    lines.append(f"<b>Partner:</b> {partner_state}")
 
     workers_usage = {}
     if usage and "workers" in usage:
@@ -593,6 +606,29 @@ async def _send_output(message, name: str, lines: int = 100):
         await send_chunked(message, output, parse_mode=None)
     else:
         await message.reply_text(f"Failed to get output from {name}.")
+
+
+async def _poll_for_response(last_before: str | None, timeout: int = 30) -> str | None:
+    """Poll partner history until a new assistant response appears."""
+    start = time.time()
+    poll_interval = 2  # seconds between checks
+
+    while time.time() - start < timeout:
+        await asyncio.sleep(poll_interval)
+        history = await api_get("/api/partner/history", limit=5)
+        if not history or "messages" not in history:
+            continue
+
+        assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
+        if not assistant_msgs:
+            continue
+
+        last_now = assistant_msgs[-1].get("content", "")
+        # Check if this is a new/different response
+        if last_before is None or last_now[:100] != last_before:
+            return last_now
+
+    return None
 
 
 async def _send_last(message, name: str, count: int = 1):
@@ -1291,12 +1327,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Default: forward to partner
+    # First, capture current last assistant message to detect new response
+    history_before = await api_get("/api/partner/history", limit=5)
+    last_before = None
+    if history_before and "messages" in history_before:
+        assistant_msgs = [m for m in history_before["messages"] if m.get("role") == "assistant"]
+        if assistant_msgs:
+            last_before = assistant_msgs[-1].get("content", "")[:100]
+
     result = await api_post("/api/processes/partner/send", {"text": text})
     if result and result.get("status") == "sent":
-        await update.message.reply_text("Sent to partner.")
-        # Auto-fetch last response after a delay
-        await asyncio.sleep(4)
-        await _send_last(update.message, "partner", 1)
+        await update.message.reply_text("Sent ✓")
+        # Poll for new response with typing indicator
+        await update.message.chat.send_action("typing")
+        new_response = await _poll_for_response(last_before, timeout=30)
+        if new_response:
+            if len(new_response) > 3000:
+                new_response = new_response[:3000] + "\n\n... (truncated)"
+            await send_chunked(update.message, new_response, parse_mode=None)
+        else:
+            await update.message.reply_text("(no response yet — check /output)")
     else:
         await update.message.reply_text("Failed to send to partner.")
 
