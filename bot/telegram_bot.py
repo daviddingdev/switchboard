@@ -2034,6 +2034,36 @@ def main():
         log.warning("JobQueue not available — background jobs disabled. "
                      "Install: pip3 install 'python-telegram-bot[job-queue]'")
 
+    # Set bot commands menu
+    async def post_init(application):
+        commands = [
+            ("status", "Health + worker dashboard"),
+            ("workers", "List active workers"),
+            ("output", "Partner terminal output"),
+            ("p", "Partner shortcut (out/rc/compact/reset)"),
+            ("dashboard", "Multi-worker status"),
+            ("send", "Send message to worker"),
+            ("spawn", "Spawn new worker"),
+            ("kill", "End-of-session then kill"),
+            ("compact", "Compact worker context"),
+            ("reset", "Soft reset worker"),
+            ("hard_reset", "Hard reset worker"),
+            ("restart", "Kill and respawn worker"),
+            ("proposals", "View pending proposals"),
+            ("conversation", "Toggle auto-response mode"),
+            ("history", "View command history"),
+            ("pinned", "View pinned messages"),
+            ("snapshot", "Save context snapshot"),
+            ("snapshots", "View saved snapshots"),
+            ("later", "Schedule command (e.g. 30m compact)"),
+            ("last", "Last assistant message"),
+            ("ask", "Ask Ollama"),
+        ]
+        await application.bot.set_my_commands(commands)
+        log.info("Bot commands menu updated")
+
+    app.post_init = post_init
+
     log.info("Starting bot (long-polling)...")
     app.run_polling(drop_pending_updates=True)
 
