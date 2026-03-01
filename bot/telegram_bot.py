@@ -611,48 +611,55 @@ async def _send_output(message, name: str, lines: int = 100):
         await message.reply_text(f"Failed to get output from {name}.")
 
 
-async def _poll_for_response(last_before: str | None, timeout: int = 60) -> str | None:
-    """Poll until partner finishes responding, then fetch the message."""
+async def _stream_responses(message, msg_count_before: int, timeout: int = 60) -> int:
+    """Stream assistant responses as they appear. Returns count of messages sent."""
     start = time.time()
     poll_interval = 3
     stable_count = 0
     last_output = ""
+    sent_count = 0
+    last_sent_idx = msg_count_before  # Index of last message we've sent
 
-    # Phase 1: Wait for output to stabilize (stop changing)
     while time.time() - start < timeout:
         await asyncio.sleep(poll_interval)
 
+        # Check terminal output for activity
         result = await api_get("/api/processes/partner/output", lines=20)
-        if not result or "output" not in result:
-            continue
+        current_output = result.get("output", "") if result else ""
 
-        current_output = result["output"]
+        # Check for new messages in history
+        history = await api_get("/api/partner/history", limit=20)
+        if history and "messages" in history:
+            assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
 
-        # Check if output stopped changing (Claude finished typing)
-        if current_output == last_output:
+            # Send any new messages we haven't sent yet
+            for i, msg in enumerate(assistant_msgs):
+                if i >= last_sent_idx:
+                    content = msg.get("content", "")
+                    if content and len(content) > 20:  # Skip tiny messages
+                        if len(content) > 3000:
+                            content = content[:3000] + "\n\n... (truncated)"
+                        await send_chunked(message, content, parse_mode=None)
+                        sent_count += 1
+                        last_sent_idx = i + 1
+                        stable_count = 0  # Reset stability on new message
+
+        # Check if output stopped changing (idle)
+        if current_output == last_output and current_output:
             stable_count += 1
-            if stable_count >= 2:  # Stable for 2 consecutive checks (~6s)
+            # Check for idle indicators
+            out_lower = current_output.lower()
+            if stable_count >= 2 and (">" in current_output[-20:] or "waiting" in out_lower):
                 break
         else:
             stable_count = 0
             last_output = current_output
 
-    # Phase 2: Fetch the clean message from history
-    await asyncio.sleep(1)  # Brief pause for session file to flush
-    history = await api_get("/api/partner/history", limit=5)
-    if not history or "messages" not in history:
-        return None
+        # Refresh typing indicator
+        if sent_count == 0:
+            await message.chat.send_action("typing")
 
-    assistant_msgs = [m for m in history["messages"] if m.get("role") == "assistant"]
-    if not assistant_msgs:
-        return None
-
-    last_now = assistant_msgs[-1].get("content", "")
-    # Return if it's different from before
-    if last_before is None or last_now[:100] != last_before:
-        return last_now
-
-    return None
+    return sent_count
 
 
 async def _send_last(message, name: str, count: int = 1):
@@ -1351,25 +1358,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Default: forward to partner
-    # First, capture current last assistant message to detect new response
-    history_before = await api_get("/api/partner/history", limit=5)
-    last_before = None
+    # Count existing assistant messages to detect new ones
+    history_before = await api_get("/api/partner/history", limit=20)
+    msg_count_before = 0
     if history_before and "messages" in history_before:
-        assistant_msgs = [m for m in history_before["messages"] if m.get("role") == "assistant"]
-        if assistant_msgs:
-            last_before = assistant_msgs[-1].get("content", "")[:100]
+        msg_count_before = len([m for m in history_before["messages"] if m.get("role") == "assistant"])
 
     result = await api_post("/api/processes/partner/send", {"text": text})
     if result and result.get("status") == "sent":
         await update.message.reply_text("Sent ✓")
-        # Poll for new response with typing indicator
         await update.message.chat.send_action("typing")
-        new_response = await _poll_for_response(last_before, timeout=RESPONSE_POLL_TIMEOUT)
-        if new_response:
-            if len(new_response) > 3000:
-                new_response = new_response[:3000] + "\n\n... (truncated)"
-            await send_chunked(update.message, new_response, parse_mode=None)
-        else:
+        # Stream responses as they appear
+        sent = await _stream_responses(update.message, msg_count_before, timeout=RESPONSE_POLL_TIMEOUT)
+        if sent == 0:
             await update.message.reply_text("(no response yet — check /output)")
     else:
         await update.message.reply_text("Failed to send to partner.")
