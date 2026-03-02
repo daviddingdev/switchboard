@@ -193,6 +193,7 @@ cd ~/orchestrator
 ---
 
 ## Next
+- [ ] **Spark system updates in Monitor** — Show available DGX Spark system updates in the Monitor tab and allow updating directly from the UI. Source: DGX Spark local dashboard at `localhost:11000/settings`
 - [ ] **Plan mode awareness in web UI** — Detect when Claude Code is showing a plan approval prompt and show approve/reject buttons instead of text input. Currently, typing in the chat box during plan mode sends raw text to tmux, which Claude Code misinterprets (e.g., "4 test comment" got interpreted as approval)
 
 ## Backlog (Post-MVP)
