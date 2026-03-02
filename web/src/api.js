@@ -209,6 +209,27 @@ export async function fetchMetrics() {
   return res.json();
 }
 
+// Spark system updates
+
+export async function fetchSparkUpdates() {
+  const res = await fetch(`${API_BASE}/spark/updates`);
+  if (!res.ok) throw new Error(`Failed to fetch spark updates: ${res.status}`);
+  return res.json();
+}
+
+export async function triggerSparkUpdate(categories) {
+  const res = await fetch(`${API_BASE}/spark/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ categories }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to trigger update: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Usage analytics
 
 export async function fetchUsage() {

@@ -11,6 +11,7 @@ import glob as glob_module
 from datetime import datetime
 from pathlib import Path
 
+import requests as http_requests
 import yaml
 import psutil
 from flask import Flask, request, jsonify
@@ -1479,6 +1480,308 @@ def system_metrics():
     _prev_time = now
 
     return jsonify(result)
+
+
+# --- Spark System Updates ---
+
+CONFIG_FILE = PROJECT_ROOT / 'config.yaml'
+
+
+class SparkClient:
+    """Proxy client for DGX Spark dashboard API with token caching."""
+
+    def __init__(self):
+        self._token = None
+        self._config = None
+
+    def _load_config(self):
+        """Load spark config from config.yaml. Returns None if missing."""
+        if self._config is not None:
+            return self._config
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = yaml.safe_load(f)
+            self._config = cfg.get('spark', {})
+        except (FileNotFoundError, yaml.YAMLError):
+            self._config = {}
+        return self._config
+
+    @property
+    def configured(self):
+        cfg = self._load_config()
+        return bool(cfg.get('url') and cfg.get('username') and cfg.get('password'))
+
+    def _login(self):
+        """Authenticate and cache bearer token."""
+        cfg = self._load_config()
+        resp = http_requests.post(
+            f"{cfg['url']}/api/login",
+            json={'username': cfg['username'], 'password': cfg['password']},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        self._token = resp.json().get('token')
+
+    def _request(self, method, path, **kwargs):
+        """Make authenticated request, auto-retry on 401."""
+        cfg = self._load_config()
+        if not self.configured:
+            return None
+        url = f"{cfg['url']}/api/v1{path}"
+        kwargs.setdefault('timeout', 10)
+
+        for attempt in range(2):
+            if not self._token:
+                self._login()
+            headers = {'Authorization': f'Bearer {self._token}'}
+            resp = http_requests.request(method, url, headers=headers, **kwargs)
+            if resp.status_code == 401 and attempt == 0:
+                self._token = None
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        return None
+
+    def get_updates(self):
+        return self._request('GET', '/updates/available')
+
+    def trigger_update(self):
+        return self._request('POST', '/update_reboot')
+
+
+_spark = SparkClient()
+_update_proc = None  # Track background update subprocess
+_update_status = {'running': False, 'category': None, 'error': None}
+
+
+def _parse_apt_updates():
+    """Parse apt list --upgradable into categorized packages."""
+    try:
+        out = subprocess.run(
+            ['apt', 'list', '--upgradable'],
+            capture_output=True, text=True, timeout=30
+        )
+        lines = [l for l in out.stdout.strip().split('\n')
+                 if '/' in l and 'upgradable' in l]
+    except Exception:
+        return []
+
+    packages = []
+    for line in lines:
+        name = line.split('/')[0]
+        # Extract version info
+        parts = line.split()
+        new_ver = parts[1] if len(parts) > 1 else ''
+        old_ver = ''
+        for p in parts:
+            if p.startswith('[upgradable'):
+                idx = parts.index(p)
+                if idx + 2 < len(parts):
+                    old_ver = parts[idx + 2].rstrip(']')
+        packages.append({'name': name, 'new_version': new_ver, 'old_version': old_ver})
+    return packages
+
+
+def _parse_snap_updates():
+    """Parse snap refresh --list for available snap updates."""
+    try:
+        out = subprocess.run(
+            ['snap', 'refresh', '--list'],
+            capture_output=True, text=True, timeout=30
+        )
+        if out.returncode != 0:
+            return []
+        lines = out.stdout.strip().split('\n')
+        if len(lines) <= 1:
+            return []
+        # Header: Name  Version  Rev  Size  Publisher  Notes
+        snaps = []
+        for line in lines[1:]:
+            parts = line.split()
+            if len(parts) >= 2:
+                snaps.append({'name': parts[0], 'new_version': parts[1]})
+        return snaps
+    except Exception:
+        return []
+
+
+def _categorize_apt_packages(packages):
+    """Sort apt packages into categories."""
+    import re
+    # Match nvidia-related packages using word-boundary-aware patterns
+    nvidia_pattern = re.compile(
+        r'(nvidia|cuda-|cudnn|jetpack|tegra|tensorrt|nccl|'
+        r'(?:^|[-_])l4t(?:[-_]|$))', re.I
+    )
+    firmware_keywords = {'firmware', 'linux-firmware'}
+
+    categories = {
+        'nvidia': {'name': 'NVIDIA Packages', 'packages': [], 'requires_reboot': True},
+        'firmware': {'name': 'Firmware', 'packages': [], 'requires_reboot': True},
+        'system': {'name': 'System Packages', 'packages': [], 'requires_reboot': False},
+    }
+
+    for pkg in packages:
+        name_lower = pkg['name'].lower()
+        if any(kw in name_lower for kw in firmware_keywords):
+            categories['firmware']['packages'].append(pkg)
+        elif nvidia_pattern.search(name_lower):
+            categories['nvidia']['packages'].append(pkg)
+        else:
+            categories['system']['packages'].append(pkg)
+
+    return categories
+
+
+def _check_sudoers_setup():
+    """Check if passwordless sudo is configured for update commands."""
+    try:
+        out = subprocess.run(
+            ['sudo', '-n', 'apt-get', 'update', '-qq', '--print-uris'],
+            capture_output=True, timeout=5
+        )
+        return out.returncode == 0
+    except Exception:
+        return False
+
+
+@app.route('/api/spark/updates')
+def spark_updates():
+    """Return categorized available updates from apt, snap, and Spark platform."""
+    apt_pkgs = _parse_apt_updates()
+    apt_cats = _categorize_apt_packages(apt_pkgs)
+    snap_pkgs = _parse_snap_updates()
+
+    # Check Spark platform update
+    platform_available = False
+    spark_error = None
+    if _spark.configured:
+        try:
+            data = _spark.get_updates()
+            platform_available = (data or {}).get('available', False)
+        except Exception:
+            spark_error = 'Failed to reach Spark dashboard'
+
+    categories = []
+    for cat_id in ['system', 'nvidia', 'firmware']:
+        cat = apt_cats[cat_id]
+        if cat['packages']:
+            categories.append({
+                'id': cat_id,
+                'name': cat['name'],
+                'count': len(cat['packages']),
+                'packages': cat['packages'],
+                'requires_reboot': cat['requires_reboot'],
+            })
+
+    if snap_pkgs:
+        categories.append({
+            'id': 'snap',
+            'name': 'Snap Packages',
+            'count': len(snap_pkgs),
+            'packages': snap_pkgs,
+            'requires_reboot': False,
+        })
+
+    categories.append({
+        'id': 'platform',
+        'name': 'Spark Platform',
+        'count': 1 if platform_available else 0,
+        'packages': [],
+        'requires_reboot': True,
+        'available': platform_available,
+        'error': spark_error,
+    })
+
+    sudo_ok = _check_sudoers_setup()
+
+    return jsonify({
+        'categories': categories,
+        'update_status': _update_status,
+        'sudo_configured': sudo_ok,
+    })
+
+
+@app.route('/api/spark/update', methods=['POST'])
+def spark_trigger_update():
+    """Trigger updates for selected categories."""
+    global _update_proc, _update_status
+
+    if _update_status['running']:
+        return jsonify({'error': 'Update already in progress'}), 409
+
+    data = request.get_json() or {}
+    categories = data.get('categories', [])
+    if not categories:
+        return jsonify({'error': 'No categories specified'}), 400
+
+    # Platform update goes through Spark dashboard API
+    if 'platform' in categories:
+        if not _spark.configured:
+            return jsonify({'error': 'Spark not configured'}), 400
+        try:
+            _update_status = {'running': True, 'category': 'platform', 'error': None}
+            _spark.trigger_update()
+            return jsonify({'status': 'started', 'category': 'platform',
+                            'note': 'System will reboot shortly'})
+        except Exception as e:
+            _update_status = {'running': False, 'category': None, 'error': str(e)}
+            return jsonify({'error': str(e)}), 502
+
+    # For apt/snap categories, build a script and run in background
+    cmds = []
+    cat_names = []
+
+    apt_cats_needed = [c for c in categories if c in ('system', 'nvidia', 'firmware')]
+    if apt_cats_needed:
+        # Get the specific packages for requested categories
+        apt_pkgs = _parse_apt_updates()
+        apt_cats = _categorize_apt_packages(apt_pkgs)
+        pkg_names = []
+        for cat_id in apt_cats_needed:
+            pkg_names.extend(p['name'] for p in apt_cats[cat_id]['packages'])
+            cat_names.append(apt_cats[cat_id]['name'])
+        if pkg_names:
+            cmds.append('sudo apt-get update -qq')
+            cmds.append(f"sudo apt-get upgrade -y {' '.join(pkg_names)}")
+
+    if 'snap' in categories:
+        snap_pkgs = _parse_snap_updates()
+        snap_names = [s['name'] for s in snap_pkgs]
+        cat_names.append('Snap Packages')
+        if snap_names:
+            for sn in snap_names:
+                cmds.append(f"sudo snap refresh {sn}")
+
+    if not cmds:
+        return jsonify({'error': 'No packages to update'}), 400
+
+    label = ', '.join(cat_names)
+    _update_status = {'running': True, 'category': label, 'error': None}
+
+    script = ' && '.join(cmds)
+    _update_proc = subprocess.Popen(
+        ['bash', '-c', script],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+    )
+
+    # Monitor in a thread
+    import threading
+
+    def _watch():
+        global _update_status
+        proc = _update_proc
+        proc.wait()
+        if proc.returncode == 0:
+            _update_status = {'running': False, 'category': None, 'error': None}
+        else:
+            stderr = proc.stderr.read().decode()[-200:] if proc.stderr else ''
+            _update_status = {'running': False, 'category': None,
+                              'error': f'Update failed (exit {proc.returncode}): {stderr}'}
+
+    threading.Thread(target=_watch, daemon=True).start()
+
+    return jsonify({'status': 'started', 'categories': categories})
 
 
 # --- Usage Analytics ---

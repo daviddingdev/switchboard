@@ -1,0 +1,16 @@
+[Unit]
+Description=Orchestrator API + Web Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+WorkingDirectory=/home/davidding/orchestrator
+Environment=PATH=/home/davidding/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/davidding/orchestrator/start.sh
+ExecStop=/home/davidding/orchestrator/stop.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
