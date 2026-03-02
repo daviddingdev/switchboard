@@ -2,6 +2,12 @@
 
 ## 2026-03-02
 
+### Usage Fixes
+
+- **Filter synthetic model entries** — Rate-limit error responses from Claude Code use `<synthetic>` as the model name; these are now excluded from usage stats (`compute-usage.py`)
+- **Fix project name overlap in bar chart** — Widened label column for project names (100px vs 50px), added text truncation with hover tooltip (`Usage.jsx`)
+- **Historical Mac data** — Synced `~/.claude/projects/` from Mac to Spark for complete usage history
+
 ### Usage Analytics Tab
 
 - **Usage dashboard** — New tab showing Claude Code usage analytics across all sessions

@@ -165,7 +165,7 @@ def extract_tokens_chunked(filepath):
 
                     # Track model
                     model = msg.get('model', '')
-                    if model:
+                    if model and model.startswith('claude'):
                         models[model]['messages'] += 1
                         models[model]['input'] += usage.get('input_tokens', 0)
                         models[model]['output'] += usage.get('output_tokens', 0)

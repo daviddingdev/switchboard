@@ -199,12 +199,13 @@ function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
       {items.map((d, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{
+          <span title={typeof d[labelKey] === 'string' ? d[labelKey] : undefined} style={{
             fontSize: '11px', color: 'var(--text-secondary)',
-            width: '50px', flexShrink: 0, textAlign: 'right',
+            width: labelKey === 'name' ? '100px' : '50px', flexShrink: 0, textAlign: 'right',
             fontVariantNumeric: 'tabular-nums',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {typeof d[labelKey] === 'string' ? shortDate(d[labelKey]) : d[labelKey]}
+            {labelKey === 'name' ? d[labelKey] : (typeof d[labelKey] === 'string' ? shortDate(d[labelKey]) : d[labelKey])}
           </span>
           <div style={{
             flex: 1, height: '14px', background: 'var(--bg-tertiary)',
