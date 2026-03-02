@@ -1,43 +1,61 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
+import { useIsMobile } from './hooks/useMediaQuery'
 import FileTree from './components/FileTree'
-import Terminal from './components/Terminal'
 import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
 import DiffPreview from './components/DiffPreview'
-import PushPanel from './components/PushPanel'
-import CommitPanel from './components/CommitPanel'
-import PartnerHistory from './components/PartnerHistory'
-import EphemeralPreview from './components/EphemeralPreview'
-import WorkerList from './components/WorkerList'
+import WorkerDashboard from './components/WorkerDashboard'
 import Activity from './components/Activity'
 import SpawnDialog from './components/SpawnDialog'
-import QuickActions from './components/QuickActions'
-import ChatInput from './components/ChatInput'
-import { sendToProcess, fetchPendingPreviews } from './api'
+import MobileNav from './components/MobileNav'
+import Monitor from './components/Monitor'
+import Usage from './components/Usage'
 
-// Panel constraints
-const MIN_LEFT = 120
-const MIN_RIGHT = 150
-const MIN_CENTER = 300
-const MIN_INPUT_HEIGHT = 50
-const MIN_MAIN_HEIGHT = 200
-const DIVIDER_HEIGHT = 4
-const DEFAULT_LEFT = 220
-const DEFAULT_RIGHT = 280
-const DEFAULT_INPUT_HEIGHT = 70
+// Desktop panel constraints
+const MIN_FILES = 140
+const MAX_FILES = 600
+const DEFAULT_FILES = 260
+const MIN_ACTIVITY = 140
+const MAX_ACTIVITY = 500
+const DEFAULT_ACTIVITY = 260
+const MIN_CENTER = 200
+const MIN_TOP = 60
+const DEFAULT_TOP = null // auto height
 
-const styles = {
+const desktopStyles = {
   layout: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
+    height: '100dvh',
     background: 'var(--bg-primary)',
-  },
-  mainRow: {
-    display: 'flex',
-    flex: 1,
+    userSelect: 'none',
     overflow: 'hidden',
-    minHeight: MIN_MAIN_HEIGHT,
+  },
+  layoutNoSelect: {
+    userSelect: 'none',
+    cursor: 'col-resize',
+  },
+  layoutNoSelectRow: {
+    userSelect: 'none',
+    cursor: 'row-resize',
+  },
+  topSection: {
+    flexShrink: 0,
+    borderBottom: '1px solid var(--border)',
+    overflow: 'hidden',
+  },
+  hDivider: {
+    height: '4px',
+    background: 'var(--border)',
+    cursor: 'row-resize',
+    flexShrink: 0,
+    transition: 'background 0.15s',
+  },
+  bottomSection: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+    minHeight: 0,
   },
   filesPanel: {
     background: 'var(--bg-secondary)',
@@ -47,451 +65,464 @@ const styles = {
     overflow: 'hidden',
     flexShrink: 0,
   },
-  centerPanel: {
-    flex: 1,
+  filesPanelHeader: {
     display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    minWidth: 200,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    borderBottom: '1px solid var(--border)',
+    flexShrink: 0,
   },
-  divider: {
+  filesPanelTitle: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  collapseBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '14px',
+    padding: '2px 6px',
+    borderRadius: '3px',
+  },
+  vDivider: {
     width: '4px',
     background: 'var(--border)',
     cursor: 'col-resize',
     flexShrink: 0,
     transition: 'background 0.15s',
   },
-  dividerHover: {
+  dividerActive: {
     background: 'var(--accent)',
   },
-  centerContent: {
+  centerPanel: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    minWidth: MIN_CENTER,
+  },
+  previewContent: {
     flex: 1,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
   },
-  terminalWrapper: {
+  previewEmpty: {
     flex: 1,
-    padding: '8px',
-    overflow: 'hidden',
     display: 'flex',
-    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'var(--text-secondary)',
+    fontSize: '13px',
   },
-  rightPanel: {
+  activityPanel: {
+    flexShrink: 0,
     background: 'var(--bg-secondary)',
     borderLeft: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    flexShrink: 0,
   },
-  hDivider: {
-    height: '4px',
-    background: 'var(--border)',
-    cursor: 'row-resize',
-    flexShrink: 0,
-    transition: 'background 0.15s',
-  },
-  inputBar: {
+}
+
+const mobileStyles = {
+  layout: {
+    position: 'fixed',
+    inset: 0,
     display: 'flex',
-    alignItems: 'stretch',
+    flexDirection: 'column',
+    background: 'var(--bg-primary)',
+    paddingTop: 'env(safe-area-inset-top, 0px)',
+  },
+  content: {
+    flex: 1,
+    overflowY: 'scroll',
+    WebkitOverflowScrolling: 'touch',
+    minHeight: 0,
+    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
+  },
+  previewOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'var(--bg-primary)',
+    display: 'flex',
+    flexDirection: 'column',
+    zIndex: 40,
+    paddingTop: 'env(safe-area-inset-top, 0px)',
+    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
+  },
+  previewHeader: {
+    display: 'flex',
+    alignItems: 'center',
     gap: '8px',
-    padding: '8px 12px',
+    padding: '12px 16px',
+    borderBottom: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
     flexShrink: 0,
   },
-  quickActionsWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-    flexShrink: 0,
-  },
-  inputWrapper: {
-    flex: 1,
-    display: 'flex',
-    minWidth: 0,
-  },
-  spawnButton: {
-    background: 'var(--accent)',
-    color: 'white',
+  backBtn: {
+    background: 'transparent',
     border: 'none',
-    borderRadius: '4px',
-    padding: '4px 10px',
-    fontSize: '11px',
-    fontWeight: 500,
+    color: 'var(--accent)',
+    fontSize: '16px',
     cursor: 'pointer',
+    padding: '4px 8px',
+  },
+  previewTitle: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'var(--text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  previewBody: {
+    flex: 1,
+    overflow: 'auto',
   },
 }
 
 export default function App() {
+  const isMobile = useIsMobile()
+
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [sending, setSending] = useState(false)
-  const [chatInput, setChatInput] = useState('')
 
-  // Panel sizes (resizable)
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT)
-  const [rightWidth, setRightWidth] = useState(DEFAULT_RIGHT)
-  const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT)
-  const [dragging, setDragging] = useState(null) // 'left' | 'right' | 'bottom' | null
-  const dragStartX = useRef(0)
-  const dragStartY = useRef(0)
-  const dragStartWidth = useRef(0)
-  const dragStartHeight = useRef(0)
+  // Tab state
+  const [tabs, setTabs] = useState([])
+  const [activeTabId, setActiveTabId] = useState(null)
 
-  // Tab state - terminals and files
-  const [tabs, setTabs] = useState([
-    { id: 'terminal:partner', label: 'partner', type: 'terminal', workerName: 'partner' }
-  ])
-  const [activeTab, setActiveTab] = useState('terminal:partner')
+  // Desktop panel sizes
+  const [filesPanelWidth, setFilesPanelWidth] = useState(DEFAULT_FILES)
+  const [activityPanelWidth, setActivityPanelWidth] = useState(DEFAULT_ACTIVITY)
+  const [topHeight, setTopHeight] = useState(DEFAULT_TOP) // null = auto
+  const [filesPanelCollapsed, setFilesPanelCollapsed] = useState(false)
+  const [activityPanelCollapsed, setActivityPanelCollapsed] = useState(false)
 
-  // Drag handlers for resizable panels
-  const handleMouseDown = useCallback((side) => (e) => {
-    e.preventDefault()
-    setDragging(side)
-    dragStartX.current = e.clientX
-    dragStartY.current = e.clientY
-    if (side === 'left') dragStartWidth.current = leftWidth
-    else if (side === 'right') dragStartWidth.current = rightWidth
-    else if (side === 'bottom') dragStartHeight.current = inputHeight
-  }, [leftWidth, rightWidth, inputHeight])
+  // Drag state: which divider is being dragged
+  const [dragging, setDragging] = useState(null) // 'files' | 'activity' | 'top' | null
+  const dragStart = useRef({ x: 0, y: 0, width: 0, height: 0 })
 
-  const handleMouseMove = useCallback((e) => {
-    if (!dragging) return
+  // Mobile state
+  const [mobileSection, setMobileSection] = useState('workers')
+  const [mobilePreview, setMobilePreview] = useState(null)
 
-    if (dragging === 'left' || dragging === 'right') {
-      const viewportWidth = window.innerWidth
-      const delta = e.clientX - dragStartX.current
+  // --- Tab management ---
 
-      if (dragging === 'left') {
-        const maxLeft = viewportWidth - MIN_CENTER - rightWidth - 16
-        const newWidth = Math.min(maxLeft, Math.max(MIN_LEFT, dragStartWidth.current + delta))
-        setLeftWidth(newWidth)
-      } else if (dragging === 'right') {
-        const maxRight = viewportWidth - MIN_CENTER - leftWidth - 16
-        const newWidth = Math.min(maxRight, Math.max(MIN_RIGHT, dragStartWidth.current - delta))
-        setRightWidth(newWidth)
-      }
-    } else if (dragging === 'bottom') {
-      // Dragging up = larger input area
-      const delta = dragStartY.current - e.clientY
-      // Dynamic max: viewport - min main content - divider
-      const maxInputHeight = window.innerHeight - MIN_MAIN_HEIGHT - DIVIDER_HEIGHT
-      const newHeight = Math.min(maxInputHeight, Math.max(MIN_INPUT_HEIGHT, dragStartHeight.current + delta))
-      setInputHeight(newHeight)
-    }
-  }, [dragging, leftWidth, rightWidth])
+  const openTab = useCallback((type, path, project) => {
+    const id = type === 'monitor' ? 'monitor' : type === 'usage' ? 'usage' : type === 'diff' ? `diff:${project}:${path}` : `file:${path}`
+    const label = type === 'monitor' ? 'Monitor' : type === 'usage' ? 'Usage' : path.split('/').pop()
 
-  const handleMouseUp = useCallback(() => {
-    setDragging(null)
+    setTabs(prev => {
+      if (prev.find(t => t.id === id)) return prev
+      return [...prev, { id, type, label, path, project }]
+    })
+    setActiveTabId(id)
   }, [])
 
-  // Get current worker from active terminal tab
-  const activeTerminalTab = tabs.find(t => t.id === activeTab && t.type === 'terminal')
-  const currentWorker = activeTerminalTab?.workerName || 'partner'
+  const closeTab = useCallback((id) => {
+    setTabs(prev => {
+      const next = prev.filter(t => t.id !== id)
+      return next
+    })
+    setActiveTabId(prev => {
+      if (prev !== id) return prev
+      const remaining = tabs.filter(t => t.id !== id)
+      return remaining.length > 0 ? remaining[remaining.length - 1].id : null
+    })
+  }, [tabs])
+
+  // --- File/diff opening ---
 
   const handleFileSelect = useCallback((file) => {
     if (file.type === 'dir') return
-
-    const tabId = `file:${file.path}`
-
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: file.name,
-        type: 'file',
-        filepath: file.path
-      }])
+    if (isMobile) {
+      setMobilePreview({ type: 'file', path: file.path })
+    } else {
+      openTab('file', file.path)
     }
+  }, [isMobile, openTab])
 
-    setActiveTab(tabId)
-  }, [tabs])
-
-  const handleWorkerSelect = useCallback((workerName) => {
-    const tabId = `terminal:${workerName}`
-
-    // Check if terminal tab already exists
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: workerName,
-        type: 'terminal',
-        workerName: workerName
-      }])
-    }
-
-    setActiveTab(tabId)
-  }, [tabs])
-
-  const handleTabClose = useCallback((tabId) => {
-    // Don't allow closing partner terminal
-    if (tabId === 'terminal:partner') return
-
-    setTabs(prev => prev.filter(t => t.id !== tabId))
-    if (activeTab === tabId) {
-      setActiveTab('terminal:partner')
-    }
-  }, [activeTab])
-
-  // Handle clicking a changed file in Activity panel
   const handleChangeFileClick = useCallback((project, file) => {
-    const tabId = `diff:${project.project}:${file.path}`
-
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: `${file.path.split('/').pop()} (diff)`,
-        type: 'diff',
-        project: project.project,
-        filepath: file.path
-      }])
+    if (isMobile) {
+      setMobilePreview({ type: 'diff', path: file.path, project: project.project })
+    } else {
+      openTab('diff', file.path, project.project)
     }
+  }, [isMobile, openTab])
 
-    setActiveTab(tabId)
-  }, [tabs])
+  // --- Unified drag resize ---
 
-  const handlePushClick = useCallback(() => {
-    const tabId = 'push'
-
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: 'Push',
-        type: 'push'
-      }])
+  const handleDragStart = useCallback((which) => (e) => {
+    e.preventDefault()
+    setDragging(which)
+    dragStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: which === 'files' ? filesPanelWidth : activityPanelWidth,
+      height: topHeight || 0,
     }
-
-    setActiveTab(tabId)
-  }, [tabs])
-
-  const handleCommitClick = useCallback(() => {
-    const tabId = 'commit'
-
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: 'Commit',
-        type: 'commit'
-      }])
+    // Capture initial auto height for top section
+    if (which === 'top' && topHeight === null) {
+      const topEl = document.getElementById('top-section')
+      if (topEl) dragStart.current.height = topEl.offsetHeight
     }
+  }, [filesPanelWidth, activityPanelWidth, topHeight])
 
-    setActiveTab(tabId)
-  }, [tabs])
+  const handleMouseMove = useCallback((e) => {
+    if (!dragging) return
+    const dx = e.clientX - dragStart.current.x
+    const dy = e.clientY - dragStart.current.y
 
-  const handleHistoryClick = useCallback(() => {
-    const tabId = 'history'
-
-    if (!tabs.find(t => t.id === tabId)) {
-      setTabs(prev => [...prev, {
-        id: tabId,
-        label: 'History',
-        type: 'history'
-      }])
+    if (dragging === 'files') {
+      setFilesPanelWidth(Math.min(MAX_FILES, Math.max(MIN_FILES, dragStart.current.width + dx)))
+    } else if (dragging === 'activity') {
+      // Activity is on the right, so dragging left increases width
+      setActivityPanelWidth(Math.min(MAX_ACTIVITY, Math.max(MIN_ACTIVITY, dragStart.current.width - dx)))
+    } else if (dragging === 'top') {
+      const maxTop = window.innerHeight * 0.6
+      const newHeight = Math.min(maxTop, Math.max(MIN_TOP, dragStart.current.height + dy))
+      setTopHeight(newHeight)
     }
+  }, [dragging])
 
-    setActiveTab(tabId)
-  }, [tabs])
-
-  const handleCreatePreview = useCallback((content, title, language = 'markdown') => {
-    const tabId = `preview:${Date.now()}`
-    setTabs(prev => [...prev, {
-      id: tabId,
-      label: title || 'Preview',
-      type: 'preview',
-      content: content,
-      language: language
-    }])
-    setActiveTab(tabId)
-  }, [])
-
-  // Poll for pending previews from API
-  useEffect(() => {
-    const pollPreviews = async () => {
-      try {
-        const { previews } = await fetchPendingPreviews()
-        for (const preview of previews) {
-          handleCreatePreview(preview.content, preview.title, preview.language)
-        }
-      } catch (err) {
-        // Silently ignore polling errors
-      }
-    }
-
-    const interval = setInterval(pollPreviews, 1000)
-    return () => clearInterval(interval)
-  }, [handleCreatePreview])
+  const handleMouseUp = useCallback(() => setDragging(null), [])
 
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
   }
 
-  const handleSend = async (text) => {
-    if (!currentWorker) return
-    setSending(true)
-    try {
-      await sendToProcess(currentWorker, text, false)
-      setChatInput('')  // Clear input after sending
-    } catch (err) {
-      alert(`Failed to send: ${err.message}`)
-    } finally {
-      setSending(false)
-    }
+  // --- Active tab data ---
+  const activeTab = tabs.find(t => t.id === activeTabId)
+
+  // --- Cursor style during drag ---
+  const layoutDragStyle = dragging === 'top'
+    ? desktopStyles.layoutNoSelectRow
+    : dragging ? desktopStyles.layoutNoSelect : {}
+
+  // --- Render ---
+
+  if (isMobile) {
+    return (
+      <div style={mobileStyles.layout}>
+        <div style={mobileStyles.content}>
+          {mobileSection === 'workers' && (
+            <WorkerDashboard
+              key={refreshKey}
+              isMobile
+              onSpawn={() => setShowSpawnDialog(true)}
+              onRefresh={() => setRefreshKey(k => k + 1)}
+            />
+          )}
+          {mobileSection === 'files' && (
+            <FileTree onFileSelect={handleFileSelect} isMobile />
+          )}
+          {mobileSection === 'activity' && (
+            <Activity onFileClick={handleChangeFileClick} isMobile />
+          )}
+          {mobileSection === 'monitor' && (
+            <Monitor isMobile />
+          )}
+          {mobileSection === 'usage' && (
+            <Usage isMobile />
+          )}
+        </div>
+
+        {mobilePreview && (
+          <div style={mobileStyles.previewOverlay}>
+            <div style={mobileStyles.previewHeader}>
+              <button
+                style={mobileStyles.backBtn}
+                onClick={() => setMobilePreview(null)}
+              >
+                ← Back
+              </button>
+              <span style={mobileStyles.previewTitle}>
+                {mobilePreview.path.split('/').pop()}
+              </span>
+            </div>
+            <div style={mobileStyles.previewBody}>
+              {mobilePreview.type === 'file' ? (
+                <FilePreview filepath={mobilePreview.path} isMobile />
+              ) : (
+                <DiffPreview
+                  project={mobilePreview.project}
+                  filepath={mobilePreview.path}
+                  isMobile
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        <MobileNav
+          activeSection={mobileSection}
+          onSectionChange={(s) => {
+            setMobilePreview(null)
+            setMobileSection(s)
+          }}
+        />
+
+        {showSpawnDialog && (
+          <SpawnDialog
+            isMobile
+            onClose={() => setShowSpawnDialog(false)}
+            onSpawned={handleSpawned}
+          />
+        )}
+      </div>
+    )
   }
 
-  const handleSendRaw = async (key) => {
-    if (!currentWorker) return
-    setSending(true)
-    try {
-      await sendToProcess(currentWorker, key, true)
-    } catch (err) {
-      alert(`Failed to send: ${err.message}`)
-    } finally {
-      setSending(false)
-    }
-  }
-
-  const handlePopulate = (text) => {
-    setChatInput(prev => prev ? `${prev} ${text}` : text)
-  }
-
-  const activeFileTab = tabs.find(t => t.id === activeTab && t.type === 'file')
-  const activeDiffTab = tabs.find(t => t.id === activeTab && t.type === 'diff')
-  const activePushTab = tabs.find(t => t.id === activeTab && t.type === 'push')
-  const activeCommitTab = tabs.find(t => t.id === activeTab && t.type === 'commit')
-  const activeHistoryTab = tabs.find(t => t.id === activeTab && t.type === 'history')
-  const activePreviewTab = tabs.find(t => t.id === activeTab && t.type === 'preview')
-
-  // Expose preview creation for testing and API integration
-  if (typeof window !== 'undefined') {
-    window.createPreview = handleCreatePreview
-  }
-
+  // Desktop layout
   return (
     <div
-      style={styles.layout}
+      style={{ ...desktopStyles.layout, ...layoutDragStyle }}
       onMouseMove={dragging ? handleMouseMove : undefined}
       onMouseUp={dragging ? handleMouseUp : undefined}
       onMouseLeave={dragging ? handleMouseUp : undefined}
     >
-      {/* Main content row */}
-      <div style={styles.mainRow}>
-        {/* Left Panel: File Tree */}
-        <aside style={{ ...styles.filesPanel, width: leftWidth }}>
-          <FileTree onFileSelect={handleFileSelect} />
-        </aside>
-
-        {/* Left divider */}
-        <div
-          style={{
-            ...styles.divider,
-            ...(dragging === 'left' ? styles.dividerHover : {})
-          }}
-          onMouseDown={handleMouseDown('left')}
+      {/* Top: Workers */}
+      <div
+        id="top-section"
+        style={{
+          ...desktopStyles.topSection,
+          ...(topHeight !== null ? { height: topHeight, overflow: 'auto' } : {}),
+        }}
+      >
+        <WorkerDashboard
+          key={refreshKey}
+          onSpawn={() => setShowSpawnDialog(true)}
+          onRefresh={() => setRefreshKey(k => k + 1)}
+          onMonitor={() => openTab('monitor')}
+          onUsage={() => openTab('usage')}
         />
+      </div>
 
-        {/* Center: Tabs + Terminal/Preview */}
-        <main style={styles.centerPanel}>
-          <TabBar
-            tabs={tabs}
-            activeTab={activeTab}
-            onTabSelect={setActiveTab}
-            onTabClose={handleTabClose}
+      {/* Horizontal divider between workers and content */}
+      <div
+        style={{
+          ...desktopStyles.hDivider,
+          ...(dragging === 'top' ? desktopStyles.dividerActive : {}),
+        }}
+        onMouseDown={handleDragStart('top')}
+      />
+
+      {/* Bottom: Files | Preview | Activity */}
+      <div style={desktopStyles.bottomSection}>
+        {/* Files panel */}
+        {!filesPanelCollapsed && (
+          <aside style={{ ...desktopStyles.filesPanel, width: filesPanelWidth }}>
+            <div style={desktopStyles.filesPanelHeader}>
+              <span style={desktopStyles.filesPanelTitle}>Files</span>
+              <button
+                style={desktopStyles.collapseBtn}
+                onClick={() => setFilesPanelCollapsed(true)}
+                title="Collapse files"
+              >
+                ◀
+              </button>
+            </div>
+            <FileTree onFileSelect={handleFileSelect} />
+          </aside>
+        )}
+
+        {/* Left divider / expand button */}
+        {filesPanelCollapsed ? (
+          <button
+            style={{
+              ...desktopStyles.collapseBtn,
+              padding: '8px 4px',
+              borderRight: '1px solid var(--border)',
+              borderRadius: 0,
+              background: 'var(--bg-secondary)',
+            }}
+            onClick={() => setFilesPanelCollapsed(false)}
+            title="Show files"
+          >
+            ▶
+          </button>
+        ) : (
+          <div
+            style={{
+              ...desktopStyles.vDivider,
+              ...(dragging === 'files' ? desktopStyles.dividerActive : {}),
+            }}
+            onMouseDown={handleDragStart('files')}
           />
-          <div style={styles.centerContent}>
-            {activeTerminalTab && (
-              <div style={styles.terminalWrapper}>
-                <Terminal
-                  workerName={activeTerminalTab.workerName}
-                  fullHeight
-                  onPreview={handleCreatePreview}
-                />
+        )}
+
+        {/* Center: Tabs + Preview */}
+        <main style={desktopStyles.centerPanel}>
+          {tabs.length > 0 && (
+            <TabBar
+              tabs={tabs}
+              activeTab={activeTabId}
+              onTabSelect={setActiveTabId}
+              onTabClose={closeTab}
+            />
+          )}
+          <div style={desktopStyles.previewContent}>
+            {activeTab ? (
+              activeTab.type === 'usage' ? (
+                <Usage />
+              ) : activeTab.type === 'monitor' ? (
+                <Monitor />
+              ) : activeTab.type === 'file' ? (
+                <FilePreview filepath={activeTab.path} />
+              ) : (
+                <DiffPreview project={activeTab.project} filepath={activeTab.path} />
+              )
+            ) : (
+              <div style={desktopStyles.previewEmpty}>
+                Select a file to preview
               </div>
-            )}
-            {activeFileTab && (
-              <FilePreview filepath={activeFileTab.filepath} />
-            )}
-            {activeDiffTab && (
-              <DiffPreview project={activeDiffTab.project} filepath={activeDiffTab.filepath} />
-            )}
-            {/* Keep panels mounted to preserve state during tab switches */}
-            {tabs.find(t => t.type === 'push') && (
-              <div style={{ display: activePushTab ? 'contents' : 'none' }}>
-                <PushPanel />
-              </div>
-            )}
-            {tabs.find(t => t.type === 'commit') && (
-              <div style={{ display: activeCommitTab ? 'contents' : 'none' }}>
-                <CommitPanel />
-              </div>
-            )}
-            {activeHistoryTab && (
-              <PartnerHistory />
-            )}
-            {activePreviewTab && (
-              <EphemeralPreview
-                content={activePreviewTab.content}
-                language={activePreviewTab.language}
-              />
             )}
           </div>
         </main>
 
-        {/* Right divider */}
-        <div
-          style={{
-            ...styles.divider,
-            ...(dragging === 'right' ? styles.dividerHover : {})
-          }}
-          onMouseDown={handleMouseDown('right')}
-        />
-
-        {/* Right Panel: Workers + Activity */}
-        <aside style={{ ...styles.rightPanel, width: rightWidth }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-            <button
-              style={styles.spawnButton}
-              onClick={() => setShowSpawnDialog(true)}
-            >
-              + Spawn
-            </button>
-          </div>
-          <WorkerList
-            key={refreshKey}
-            selectedWorker={currentWorker}
-            onSelect={handleWorkerSelect}
-            onRefresh={() => setRefreshKey(k => k + 1)}
+        {/* Right divider / expand button */}
+        {activityPanelCollapsed ? (
+          <button
+            style={{
+              ...desktopStyles.collapseBtn,
+              padding: '8px 4px',
+              borderLeft: '1px solid var(--border)',
+              borderRadius: 0,
+              background: 'var(--bg-secondary)',
+            }}
+            onClick={() => setActivityPanelCollapsed(false)}
+            title="Show activity"
+          >
+            ◀
+          </button>
+        ) : (
+          <div
+            style={{
+              ...desktopStyles.vDivider,
+              ...(dragging === 'activity' ? desktopStyles.dividerActive : {}),
+            }}
+            onMouseDown={handleDragStart('activity')}
           />
-          <Activity onFileClick={handleChangeFileClick} onPushClick={handlePushClick} onCommitClick={handleCommitClick} onHistoryClick={handleHistoryClick} />
-        </aside>
+        )}
+
+        {/* Activity panel */}
+        {!activityPanelCollapsed && (
+          <aside style={{ ...desktopStyles.activityPanel, width: activityPanelWidth }}>
+            <Activity
+              onFileClick={handleChangeFileClick}
+              onCollapse={() => setActivityPanelCollapsed(true)}
+            />
+          </aside>
+        )}
       </div>
 
-      {/* Horizontal divider for vertical resize */}
-      <div
-        style={{
-          ...styles.hDivider,
-          ...(dragging === 'bottom' ? { background: 'var(--accent)' } : {})
-        }}
-        onMouseDown={handleMouseDown('bottom')}
-      />
-
-      {/* Bottom: Input Bar */}
-      <footer style={{ ...styles.inputBar, height: inputHeight }}>
-        <div style={styles.quickActionsWrapper}>
-          <QuickActions onSend={handleSend} onSendRaw={handleSendRaw} onPopulate={handlePopulate} onPreview={handleCreatePreview} disabled={sending} />
-        </div>
-        <div style={styles.inputWrapper}>
-          <ChatInput
-            onSend={handleSend}
-            disabled={sending}
-            placeholder={`Send to ${currentWorker}...`}
-            value={chatInput}
-            onChange={setChatInput}
-          />
-        </div>
-      </footer>
-
-      {/* Spawn Dialog */}
       {showSpawnDialog && (
         <SpawnDialog
           onClose={() => setShowSpawnDialog(false)}

@@ -30,6 +30,43 @@ cd ~/orchestrator
 
 ## Completed
 
+### Usage Analytics Tab (Mar 2, 2026)
+- [x] `scripts/compute-usage.py` — Scans all session JSONLs, computes daily/weekly/by-project/by-model/by-hour stats
+- [x] `web/src/components/Usage.jsx` — Dashboard with overview cards, charts, heatmap
+- [x] `GET /api/usage` — Auto-recomputes if stale (>5 min)
+- [x] `POST /api/usage/refresh` — Manual background recompute
+- [x] `state/usage-archive.json` — Persistent daily data archive
+- [x] Weekly cron job for automatic stats computation
+
+### Multi-Instance Worker Spawning (Mar 2, 2026)
+- [x] Auto-increment names (partner, partner-2, partner-3) instead of 409 error
+- [x] Session naming — types folder name + instance number as first message
+- [x] Trust prompt detection — only sends "1" when trust prompt is showing
+
+### Mobile-Responsive UI Redesign (Mar 2, 2026)
+- [x] `WorkerDashboard.jsx` — Combined worker list + quick actions + input
+- [x] `MobileNav.jsx` — Bottom navigation for mobile
+- [x] `Monitor.jsx` — System monitoring dashboard
+- [x] `useMediaQuery` hook for responsive rendering
+- [x] Simplified Activity panel
+- [x] Removed Terminal.jsx and EphemeralPreview.jsx
+
+### Telegram Bot (Feb 27, 2026)
+- [x] `bot/telegram_bot.py` — Mobile control interface with button-based UI
+- [x] Worker commands: spawn, kill, restart, send, output
+- [x] Proposal management: list, approve, reject
+- [x] Context management: compact, reset, hard reset
+- [x] Status views with context usage progress bars
+- [x] Git dashboard: changed files + unpushed commits with push button
+- [x] Ollama integration for /ask queries
+- [x] `hooks/notify-telegram.sh` — Stop + Notification events via curl
+- [x] `services/orchestrator-telegram.service` — Systemd daemon
+
+### Documentation Cleanup (Feb 27, 2026)
+- [x] Removed USAGE.md — Manual token tracking discontinued
+- [x] Removed docs/architecture.md, chat-summary.md, SOUL.example.md
+- [x] Removed ProposalCard.jsx — Unused component
+
 ### Auto-Preview for Plan Files (Feb 23, 2026)
 - [x] `POST /api/preview` + `GET /api/preview/pending` — Preview queue API
 - [x] `EphemeralPreview.jsx` — Tab component for temporary content
@@ -159,12 +196,13 @@ cd ~/orchestrator
 - [ ] **Plan mode awareness in web UI** — Detect when Claude Code is showing a plan approval prompt and show approve/reject buttons instead of text input. Currently, typing in the chat box during plan mode sends raw text to tmux, which Claude Code misinterprets (e.g., "4 test comment" got interpreted as approval)
 
 ## Backlog (Post-MVP)
+- [ ] **Terminal scrolling** — Output panel doesn't scroll properly; low priority, defer until worth the effort
 - [ ] **Push workflow: orphaned doc changes** — When "Update Docs" runs but user doesn't complete "Push All", modified CHANGELOG/TODO files are left uncommitted. Need to either: (a) auto-stash on cancel, (b) commit immediately after update, or (c) warn user about uncommitted changes
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)
 - [ ] Claude Desktop MCP integration
-- [ ] Phone PWA
+- [x] Phone PWA — Telegram bot provides mobile interface
 - [ ] Child process tracking
 - [ ] Real-time WebSocket (replace polling)
 - [ ] Editable file preview
@@ -189,4 +227,4 @@ cd ~/orchestrator
 
 ---
 
-*Last updated: February 27, 2026*
+*Last updated: March 2, 2026*

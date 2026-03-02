@@ -8,6 +8,9 @@ const styles = {
     height: '100%',
     overflow: 'hidden',
   },
+  containerMobile: {
+    // No height/overflow — parent handles scroll
+  },
   header: {
     padding: '8px 12px',
     borderBottom: '1px solid var(--border)',
@@ -20,6 +23,9 @@ const styles = {
   tree: {
     flex: 1,
     overflow: 'auto',
+    padding: '4px 0',
+  },
+  treeMobile: {
     padding: '4px 0',
   },
   item: {
@@ -87,7 +93,7 @@ const styles = {
   },
 }
 
-function FileItem({ item, depth = 0, onFileSelect }) {
+function FileItem({ item, depth = 0, onFileSelect, isMobile }) {
   // All folders collapsed by default
   const [expanded, setExpanded] = useState(false)
   const [hovered, setHovered] = useState(false)
@@ -140,6 +146,7 @@ function FileItem({ item, depth = 0, onFileSelect }) {
           paddingLeft: 8 + indent,
           ...(hovered ? styles.itemHover : {}),
           ...(item.is_project ? styles.itemProject : {}),
+          ...(isMobile ? { padding: '10px 14px', paddingLeft: 14 + indent, fontSize: '15px' } : {}),
         }}
         onClick={handleClick}
         onMouseEnter={() => setHovered(true)}
@@ -168,13 +175,14 @@ function FileItem({ item, depth = 0, onFileSelect }) {
           item={child}
           depth={depth + 1}
           onFileSelect={onFileSelect}
+          isMobile={isMobile}
         />
       ))}
     </>
   )
 }
 
-export default function FileTree({ onFileSelect }) {
+export default function FileTree({ onFileSelect, isMobile }) {
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -200,10 +208,10 @@ export default function FileTree({ onFileSelect }) {
   }, [])
 
   return (
-    <div style={styles.container}>
+    <div style={isMobile ? styles.containerMobile : styles.container}>
       <div style={styles.header}>Files</div>
 
-      <div style={styles.tree}>
+      <div style={isMobile ? styles.treeMobile : styles.tree}>
         {loading ? (
           <div style={styles.loading}>Loading...</div>
         ) : error ? (
@@ -216,6 +224,7 @@ export default function FileTree({ onFileSelect }) {
               key={item.path || i}
               item={item}
               onFileSelect={onFileSelect}
+              isMobile={isMobile}
             />
           ))
         )}

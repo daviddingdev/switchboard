@@ -21,6 +21,8 @@ bot/config.env
 # State content (keep structure)
 state/proposals/*.yaml
 !state/proposals/.gitkeep
+state/usage-stats.json
+state/usage-archive.json
 
 # IDE
 .vscode/

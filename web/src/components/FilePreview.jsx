@@ -73,7 +73,7 @@ const styles = {
   },
 }
 
-export default function FilePreview({ filepath }) {
+export default function FilePreview({ filepath, isMobile }) {
   const [content, setContent] = useState('')
   const [language, setLanguage] = useState('plaintext')
   const [loading, setLoading] = useState(true)
@@ -124,14 +124,19 @@ export default function FilePreview({ filepath }) {
     <div style={styles.container}>
       <pre style={styles.pre}>
         <div style={styles.lineNumbers}>
-          <div style={styles.numbers}>
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
-          </div>
+          {!isMobile && (
+            <div style={styles.numbers}>
+              {Array.from({ length: lineCount }, (_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+          )}
           <code
             ref={codeRef}
-            style={styles.code}
+            style={{
+              ...styles.code,
+              ...(isMobile ? { fontSize: '12px' } : {}),
+            }}
             className={`language-${language}`}
           >
             {content}

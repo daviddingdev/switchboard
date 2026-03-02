@@ -4,7 +4,8 @@ const styles = {
     background: 'var(--bg-secondary)',
     borderBottom: '1px solid var(--border)',
     height: '35px',
-    overflow: 'hidden',
+    overflowX: 'auto',
+    overflowY: 'hidden',
   },
   tab: {
     display: 'flex',
@@ -42,12 +43,17 @@ const styles = {
     border: 'none',
     color: 'var(--text-secondary)',
     cursor: 'pointer',
-    padding: '0 2px',
+    padding: '4px 6px',
     fontSize: '14px',
     lineHeight: 1,
     marginLeft: '4px',
     borderRadius: '3px',
     flexShrink: 0,
+    minWidth: '24px',
+    minHeight: '24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }
 
@@ -71,10 +77,10 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
             ...(tab.type === 'commit' ? { color: 'var(--success)' } : {}),
             ...(tab.type === 'preview' ? { color: 'var(--accent)' } : {})
           }}>
-            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'commit' ? '✓' : tab.type === 'history' ? '💬' : tab.type === 'preview' ? '👁' : '📄'}
+            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'commit' ? '✓' : tab.type === 'history' ? '💬' : tab.type === 'preview' ? '👁' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || tab.type === 'preview' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
+          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || tab.type === 'preview' || tab.type === 'monitor' || tab.type === 'usage' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
             <button
               style={styles.closeButton}
               onClick={(e) => {

@@ -1,6 +1,58 @@
 # Orchestrator Changelog
 
+## 2026-03-02
+
+### Usage Analytics Tab
+
+- **Usage dashboard** — New tab showing Claude Code usage analytics across all sessions
+  - `scripts/compute-usage.py` — Scans all `~/.claude/projects/` session JSONLs, computes aggregated stats
+  - Handles large files (>50MB) via chunked regex, normal files via line-by-line JSON parsing
+  - `web/src/components/Usage.jsx` — Dashboard with overview cards, weekly comparison, daily bar chart, weekly trends, by-project bars, by-model breakdown, hourly heatmap, token breakdown
+  - `GET /api/usage` — Auto-recomputes if data older than 5 minutes
+  - `POST /api/usage/refresh` — Manual background recompute
+  - Weekly cron job (Sunday 2am) for automatic stats computation
+- **Data persistence** — `state/usage-archive.json` preserves daily data across runs, so historical stats survive even if Claude Code purges old session files
+
+### Multi-Instance Worker Spawning
+
+- **Auto-increment names** — Spawning a worker with an existing name now creates a new instance (e.g., partner, partner-2, partner-3) instead of returning a 409 error
+- **Session naming** — Workers now type the folder name + instance number as first message (e.g., "family-vault 1") so sessions have meaningful names in the Claude Code UI
+- **Trust prompt detection** — Only sends "1" to confirm trust when the trust prompt is actually showing, preventing "1" from becoming the session name
+
+### Mobile-Responsive UI Redesign
+
+- **New layout** — Responsive design with mobile bottom nav and desktop 3-panel layout
+  - `WorkerDashboard.jsx` — Combined worker list + quick actions + input for the top section
+  - `MobileNav.jsx` — Bottom navigation bar with Workers, Files, Activity, Monitor, Usage tabs
+  - `Monitor.jsx` — System monitoring dashboard (CPU, memory, disk, tmux sessions)
+  - `useMediaQuery` hook — Mobile detection for responsive rendering
+- **Simplified Activity panel** — Streamlined to focused git changes + unpushed commits view
+- **Removed components** — `Terminal.jsx` (integrated into WorkerDashboard), `EphemeralPreview.jsx` (replaced by preview in tabs)
+- **Removed preview test button** from QuickActions (was temporary debug tool)
+
+---
+
 ## 2026-02-27
+
+### Telegram Bot
+
+- **Mobile control interface** — New Telegram bot (`bot/telegram_bot.py`) for remote orchestrator management
+  - Worker management: `/spawn`, `/kill`, `/kill_now`, `/restart`, `/send`, `/output`
+  - Proposal actions: `/proposals`, `/approve`, `/reject`
+  - Context management: `/compact`, `/reset`, `/hard_reset`
+  - Status views: `/status`, `/workers` with context usage bars
+  - Ollama integration: `/ask` routes questions to local LLM
+  - Button-based UI with inline keyboards for all actions
+  - Partner shortcut: plain text messages route directly to partner
+- **Telegram notification hooks** — `hooks/notify-telegram.sh` sends Stop + Notification events via direct curl (async, no bot dependency)
+- **Systemd service** — `services/orchestrator-telegram.service` for running as daemon
+- **Git dashboard** — New "Git" button in Telegram showing changed files and unpushed commits per project, with push confirmation
+
+### Documentation Cleanup
+
+- **Removed USAGE.md** — Manual token tracking discontinued
+- **Removed docs/** files — Deleted `architecture.md`, `chat-summary.md`, `SOUL.example.md` (consolidated into CLAUDE.md and memory)
+- **Removed ProposalCard.jsx** — Unused component cleanup
 
 ### Output Capture Improvements
 
@@ -513,4 +565,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: February 24, 2026*
+*Last updated: March 2, 2026*

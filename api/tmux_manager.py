@@ -76,13 +76,14 @@ def list_windows() -> list[dict]:
     return windows
 
 
-def spawn_worker(name: str, directory: str) -> dict:
+def spawn_worker(name: str, directory: str, session_label: str = None) -> dict:
     """
     Spawn a new Claude Code worker in a tmux window.
 
     Args:
         name: Window name for the worker
         directory: Working directory (~ expansion supported)
+        session_label: First message to type (becomes session name in Claude Code UI)
 
     Returns:
         Dict with {name, directory, status, pid}
@@ -122,14 +123,23 @@ def spawn_worker(name: str, directory: str) -> dict:
     # Start Claude Code
     _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "unset CLAUDECODE && claude", "Enter", check=False)
 
-    # Wait for Claude to start and show trust prompt
+    # Wait for Claude to start
     time.sleep(2)
 
-    # Auto-confirm trust prompt (select "1. Yes, I trust this folder")
-    # This is safe because user explicitly chose to spawn in this directory
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
-    time.sleep(0.2)
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
+    # Check if trust prompt is showing (only appears for new/untrusted directories)
+    output = capture_output(name, lines=20)
+    if 'trust' in output.lower():
+        # Auto-confirm trust prompt (select "1. Yes, I trust this folder")
+        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
+        time.sleep(0.2)
+        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
+        time.sleep(3)  # Wait for Claude to finish starting after trust
+
+    # Send session label as first message (sets session name in Claude Code UI)
+    if session_label:
+        _run_tmux("send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", session_label, check=False)
+        time.sleep(0.1)
+        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
 
     # Get the pane PID
     pid = get_pane_pid(name)

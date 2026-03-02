@@ -49,7 +49,7 @@ const QUICK_ACTIONS = [
   { key: '/plan', label: 'Plan', style: 'plan' },
 ]
 
-export default function QuickActions({ onSend, onSendRaw, onPopulate, onPreview, disabled = false }) {
+export default function QuickActions({ onSend, onSendRaw, onPopulate, disabled = false }) {
   const handleClick = (action, e) => {
     // Shift+click populates chat input instead of sending
     if (e.shiftKey && onPopulate) {
@@ -76,31 +76,6 @@ export default function QuickActions({ onSend, onSendRaw, onPopulate, onPreview,
     return style
   }
 
-  const handlePreviewTest = () => {
-    if (onPreview) {
-      onPreview(`# Test Preview
-
-This is a test of the ephemeral preview tab.
-
-## Features
-- Full-height scrollable content
-- Syntax highlighting
-- Copy button
-
-\`\`\`javascript
-function hello() {
-  return "world";
-}
-\`\`\`
-
-## Large Content Test
-${Array.from({length: 50}, (_, i) => `- Line ${i + 1}: Testing scroll behavior with repeated content`).join('\n')}
-
----
-*End of test*`, 'Test Preview', 'markdown')
-    }
-  }
-
   return (
     <div style={styles.container}>
       {QUICK_ACTIONS.map(action => (
@@ -114,15 +89,6 @@ ${Array.from({length: 50}, (_, i) => `- Line ${i + 1}: Testing scroll behavior w
           {action.label}
         </button>
       ))}
-      {onPreview && (
-        <button
-          style={{ ...styles.button, background: '#1e3a5f', borderColor: '#1d4ed8', color: '#93c5fd' }}
-          onClick={handlePreviewTest}
-          title="Test preview tab"
-        >
-          👁
-        </button>
-      )}
     </div>
   )
 }

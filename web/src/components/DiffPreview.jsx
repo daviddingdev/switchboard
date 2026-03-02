@@ -103,7 +103,7 @@ function getLineStyle(line) {
   return {}
 }
 
-export default function DiffPreview({ project, filepath }) {
+export default function DiffPreview({ project, filepath, isMobile }) {
   const [diff, setDiff] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -148,8 +148,14 @@ export default function DiffPreview({ project, filepath }) {
       <pre style={styles.content}>
         {lines.map((line, i) => (
           <div key={i} style={styles.line}>
-            <span style={styles.lineNumber}>{i + 1}</span>
-            <span style={{ ...styles.lineContent, ...getLineStyle(line) }}>
+            {!isMobile && (
+              <span style={styles.lineNumber}>{i + 1}</span>
+            )}
+            <span style={{
+              ...styles.lineContent,
+              ...getLineStyle(line),
+              ...(isMobile ? { fontSize: '11px', paddingLeft: '8px' } : {}),
+            }}>
               {line || ' '}
             </span>
           </div>

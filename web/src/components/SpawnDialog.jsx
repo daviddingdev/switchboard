@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { spawnProcess } from '../api'
+import { spawnProcess, sendToProcess } from '../api'
 
 // Known project directories - click to auto-fill
 const PROJECTS = [
+  { name: 'partner', directory: '~/orchestrator', description: 'Master control session' },
   { name: 'family-vault', directory: '~/family-vault', description: 'Document search for family business' },
   { name: 'research-pipeline', directory: '~/services/research-pipeline', description: 'Paper discovery pipeline' },
   { name: 'vault', directory: '~/vault', description: 'Document inbox/staging' },
@@ -25,6 +26,8 @@ const styles = {
     padding: '24px',
     width: '440px',
     maxWidth: '90vw',
+    maxHeight: '90vh',
+    overflow: 'auto',
     border: '1px solid var(--border)',
   },
   title: {
@@ -144,7 +147,7 @@ const styles = {
   },
 }
 
-export default function SpawnDialog({ onClose, onSpawned }) {
+export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
   const [name, setName] = useState('')
   const [directory, setDirectory] = useState('')
   const [selectedProject, setSelectedProject] = useState(null)
@@ -173,7 +176,16 @@ export default function SpawnDialog({ onClose, onSpawned }) {
     setError(null)
 
     try {
-      await spawnProcess(name.trim(), directory.trim())
+      const result = await spawnProcess(name.trim(), directory.trim())
+      const actualName = result.name || name.trim()
+      // Auto-enable remote control after spawn
+      setTimeout(async () => {
+        try {
+          await sendToProcess(actualName, '/rc')
+        } catch (e) {
+          console.warn('Failed to auto-enable /rc:', e)
+        }
+      }, 5000)
       onSpawned()
     } catch (err) {
       setError(err.message)
@@ -196,7 +208,10 @@ export default function SpawnDialog({ onClose, onSpawned }) {
 
         <div style={styles.section}>
           <div style={styles.sectionLabel}>Projects</div>
-          <div style={styles.projectGrid}>
+          <div style={{
+            ...styles.projectGrid,
+            ...(isMobile ? { gridTemplateColumns: '1fr' } : {}),
+          }}>
             {PROJECTS.map(project => (
               <button
                 key={project.name}

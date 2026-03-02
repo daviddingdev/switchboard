@@ -49,6 +49,9 @@ CONTEXT_CRITICAL_PCT = int(os.getenv("CONTEXT_CRITICAL_PCT", "95"))
 CONTEXT_CHECK_INTERVAL = int(os.getenv("CONTEXT_CHECK_INTERVAL", "300"))
 RESPONSE_POLL_TIMEOUT = int(os.getenv("RESPONSE_POLL_TIMEOUT", "90"))
 
+# Set to True to re-enable automatic notifications (context warnings, proposal alerts, etc.)
+ENABLE_AUTO_NOTIFICATIONS = False
+
 logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     level=logging.INFO,
@@ -547,15 +550,16 @@ async def _do_spawn(message, name: str, directory: str):
         await message.reply_text(f"Failed to spawn {name}.")
         return
 
+    actual_name = result.get("name", name)
     await message.reply_text(
-        f"Spawned <b>{esc(name)}</b> in {esc(directory)}",
+        f"Spawned <b>{esc(actual_name)}</b> in {esc(directory)}",
         parse_mode=ParseMode.HTML,
     )
     await asyncio.sleep(5)
-    rc_result = await api_post(f"/api/processes/{name}/send", {"text": "/rc"})
+    rc_result = await api_post(f"/api/processes/{actual_name}/send", {"text": "/rc"})
     if rc_result:
         await message.reply_text(
-            f"Enabled remote control on {esc(name)}",
+            f"Enabled remote control on {esc(actual_name)}",
             parse_mode=ParseMode.HTML,
         )
 
@@ -2012,7 +2016,7 @@ def main():
 
     # Background jobs
     job_queue = app.job_queue
-    if job_queue:
+    if job_queue and ENABLE_AUTO_NOTIFICATIONS:
         job_queue.run_repeating(
             context_health_check,
             interval=CONTEXT_CHECK_INTERVAL,
@@ -2034,6 +2038,8 @@ def main():
             first=15,
         )
         log.info("Background jobs enabled (context: %ds, proposals: 30s, scheduled: 10s)", CONTEXT_CHECK_INTERVAL)
+    elif job_queue:
+        log.info("Background jobs disabled (ENABLE_AUTO_NOTIFICATIONS=False)")
     else:
         log.warning("JobQueue not available — background jobs disabled. "
                      "Install: pip3 install 'python-telegram-bot[job-queue]'")

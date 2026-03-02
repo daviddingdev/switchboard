@@ -86,12 +86,6 @@ export async function deleteProposal(id) {
 
 // Projects, Files, Changes, Activity
 
-export async function fetchProjects() {
-  const res = await fetch(`${API_BASE}/projects`);
-  if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`);
-  return res.json();
-}
-
 export async function fetchHome() {
   const res = await fetch(`${API_BASE}/home`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
@@ -104,18 +98,6 @@ export async function fetchFileContent(filepath) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to fetch file: ${res.status}`);
   }
-  return res.json();
-}
-
-export async function fetchFiles(project) {
-  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(project)}`);
-  if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchChanges() {
-  const res = await fetch(`${API_BASE}/changes`);
-  if (!res.ok) throw new Error(`Failed to fetch changes: ${res.status}`);
   return res.json();
 }
 
@@ -219,23 +201,30 @@ export async function hardResetPartner() {
   return res.json();
 }
 
-// Preview
+// System metrics
 
-export async function createPreview(content, title = 'Preview', language = 'markdown') {
-  const res = await fetch(`${API_BASE}/preview`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, title, language })
-  });
+export async function fetchMetrics() {
+  const res = await fetch(`${API_BASE}/metrics`);
+  if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.status}`);
+  return res.json();
+}
+
+// Usage analytics
+
+export async function fetchUsage() {
+  const res = await fetch(`${API_BASE}/usage`);
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Failed to create preview: ${res.status}`);
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch usage: ${res.status}`);
   }
   return res.json();
 }
 
-export async function fetchPendingPreviews() {
-  const res = await fetch(`${API_BASE}/preview/pending`);
-  if (!res.ok) throw new Error(`Failed to fetch pending previews: ${res.status}`);
+export async function refreshUsage() {
+  const res = await fetch(`${API_BASE}/usage/refresh`, { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to refresh usage: ${res.status}`);
+  }
   return res.json();
 }

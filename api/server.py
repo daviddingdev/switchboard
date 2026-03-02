@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tmux_manager as tmux
@@ -48,21 +49,26 @@ def index():
             "DELETE /api/processes/<name>",
             "POST /api/processes/<name>/send",
             "GET /api/processes/<name>/output",
-            "POST /api/preview",
             "GET /api/proposals",
             "POST /api/proposals",
             "PATCH /api/proposals/<id>",
             "DELETE /api/proposals/<id>",
             "GET /api/projects",
             "GET /api/home",
-            "GET /api/files/<project>",
             "GET /api/file?path=<filepath>",
-            "GET /api/changes",
+            "GET /api/diff?project=&path=",
             "GET /api/activity",
+            "GET /api/doc-context",
+            "POST /api/update-docs",
+            "POST /api/push",
+            "POST /api/commit",
             "GET /api/workers/usage",
             "GET /api/partner/history",
             "POST /api/partner/reset",
-            "POST /api/partner/hard-reset"
+            "POST /api/partner/hard-reset",
+            "GET /api/metrics",
+            "GET /api/usage",
+            "POST /api/usage/refresh"
         ]
     }
 
@@ -82,7 +88,7 @@ def list_processes():
 
 @app.route('/api/processes', methods=['POST'])
 def spawn_process():
-    """Spawn a new worker."""
+    """Spawn a new worker. Auto-increments name if worker already exists."""
     data = request.json or {}
     name = data.get('name')
     directory = data.get('directory', '~')
@@ -91,13 +97,23 @@ def spawn_process():
     if not name:
         return {"error": "name required"}, 400
 
-    # Check if already exists
-    existing = [w for w in tmux.list_windows() if w['name'] == name]
-    if existing:
-        return {"error": f"worker '{name}' already exists"}, 409
+    # Auto-increment name if worker already exists
+    windows = tmux.list_windows()
+    existing_names = {w['name'] for w in windows}
+    actual_name = name
+    counter = 2
+    while actual_name in existing_names:
+        actual_name = f"{name}-{counter}"
+        counter += 1
+
+    # Calculate session label: folder name + instance number
+    expanded_dir = os.path.expanduser(directory)
+    folder_name = os.path.basename(expanded_dir.rstrip('/'))
+    instance_number = counter - 1
+    session_label = f"{folder_name} {instance_number}"
 
     try:
-        result = tmux.spawn_worker(name, directory)
+        result = tmux.spawn_worker(actual_name, directory, session_label=session_label)
         return jsonify(result), 201
     except ValueError as e:
         return {"error": str(e)}, 400
@@ -139,42 +155,6 @@ def get_output(name):
     output = tmux.capture_output(name, lines)
     return {"output": output}
 
-
-# In-memory queue for pending previews (simple approach)
-pending_previews = []
-preview_counter = [0]  # Use list to allow mutation in nested function
-
-
-@app.route('/api/preview', methods=['POST'])
-def create_preview():
-    """Queue a preview for the UI to pick up."""
-    data = request.json or {}
-    content = data.get('content', '')
-    title = data.get('title', 'Preview')
-    language = data.get('language', 'markdown')
-
-    if not content:
-        return {"error": "content required"}, 400
-
-    preview_counter[0] += 1
-    preview = {
-        'id': preview_counter[0],
-        'content': content,
-        'title': title,
-        'language': language
-    }
-    pending_previews.append(preview)
-
-    return jsonify({'status': 'queued', 'id': preview['id']})
-
-
-@app.route('/api/preview/pending')
-def get_pending_previews():
-    """Get and clear pending previews."""
-    global pending_previews
-    previews = pending_previews[:]
-    pending_previews = []
-    return jsonify({'previews': previews})
 
 
 @app.route('/api/proposals')
@@ -492,6 +472,7 @@ def get_unpushed_commits(directory):
         return None
 
 
+
 @app.route('/api/projects')
 def list_projects():
     """Auto-discover projects with CLAUDE.md files."""
@@ -594,24 +575,6 @@ def get_home_tree():
     })
 
 
-@app.route('/api/files/<project>')
-def list_files(project):
-    """List files for a project with git status."""
-    directory = get_project_directory(project)
-    if not directory:
-        return {"error": f"project '{project}' not found"}, 404
-
-    if not os.path.isdir(directory):
-        return {"error": f"directory '{directory}' does not exist"}, 404
-
-    git_status = get_git_status_map(directory)
-    tree = build_file_tree(directory, git_status=git_status, base_dir=directory)
-    return jsonify({
-        'project': project,
-        'directory': directory,
-        'files': tree
-    })
-
 
 def detect_language(filepath):
     """Map file extension to highlight.js language name."""
@@ -684,27 +647,6 @@ def get_file_content():
         'name': os.path.basename(filepath)
     })
 
-
-@app.route('/api/changes')
-def get_changes():
-    """Get git status across all projects."""
-    projects = load_projects()
-    result = []
-
-    for p in projects:
-        directory = os.path.expanduser(p.get('directory', ''))
-        if not os.path.isdir(directory):
-            continue
-
-        status = get_git_status(directory)
-        result.append({
-            'project': p.get('name'),
-            'directory': directory,
-            'has_git': status is not None,
-            'files': status or []
-        })
-
-    return jsonify(result)
 
 
 @app.route('/api/diff')
@@ -1453,6 +1395,155 @@ def hard_reset_partner():
         return jsonify({'status': 'hard_reset', 'message': 'Partner window recreated with /rc'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# --- System Metrics (direct) ---
+
+_prev_net = None
+_prev_disk = None
+_prev_time = None
+
+
+def _gpu_metrics():
+    """Read GPU metrics via nvidia-smi."""
+    try:
+        out = subprocess.run(
+            ['nvidia-smi', '--query-gpu=utilization.gpu,temperature.gpu,utilization.memory',
+             '--format=csv,noheader,nounits'],
+            capture_output=True, text=True, timeout=3
+        )
+        if out.returncode == 0:
+            parts = out.stdout.strip().split(', ')
+            return {'util': int(parts[0]), 'temp': int(parts[1]), 'mem': int(parts[2])}
+    except Exception:
+        pass
+    return {'util': None, 'temp': None, 'mem': None}
+
+
+def _ollama_metrics():
+    """Read Ollama process metrics via psutil."""
+    for p in psutil.process_iter(['name', 'cpu_percent', 'memory_info']):
+        try:
+            if p.info['name'] and 'ollama' in p.info['name'].lower():
+                rss = p.info['memory_info'].rss if p.info['memory_info'] else 0
+                return {'cpu': round(p.info['cpu_percent'] or 0), 'ram_gb': round(rss / 1e9, 1)}
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return {'cpu': None, 'ram_gb': None}
+
+
+@app.route('/api/metrics')
+def system_metrics():
+    """System metrics read directly from OS."""
+    global _prev_net, _prev_disk, _prev_time
+    import time as _time
+
+    now = _time.time()
+    result = {
+        'gpu': _gpu_metrics(),
+        'ollama': _ollama_metrics(),
+        'cpu': {
+            'usage': round(psutil.cpu_percent()),
+            'load': round(psutil.getloadavg()[0], 2),
+        },
+        'memory': {
+            'used_gb': round(psutil.virtual_memory().used / 1e9, 1),
+            'available_gb': round(psutil.virtual_memory().available / 1e9, 1),
+        },
+        'network': {'down_mbps': None, 'up_mbps': None},
+        'disk': {
+            'read_mbs': None,
+            'write_mbs': None,
+            'space_pct': round(psutil.disk_usage('/').percent),
+        },
+        'system': {
+            'uptime_secs': round(now - psutil.boot_time()),
+            'processes': len(psutil.pids()),
+        },
+    }
+
+    # Network and disk I/O are rates — need delta from previous call
+    net = psutil.net_io_counters()
+    disk = psutil.disk_io_counters()
+
+    if _prev_net and _prev_time:
+        dt = now - _prev_time
+        if dt > 0:
+            result['network']['down_mbps'] = round((net.bytes_recv - _prev_net.bytes_recv) * 8 / 1e6 / dt, 2)
+            result['network']['up_mbps'] = round((net.bytes_sent - _prev_net.bytes_sent) * 8 / 1e6 / dt, 2)
+            result['disk']['read_mbs'] = round((disk.read_bytes - _prev_disk.read_bytes) / 1e6 / dt, 2)
+            result['disk']['write_mbs'] = round((disk.write_bytes - _prev_disk.write_bytes) / 1e6 / dt, 2)
+
+    _prev_net = net
+    _prev_disk = disk
+    _prev_time = now
+
+    return jsonify(result)
+
+
+# --- Usage Analytics ---
+
+USAGE_STATS_FILE = STATE_DIR / 'usage-stats.json'
+USAGE_STALE_SECS = 300  # Auto-recompute if older than 5 minutes
+_usage_refresh_proc = None
+
+
+def _compute_usage_sync():
+    """Run compute-usage.py synchronously (~1s)."""
+    script = str(PROJECT_ROOT / 'scripts' / 'compute-usage.py')
+    subprocess.run(
+        ['python3', script],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        timeout=30
+    )
+
+
+@app.route('/api/usage')
+def get_usage():
+    """Serve usage stats, auto-recomputing if stale (>5 min)."""
+    import time as _time
+
+    # Auto-compute if missing or stale
+    needs_compute = not USAGE_STATS_FILE.exists()
+    if not needs_compute:
+        age = _time.time() - USAGE_STATS_FILE.stat().st_mtime
+        needs_compute = age > USAGE_STALE_SECS
+
+    if needs_compute:
+        try:
+            _compute_usage_sync()
+        except Exception:
+            pass
+
+    if not USAGE_STATS_FILE.exists():
+        return {"error": "no stats computed yet"}, 404
+
+    try:
+        with open(USAGE_STATS_FILE) as f:
+            return jsonify(json.load(f))
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route('/api/usage/refresh', methods=['POST'])
+def refresh_usage():
+    """Trigger background recompute of usage stats."""
+    global _usage_refresh_proc
+
+    # Check if already running
+    if _usage_refresh_proc and _usage_refresh_proc.poll() is None:
+        return {"status": "already_running", "pid": _usage_refresh_proc.pid}
+
+    script = str(PROJECT_ROOT / 'scripts' / 'compute-usage.py')
+    _usage_refresh_proc = subprocess.Popen(
+        ['python3', script],
+        cwd=str(PROJECT_ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+    return {"status": "started", "pid": _usage_refresh_proc.pid}
 
 
 if __name__ == '__main__':
