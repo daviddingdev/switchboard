@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { spawnProcess, sendToProcess } from '../api'
+import { spawnProcess } from '../api'
 
 // Known project directories - click to auto-fill
 const PROJECTS = [
-  { name: 'partner', directory: '~/orchestrator', description: 'Master control session' },
+  { name: 'partner', directory: '~/orchestrator', description: 'Orchestrator project' },
   { name: 'family-vault', directory: '~/family-vault', description: 'Document search for family business' },
   { name: 'research-pipeline', directory: '~/services/research-pipeline', description: 'Paper discovery pipeline' },
   { name: 'vault', directory: '~/vault', description: 'Document inbox/staging' },
@@ -176,16 +176,7 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
     setError(null)
 
     try {
-      const result = await spawnProcess(name.trim(), directory.trim())
-      const actualName = result.name || name.trim()
-      // Auto-enable remote control after spawn
-      setTimeout(async () => {
-        try {
-          await sendToProcess(actualName, '/rc')
-        } catch (e) {
-          console.warn('Failed to auto-enable /rc:', e)
-        }
-      }, 5000)
+      await spawnProcess(name.trim(), directory.trim())
       onSpawned()
     } catch (err) {
       setError(err.message)

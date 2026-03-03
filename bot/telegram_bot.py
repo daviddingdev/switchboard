@@ -552,16 +552,9 @@ async def _do_spawn(message, name: str, directory: str):
 
     actual_name = result.get("name", name)
     await message.reply_text(
-        f"Spawned <b>{esc(actual_name)}</b> in {esc(directory)}",
+        f"Spawned <b>{esc(actual_name)}</b> in {esc(directory)} (with /rc)",
         parse_mode=ParseMode.HTML,
     )
-    await asyncio.sleep(5)
-    rc_result = await api_post(f"/api/processes/{actual_name}/send", {"text": "/rc"})
-    if rc_result:
-        await message.reply_text(
-            f"Enabled remote control on {esc(actual_name)}",
-            parse_mode=ParseMode.HTML,
-        )
 
 
 async def _do_kill(message, name: str):
@@ -582,32 +575,16 @@ async def _do_kill(message, name: str):
 
 
 async def _do_reset(message, name: str):
-    """Soft reset a worker (Ctrl-C + restart Claude). Partner uses dedicated API, others get /compact."""
-    if name == "partner":
-        result = await api_post("/api/partner/reset")
-        if result:
-            await message.reply_text(f"Soft reset <b>{esc(name)}</b>.", parse_mode=ParseMode.HTML)
-        else:
-            await message.reply_text(f"Failed to reset {name}.")
-    else:
-        # Non-partner workers: send Ctrl-C then restart via /rc
-        await api_post(f"/api/processes/{name}/send", {"text": "\x03"})
-        await asyncio.sleep(2)
-        await api_post(f"/api/processes/{name}/send", {"text": "/rc"})
-        await message.reply_text(f"Sent reset to <b>{esc(name)}</b>.", parse_mode=ParseMode.HTML)
+    """Soft reset a worker (Ctrl-C then /rc)."""
+    await api_post(f"/api/processes/{name}/send", {"text": "\x03"})
+    await asyncio.sleep(2)
+    await api_post(f"/api/processes/{name}/send", {"text": "/rc"})
+    await message.reply_text(f"Sent reset to <b>{esc(name)}</b>.", parse_mode=ParseMode.HTML)
 
 
 async def _do_hard_reset(message, name: str):
-    """Hard reset a worker (kill window + recreate). Partner uses dedicated API, others use restart."""
-    if name == "partner":
-        result = await api_post("/api/partner/hard-reset")
-        if result:
-            await message.reply_text(f"Hard reset <b>{esc(name)}</b>.", parse_mode=ParseMode.HTML)
-        else:
-            await message.reply_text(f"Failed to hard reset {name}.")
-    else:
-        # Non-partner: fall back to restart (kill + respawn)
-        await _do_restart(message, name)
+    """Hard reset a worker (kill + respawn)."""
+    await _do_restart(message, name)
 
 
 async def _do_compact(message, name: str):
@@ -646,10 +623,7 @@ async def _do_restart(message, name: str, extra_args=None):
         await message.reply_text(f"Failed to respawn {name}.")
         return
 
-    await message.reply_text(f"Respawned <b>{esc(name)}</b>", parse_mode=ParseMode.HTML)
-    await asyncio.sleep(5)
-    await api_post(f"/api/processes/{name}/send", {"text": "/rc"})
-    await message.reply_text(f"Re-enabled remote control on {esc(name)}", parse_mode=ParseMode.HTML)
+    await message.reply_text(f"Respawned <b>{esc(name)}</b> (with /rc)", parse_mode=ParseMode.HTML)
 
 
 async def _send_output(message, name: str, lines: int = 100):

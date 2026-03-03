@@ -64,9 +64,6 @@ def index():
             "POST /api/push",
             "POST /api/commit",
             "GET /api/workers/usage",
-            "GET /api/partner/history",
-            "POST /api/partner/reset",
-            "POST /api/partner/hard-reset",
             "GET /api/metrics",
             "GET /api/usage",
             "POST /api/usage/refresh"
@@ -125,9 +122,6 @@ def spawn_process():
 @app.route('/api/processes/<name>', methods=['DELETE'])
 def kill_process(name):
     """Kill a worker."""
-    if name == 'partner':
-        return {"error": "cannot kill partner"}, 403
-
     # Check if worker exists
     existing = [w for w in tmux.list_windows() if w['name'] == name]
     if not existing:
@@ -1251,20 +1245,10 @@ def get_workers_usage():
     for window in windows:
         name = window.get('name', '')
 
-        # Find the project directory for this worker
-        # For partner, it's the orchestrator project root. For others, we need to determine.
-        if name == 'partner':
-            proj_dir = str(PROJECT_ROOT)
-        else:
-            # Check if it matches a known project
-            projects = load_projects()
-            proj_dir = None
-            for p in projects:
-                if p.get('name') == name:
-                    proj_dir = p.get('directory')
-                    break
-            if not proj_dir:
-                continue
+        # Get the worker's current working directory from tmux
+        proj_dir = tmux.get_pane_cwd(name)
+        if not proj_dir:
+            continue
 
         # Find session directory and latest session file
         session_dir = get_project_session_dir(proj_dir)
@@ -1296,106 +1280,6 @@ def get_workers_usage():
             })
 
     return jsonify({'workers': result})
-
-
-@app.route('/api/partner/history')
-def get_partner_history():
-    """
-    Get filtered conversation history for the partner session.
-    Returns text messages only (no tool calls or thinking blocks).
-    """
-    limit = request.args.get('limit', 100, type=int)
-
-    # Partner is the orchestrator project root
-    proj_dir = str(PROJECT_ROOT)
-    session_dir = get_project_session_dir(proj_dir)
-    session_file = find_latest_session_file(session_dir)
-
-    messages = filter_conversation(session_file, limit=limit if limit > 0 else None)
-
-    return jsonify({
-        'messages': messages,
-        'session_file': os.path.basename(session_file) if session_file else None
-    })
-
-
-@app.route('/api/partner/reset', methods=['POST'])
-def reset_partner():
-    """
-    Soft reset the partner session.
-    Sends Ctrl-C to interrupt, waits for shell, then restarts claude.
-    """
-    import time
-
-    try:
-        # Send Ctrl-C to interrupt any running operation
-        tmux.send_keys('partner', 'C-c', raw=True)
-        time.sleep(0.3)
-
-        # Send another Ctrl-C in case first was absorbed by a prompt
-        tmux.send_keys('partner', 'C-c', raw=True)
-        time.sleep(0.3)
-
-        # Send Escape to exit any prompt/menu state
-        tmux.send_keys('partner', 'Escape', raw=True)
-        time.sleep(0.3)
-
-        # Third Ctrl-C to ensure we're back at shell
-        tmux.send_keys('partner', 'C-c', raw=True)
-        time.sleep(1.0)  # Wait longer for Claude to fully exit
-
-        # Clear any partial input
-        tmux.send_keys('partner', 'C-u', raw=True)
-        time.sleep(0.1)
-
-        # Start a new claude session
-        tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
-
-        # Auto-enable remote control after Claude starts
-        time.sleep(5)
-        tmux.send_keys('partner', '/rc', raw=False)
-
-        return jsonify({'status': 'reset', 'message': 'Partner session restarting with /rc'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/partner/hard-reset', methods=['POST'])
-def hard_reset_partner():
-    """
-    Hard reset: kill the partner window and recreate it.
-    Use when soft reset doesn't work (e.g., after Claude Code version update).
-    """
-    import time
-
-    try:
-        # Kill the partner window (may kill entire session if it's the only window)
-        tmux.kill_worker('partner')
-        time.sleep(0.5)
-
-        # ensure_session recreates the session with partner window if needed
-        tmux.ensure_session()
-        time.sleep(0.3)
-
-        # If session existed but partner was killed, recreate partner window
-        windows = tmux.list_windows()
-        if not any(w['name'] == 'partner' for w in windows):
-            subprocess.run(
-                ["tmux", "-L", "orchestrator", "new-window", "-t", "orchestrator",
-                 "-n", "partner", "-c", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))],
-                capture_output=True, check=True
-            )
-            time.sleep(0.3)
-            # Start Claude
-            tmux.send_keys('partner', 'unset CLAUDECODE && claude', raw=False)
-
-            # Auto-enable remote control after Claude starts
-            time.sleep(5)
-            tmux.send_keys('partner', '/rc', raw=False)
-
-        return jsonify({'status': 'hard_reset', 'message': 'Partner window recreated with /rc'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 # --- System Metrics (direct) ---
@@ -1851,4 +1735,4 @@ def refresh_usage():
 
 if __name__ == '__main__':
     tmux.ensure_session()
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001)

@@ -24,29 +24,37 @@ def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, check=check, env=env)
 
 
-def ensure_session() -> bool:
-    """
-    Ensure the orchestrator tmux session exists.
-    Creates it with a 'partner' window if it doesn't exist.
-    Returns True if session is ready.
-    """
-    # Check if session exists
+def _session_exists() -> bool:
+    """Check if the orchestrator tmux session exists."""
     result = _run_tmux("has-session", "-t", SESSION_NAME, check=False)
-    if result.returncode == 0:
-        return True
+    return result.returncode == 0
 
-    # Create session with partner window
-    result = _run_tmux(
-        "new-session", "-d", "-s", SESSION_NAME, "-n", "partner",
-        "-c", PROJECT_ROOT,
-        check=False
-    )
-    if result.returncode != 0:
-        return False
 
-    # Start Claude Code in partner window (unset CLAUDECODE to avoid nested session error)
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:partner", "unset CLAUDECODE && claude", "Enter", check=False)
-    return True
+def ensure_session() -> str:
+    """
+    Check if the tmux session exists and return its state.
+    Session is created lazily on first worker spawn, not here.
+    """
+    if _session_exists():
+        return "active"
+    return "inactive"
+
+
+def _wait_for_prompt(name: str, timeout: int = 30) -> bool:
+    """
+    Poll pane output for Claude Code's '>' input prompt, indicating readiness.
+    Returns True if prompt detected within timeout, False otherwise.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        output = capture_output(name, lines=10)
+        if output:
+            for line in output.strip().split('\n')[-3:]:
+                stripped = line.strip()
+                if stripped in ('>', '❯'):
+                    return True
+        time.sleep(1)
+    return False
 
 
 def list_windows() -> list[dict]:
@@ -76,20 +84,25 @@ def list_windows() -> list[dict]:
     return windows
 
 
-def spawn_worker(name: str, directory: str, session_label: str = None) -> dict:
+def spawn_worker(name: str, directory: str, session_label: str = None, enable_rc: bool = True) -> dict:
     """
     Spawn a new Claude Code worker in a tmux window.
+
+    Creates the tmux session if it doesn't exist. Waits for Claude to be
+    ready before sending session label and /rc (readiness-based, not blind sleep).
 
     Args:
         name: Window name for the worker
         directory: Working directory (~ expansion supported)
         session_label: First message to type (becomes session name in Claude Code UI)
+        enable_rc: If True, send /rc after Claude is ready (default: True)
 
     Returns:
-        Dict with {name, directory, status, pid}
+        Dict with {name, directory, status, pid, log_file}
 
     Raises:
         ValueError: If directory doesn't exist
+        RuntimeError: If window creation fails
     """
     # Expand and validate directory
     expanded_dir = os.path.expanduser(directory)
@@ -106,11 +119,17 @@ def spawn_worker(name: str, directory: str, session_label: str = None) -> dict:
         rotated = os.path.join(LOGS_DIR, f"{name}-{timestamp}.log")
         os.rename(log_file, rotated)
 
-    # Create new window with larger scrollback
-    result = _run_tmux(
-        "new-window", "-t", SESSION_NAME, "-n", name, "-c", expanded_dir,
-        check=False
-    )
+    # Create window (and session if needed)
+    if _session_exists():
+        result = _run_tmux(
+            "new-window", "-t", SESSION_NAME, "-n", name, "-c", expanded_dir,
+            check=False
+        )
+    else:
+        result = _run_tmux(
+            "new-session", "-d", "-s", SESSION_NAME, "-n", name, "-c", expanded_dir,
+            check=False
+        )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to create window: {result.stderr}")
 
@@ -123,8 +142,10 @@ def spawn_worker(name: str, directory: str, session_label: str = None) -> dict:
     # Start Claude Code
     _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "unset CLAUDECODE && claude", "Enter", check=False)
 
-    # Wait for Claude to start
-    time.sleep(2)
+    # Wait for Claude to be ready (replaces blind sleep)
+    if not _wait_for_prompt(name, timeout=30):
+        # Fall back: Claude may have a trust prompt or be slow
+        time.sleep(2)
 
     # Check if trust prompt is showing (only appears for new/untrusted directories)
     output = capture_output(name, lines=20)
@@ -133,13 +154,21 @@ def spawn_worker(name: str, directory: str, session_label: str = None) -> dict:
         _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
         time.sleep(0.2)
         _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
-        time.sleep(3)  # Wait for Claude to finish starting after trust
+        # Wait for Claude to be ready after trust confirmation
+        _wait_for_prompt(name, timeout=30)
 
     # Send session label as first message (sets session name in Claude Code UI)
     if session_label:
         _run_tmux("send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", session_label, check=False)
         time.sleep(0.1)
         _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
+        # Wait for Claude to process the label and return to prompt
+        if enable_rc:
+            _wait_for_prompt(name, timeout=30)
+
+    # Enable remote control if requested
+    if enable_rc:
+        send_keys(name, '/rc', raw=False)
 
     # Get the pane PID
     pid = get_pane_pid(name)
@@ -246,3 +275,24 @@ def get_pane_pid(name: str) -> int | None:
 
     pid_str = result.stdout.strip().split("\n")[0]
     return int(pid_str) if pid_str.isdigit() else None
+
+
+def get_pane_cwd(name: str) -> str | None:
+    """
+    Get the current working directory of a window's pane.
+
+    Args:
+        name: Window name
+
+    Returns:
+        Directory path as string, or None if not found
+    """
+    result = _run_tmux(
+        "list-panes", "-t", f"{SESSION_NAME}:{name}",
+        "-F", "#{pane_current_path}",
+        check=False
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    return result.stdout.strip().split("\n")[0]

@@ -7,40 +7,18 @@ Personal AI operating system for managing Claude Code sessions across projects.
 ## Quick Start
 
 ```bash
-./start.sh      # Start API + web + tmux
+./start.sh      # Start API + web server
 ./stop.sh       # Stop everything
 ```
 
-**UI:** http://localhost:3000
+**UI:** http://localhost:3000 — spawn workers, monitor sessions, manage proposals.
 
 ## Key Details
 
 - **API port:** 5001 (workers use this to submit proposals)
-- **tmux session:** `orchestrator` (socket: `/tmp/orchestrator.sock`)
+- **tmux session:** `orchestrator` (socket: `-L orchestrator`, created on first worker spawn)
 - **Projects:** Auto-discovered via CLAUDE.md presence
-
-## Telegram Bot
-
-Mobile control interface. Run: `python3 bot/telegram_bot.py` (or systemd: `orchestrator-telegram`)
-
-| Command | Action |
-|---------|--------|
-| `/status` | API health + worker list |
-| `/workers` | Workers with context usage bars |
-| `/spawn <name> <dir>` | Spawn + auto /rc |
-| `/kill <name>` | End-of-session → kill (60s delay) |
-| `/kill_now <name>` | Immediate kill |
-| `/send <name> <msg>` | Send to named worker |
-| `/output <name>` | Recent terminal output |
-| `/proposals` | Pending proposals |
-| `/approve <id>` / `/reject <id>` | Proposal actions |
-| `/ask <question>` | Route to Ollama |
-| `/reset` | Soft reset partner |
-| `/compact [name]` | Compact context (default: partner) |
-| `/restart <name>` | Kill + respawn + re-enable /rc |
-| *(plain text)* | Send to partner |
-
-**Hooks:** `hooks/notify-telegram.sh` sends Stop + Notification events to Telegram via direct curl (async, no bot dependency).
+- **Workers:** All sessions are equal — spawn/kill any worker from the web UI. No always-on partner.
 
 ## Gotchas
 

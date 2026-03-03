@@ -173,34 +173,6 @@ export async function fetchWorkersUsage() {
   return res.json();
 }
 
-export async function fetchPartnerHistory(limit = 100) {
-  const res = await fetch(`${API_BASE}/partner/history?limit=${limit}`);
-  if (!res.ok) throw new Error(`Failed to fetch partner history: ${res.status}`);
-  return res.json();
-}
-
-export async function resetPartner() {
-  const res = await fetch(`${API_BASE}/partner/reset`, {
-    method: 'POST'
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Failed to reset partner: ${res.status}`);
-  }
-  return res.json();
-}
-
-export async function hardResetPartner() {
-  const res = await fetch(`${API_BASE}/partner/hard-reset`, {
-    method: 'POST'
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Failed to hard reset partner: ${res.status}`);
-  }
-  return res.json();
-}
-
 // System metrics
 
 export async function fetchMetrics() {

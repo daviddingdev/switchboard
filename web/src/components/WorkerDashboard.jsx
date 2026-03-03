@@ -454,7 +454,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                 </div>
 
                 <div style={m ? styles.actionsMobile : styles.actions}>
-                  {['rc', 'compact', 'reset', ...(worker.name !== 'partner' ? ['kill'] : [])].map(action => {
+                  {['rc', 'compact', 'reset', 'kill'].map(action => {
                     const key = `${worker.name}:${action}`
                     const isActing = acting === key
                     const isDanger = action === 'kill'

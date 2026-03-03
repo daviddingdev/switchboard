@@ -80,7 +80,7 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
             {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'commit' ? '✓' : tab.type === 'history' ? '💬' : tab.type === 'preview' ? '👁' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || tab.type === 'preview' || tab.type === 'monitor' || tab.type === 'usage' || (tab.type === 'terminal' && tab.id !== 'terminal:partner')) && (
+          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || tab.type === 'preview' || tab.type === 'monitor' || tab.type === 'usage' || tab.type === 'terminal') && (
             <button
               style={styles.closeButton}
               onClick={(e) => {

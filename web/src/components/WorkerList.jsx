@@ -273,16 +273,14 @@ export default function WorkerList({ selectedWorker, onSelect, onRefresh }) {
                   >
                     {acting === `${worker.name}:compact` ? '...' : 'Compact'}
                   </button>
-                  {worker.name !== 'partner' && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.actionBtnDanger }}
-                      onClick={(e) => handleAction(e, worker.name, 'kill')}
-                      disabled={acting === `${worker.name}:kill`}
-                      title="Kill worker"
-                    >
-                      {acting === `${worker.name}:kill` ? '...' : 'Kill'}
-                    </button>
-                  )}
+                  <button
+                    style={{ ...styles.actionBtn, ...styles.actionBtnDanger }}
+                    onClick={(e) => handleAction(e, worker.name, 'kill')}
+                    disabled={acting === `${worker.name}:kill`}
+                    title="Kill worker"
+                  >
+                    {acting === `${worker.name}:kill` ? '...' : 'Kill'}
+                  </button>
                 </div>
               </li>
             )
