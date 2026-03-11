@@ -1,0 +1,21 @@
+# Orchestrator Configuration
+# Copy to config.yaml and customize as needed.
+# All settings have sensible defaults — an empty config.yaml (or none at all) works fine.
+
+# Server settings
+port: 5001
+host: "0.0.0.0"
+
+# Project discovery — scans this directory for folders containing CLAUDE.md
+project_root: "~"
+scan_depth: 3
+
+# tmux session settings
+tmux_socket: "orchestrator"
+tmux_session: "orchestrator"
+
+# Optional: DGX Spark integration (system updates via Spark dashboard)
+# spark:
+#   url: http://localhost:11000
+#   username: ""
+#   password: ""

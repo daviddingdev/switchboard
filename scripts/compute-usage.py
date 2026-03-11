@@ -72,7 +72,7 @@ def build_session_project_map():
 
 def dir_name_to_project(dir_name):
     """Convert project dir hash to readable name.
-    e.g., '-home-davidding-orchestrator' -> 'orchestrator'
+    e.g., '-home-username-orchestrator' -> 'orchestrator'
     """
     parts = dir_name.lstrip('-').split('-')
     # Skip 'home' and username, take the rest

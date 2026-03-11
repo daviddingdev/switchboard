@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/davidding/orchestrator/bot
-ExecStart=/usr/bin/python3 /home/davidding/orchestrator/bot/telegram_bot.py
+WorkingDirectory=%h/orchestrator/contrib/telegram/bot
+ExecStart=/usr/bin/python3 %h/orchestrator/contrib/telegram/bot/telegram_bot.py
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1

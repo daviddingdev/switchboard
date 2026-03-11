@@ -2,7 +2,8 @@
 # Orchestrator CLI - partner automation helper
 # Usage: orch <command> [args]
 
-API="http://localhost:5001"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+API="${ORCHESTRATOR_URL:-http://localhost:5001}"
 
 case "$1" in
   spawn)
@@ -56,7 +57,7 @@ case "$1" in
     ;;
   projects)
     # orch projects
-    cat ~/orchestrator/state/projects.yaml
+    cat "$SCRIPT_DIR/../state/projects.yaml"
     ;;
   *)
     echo "Orchestrator CLI"

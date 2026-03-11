@@ -120,8 +120,34 @@ export default function FilePreview({ filepath, isMobile }) {
   const lines = content.split('\n')
   const lineCount = content.endsWith('\n') ? lines.length - 1 : lines.length
 
+  const handleDownload = () => {
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filepath.split('/').pop()
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div style={styles.container}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 12px 0' }}>
+        <button
+          onClick={handleDownload}
+          style={{
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            padding: '4px 10px',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          Download
+        </button>
+      </div>
       <pre style={styles.pre}>
         <div style={styles.lineNumbers}>
           {!isMobile && (

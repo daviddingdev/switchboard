@@ -5,6 +5,7 @@ Provides HTTP endpoints for managing Claude Code worker sessions.
 """
 
 import os
+import platform
 import subprocess
 import json
 import glob as glob_module
@@ -33,42 +34,57 @@ EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', 
 EXCLUDE_FILES = {'.DS_Store', 'Thumbs.db'}
 MAX_DEPTH = 4
 
-app = Flask(__name__)
+
+def load_config():
+    """Load config from config.yaml with sensible defaults."""
+    defaults = {
+        'port': 5001,
+        'host': '0.0.0.0',
+        'project_root': '~',
+        'scan_depth': 3,
+        'tmux_socket': 'orchestrator',
+        'tmux_session': 'orchestrator',
+    }
+    config_path = PROJECT_ROOT / 'config.yaml'
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                user_config = yaml.safe_load(f) or {}
+            defaults.update(user_config)
+        except Exception:
+            pass
+    return defaults
+
+
+CONFIG = load_config()
+
+# Serve built frontend if available
+STATIC_DIR = PROJECT_ROOT / 'web' / 'dist'
+if STATIC_DIR.exists():
+    app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path='')
+else:
+    app = Flask(__name__)
 CORS(app)
 
 
 @app.route('/')
 def index():
-    """Root endpoint with API info."""
+    """Serve frontend if built, otherwise show API info."""
+    if STATIC_DIR.exists():
+        return app.send_static_file('index.html')
     return {
         "name": "Orchestrator API",
-        "version": "0.4.0",
-        "endpoints": [
-            "GET /api/health",
-            "GET /api/processes",
-            "POST /api/processes",
-            "DELETE /api/processes/<name>",
-            "POST /api/processes/<name>/send",
-            "GET /api/processes/<name>/output",
-            "GET /api/proposals",
-            "POST /api/proposals",
-            "PATCH /api/proposals/<id>",
-            "DELETE /api/proposals/<id>",
-            "GET /api/projects",
-            "GET /api/home",
-            "GET /api/file?path=<filepath>",
-            "GET /api/diff?project=&path=",
-            "GET /api/activity",
-            "GET /api/doc-context",
-            "POST /api/update-docs",
-            "POST /api/push",
-            "POST /api/commit",
-            "GET /api/workers/usage",
-            "GET /api/metrics",
-            "GET /api/usage",
-            "POST /api/usage/refresh"
-        ]
+        "version": "0.5.0",
+        "note": "Run 'cd web && npm run build' to enable the web UI",
     }
+
+
+@app.errorhandler(404)
+def not_found(e):
+    """Serve index.html for client-side routes, 404 for API routes."""
+    if STATIC_DIR.exists() and not request.path.startswith('/api'):
+        return app.send_static_file('index.html')
+    return {"error": "not found"}, 404
 
 
 @app.route('/api/health')
@@ -256,13 +272,15 @@ def delete_proposal(proposal_id):
 # Projects, Files, Changes, Activity endpoints
 # =============================================================================
 
-def discover_projects(root_dir=None, max_depth=3):
+def discover_projects(root_dir=None, max_depth=None):
     """
     Auto-discover projects by finding directories with CLAUDE.md files.
     Returns list of project directories relative to root.
     """
     if root_dir is None:
-        root_dir = os.path.expanduser('~')
+        root_dir = os.path.expanduser(CONFIG.get('project_root', '~'))
+    if max_depth is None:
+        max_depth = CONFIG.get('scan_depth', 3)
 
     projects = []
 
@@ -1116,7 +1134,7 @@ def commit_project():
 
 def get_project_session_dir(directory):
     """Get the Claude session directory for a project."""
-    # Claude uses a sanitized path format: -home-davidding-projectname
+    # Claude uses a sanitized path format: -home-username-projectname
     # The path starts with a hyphen replacing the leading /
     sanitized = directory.replace('/', '-')
     return os.path.join(CLAUDE_PROJECTS_DIR, sanitized)
@@ -1368,36 +1386,24 @@ def system_metrics():
 
 # --- Spark System Updates ---
 
-CONFIG_FILE = PROJECT_ROOT / 'config.yaml'
-
-
 class SparkClient:
     """Proxy client for DGX Spark dashboard API with token caching."""
 
     def __init__(self):
         self._token = None
-        self._config = None
 
-    def _load_config(self):
-        """Load spark config from config.yaml. Returns None if missing."""
-        if self._config is not None:
-            return self._config
-        try:
-            with open(CONFIG_FILE) as f:
-                cfg = yaml.safe_load(f)
-            self._config = cfg.get('spark', {})
-        except (FileNotFoundError, yaml.YAMLError):
-            self._config = {}
-        return self._config
+    def _get_spark_config(self):
+        """Get spark config from global CONFIG."""
+        return CONFIG.get('spark', {})
 
     @property
     def configured(self):
-        cfg = self._load_config()
+        cfg = self._get_spark_config()
         return bool(cfg.get('url') and cfg.get('username') and cfg.get('password'))
 
     def _login(self):
         """Authenticate and cache bearer token."""
-        cfg = self._load_config()
+        cfg = self._get_spark_config()
         resp = http_requests.post(
             f"{cfg['url']}/api/login",
             json={'username': cfg['username'], 'password': cfg['password']},
@@ -1408,7 +1414,7 @@ class SparkClient:
 
     def _request(self, method, path, **kwargs):
         """Make authenticated request, auto-retry on 401."""
-        cfg = self._load_config()
+        cfg = self._get_spark_config()
         if not self.configured:
             return None
         url = f"{cfg['url']}/api/v1{path}"
@@ -1440,6 +1446,8 @@ _update_status = {'running': False, 'category': None, 'error': None}
 
 def _parse_apt_updates():
     """Parse apt list --upgradable into categorized packages."""
+    if platform.system() != 'Linux':
+        return []
     try:
         out = subprocess.run(
             ['apt', 'list', '--upgradable'],
@@ -1468,6 +1476,8 @@ def _parse_apt_updates():
 
 def _parse_snap_updates():
     """Parse snap refresh --list for available snap updates."""
+    if platform.system() != 'Linux':
+        return []
     try:
         out = subprocess.run(
             ['snap', 'refresh', '--list'],
@@ -1519,6 +1529,8 @@ def _categorize_apt_packages(packages):
 
 def _check_sudoers_setup():
     """Check if passwordless sudo is configured for update commands."""
+    if platform.system() != 'Linux':
+        return False
     try:
         out = subprocess.run(
             ['sudo', '-n', 'apt-get', 'update', '-qq', '--print-uris'],
@@ -1579,10 +1591,12 @@ def spark_updates():
 
     sudo_ok = _check_sudoers_setup()
 
+    is_linux = platform.system() == 'Linux'
     return jsonify({
         'categories': categories,
         'update_status': _update_status,
         'sudo_configured': sudo_ok,
+        'supported': is_linux or _spark.configured,
     })
 
 
@@ -1734,5 +1748,9 @@ def refresh_usage():
 
 
 if __name__ == '__main__':
+    tmux.configure(
+        socket_name=CONFIG.get('tmux_socket'),
+        session_name=CONFIG.get('tmux_session'),
+    )
     tmux.ensure_session()
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001))

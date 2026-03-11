@@ -1,41 +1,47 @@
 #!/bin/bash
-
+set -e
 cd "$(dirname "$0")"
 
 # Unset CLAUDECODE to allow spawning Claude Code sessions from within Claude Code
 unset CLAUDECODE
 
-# Create logs dir if needed
 mkdir -p logs
 
+# Read port from config
+PORT=$(python3 -c "
+import yaml
+try:
+    with open('config.yaml') as f:
+        print(yaml.safe_load(f).get('port', 5001))
+except: print(5001)
+" 2>/dev/null || echo 5001)
+
+# Check if already running
+if [ -f logs/api.pid ] && kill -0 $(cat logs/api.pid) 2>/dev/null; then
+    echo "Orchestrator already running (PID $(cat logs/api.pid))"
+    echo "  URL: http://localhost:${PORT}"
+    exit 0
+fi
+
+# Build frontend if needed
+if [ ! -d "web/dist" ]; then
+    echo "Building web frontend..."
+    (cd web && npm run build)
+fi
+
 echo "Starting Orchestrator..."
-
-# Reload systemd in case service files changed
-systemctl --user daemon-reload
-
-# Start services
-systemctl --user start orchestrator-api.service
-systemctl --user start orchestrator-web.service
-
-# Wait for services to come up
+nohup python3 api/server.py > logs/api.log 2>&1 &
+echo $! > logs/api.pid
 sleep 2
 
-# Check status
-API_STATUS=$(systemctl --user is-active orchestrator-api.service)
-WEB_STATUS=$(systemctl --user is-active orchestrator-web.service)
-
-if [ "$API_STATUS" != "active" ]; then
-  echo "  [error] API failed to start. Check: journalctl --user -u orchestrator-api -n 20"
+if kill -0 $(cat logs/api.pid) 2>/dev/null; then
+    echo ""
+    echo "Orchestrator running:"
+    echo "  URL:  http://localhost:${PORT}"
+    echo "  Logs: logs/api.log"
+    echo "  Stop: ./stop.sh"
+else
+    echo "[error] Failed to start. Check: cat logs/api.log"
+    rm -f logs/api.pid
+    exit 1
 fi
-
-if [ "$WEB_STATUS" != "active" ]; then
-  echo "  [error] Web server failed to start. Check: journalctl --user -u orchestrator-web -n 20"
-fi
-
-echo ""
-echo "Orchestrator running:"
-echo "  Web UI:  http://localhost:3000"
-echo "  API:     http://localhost:5001"
-echo ""
-echo "Spawn workers from the web UI or API."
-echo "To stop: ./stop.sh"

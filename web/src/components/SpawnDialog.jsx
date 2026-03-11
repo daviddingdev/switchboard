@@ -1,14 +1,5 @@
-import { useState } from 'react'
-import { spawnProcess } from '../api'
-
-// Known project directories - click to auto-fill
-const PROJECTS = [
-  { name: 'partner', directory: '~/orchestrator', description: 'Orchestrator project' },
-  { name: 'family-vault', directory: '~/family-vault', description: 'Document search for family business' },
-  { name: 'research-pipeline', directory: '~/services/research-pipeline', description: 'Paper discovery pipeline' },
-  { name: 'vault', directory: '~/vault', description: 'Document inbox/staging' },
-  { name: 'learning', directory: '~/learning', description: 'Learning projects' },
-]
+import { useState, useEffect } from 'react'
+import { spawnProcess, fetchProjects } from '../api'
 
 const styles = {
   overlay: {
@@ -148,11 +139,18 @@ const styles = {
 }
 
 export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
+  const [projects, setProjects] = useState([])
   const [name, setName] = useState('')
   const [directory, setDirectory] = useState('')
   const [selectedProject, setSelectedProject] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    fetchProjects()
+      .then(data => setProjects(data))
+      .catch(() => {})
+  }, [])
 
   const handleProjectClick = (project) => {
     setSelectedProject(project.name)
@@ -203,7 +201,7 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
             ...styles.projectGrid,
             ...(isMobile ? { gridTemplateColumns: '1fr' } : {}),
           }}>
-            {PROJECTS.map(project => (
+            {projects.map(project => (
               <button
                 key={project.name}
                 type="button"

@@ -30,6 +30,15 @@ cd ~/orchestrator
 
 ## Completed
 
+### Open-Source Prep (Mar 11, 2026)
+- [x] Moved Telegram bot to `contrib/telegram/`
+- [x] Made systemd services portable with `%h` home expansion
+- [x] Made `scripts/orch` portable with `ORCHESTRATOR_URL` env var
+- [x] Removed hardcoded paths and personal references from all files
+- [x] Simplified CLAUDE.md for external users
+- [x] Deleted personal artifacts (assumptions.md, docs/NEW_PROJECT.md)
+- [x] Added config.yaml.example template
+
 ### Usage Analytics Tab (Mar 2, 2026)
 - [x] `scripts/compute-usage.py` — Scans all session JSONLs, computes daily/weekly/by-project/by-model/by-hour stats
 - [x] `web/src/components/Usage.jsx` — Dashboard with overview cards, charts, heatmap
@@ -52,15 +61,15 @@ cd ~/orchestrator
 - [x] Removed Terminal.jsx and EphemeralPreview.jsx
 
 ### Telegram Bot (Feb 27, 2026)
-- [x] `bot/telegram_bot.py` — Mobile control interface with button-based UI
+- [x] `contrib/telegram/bot/telegram_bot.py` — Mobile control interface with button-based UI
 - [x] Worker commands: spawn, kill, restart, send, output
 - [x] Proposal management: list, approve, reject
 - [x] Context management: compact, reset, hard reset
 - [x] Status views with context usage progress bars
 - [x] Git dashboard: changed files + unpushed commits with push button
 - [x] Ollama integration for /ask queries
-- [x] `hooks/notify-telegram.sh` — Stop + Notification events via curl
-- [x] `services/orchestrator-telegram.service` — Systemd daemon
+- [x] `contrib/telegram/hooks/notify-telegram.sh` — Stop + Notification events via curl
+- [x] `contrib/telegram/orchestrator-telegram.service` — Systemd daemon
 
 ### Documentation Cleanup (Feb 27, 2026)
 - [x] Removed USAGE.md — Manual token tracking discontinued
@@ -99,10 +108,10 @@ cd ~/orchestrator
 - [x] Shift+click to populate chat input instead of sending
 - [x] ChatInput supports controlled mode (value/onChange props)
 
-### Partner Context Management (Feb 23, 2026)
+### Worker Context Management (Feb 23, 2026)
 - [x] Context usage meter in Activity panel — shows % for each worker
-- [x] Partner history viewer — tab showing filtered conversation messages
-- [x] Partner reset button — soft reset to restart session
+- [x] Worker history viewer — tab showing filtered conversation messages
+- [x] Worker reset button — soft reset to restart session
 - [x] `GET /api/workers/usage` — Token usage stats
 - [x] `GET /api/partner/history` — Conversation history
 - [x] `POST /api/partner/reset` — Restart partner
@@ -143,7 +152,7 @@ cd ~/orchestrator
 - [x] Folder dot indicator when children have changes
 - [x] `FilePreview.jsx` — Syntax highlighting with highlight.js
 - [x] `TabBar.jsx` — Tab navigation for terminals and files
-- [x] Worker terminals open as separate tabs (not replacing partner)
+- [x] Worker terminals open as separate tabs
 - [x] All folders collapsed by default
 - [x] `GET /api/home` — Unified file tree with git status
 - [x] `GET /api/file` — File content with language detection
@@ -179,7 +188,7 @@ cd ~/orchestrator
 - [x] Created `~/WORKER.md` for worker instructions
 - [x] UI: collapsible proposals, delete button
 
-### Partner Orchestration (Feb 22, 2026)
+### Worker Orchestration (Feb 22, 2026)
 - [x] `scripts/orch` CLI helper
 - [x] `state/projects.yaml` project registry
 - [x] `POST /api/proposals` endpoint
@@ -193,7 +202,14 @@ cd ~/orchestrator
 ---
 
 ## Next
-- [ ] **Spark system updates in Monitor** — Show available DGX Spark system updates in the Monitor tab and allow updating directly from the UI. Source: DGX Spark local dashboard at `localhost:11000/settings`
+
+### Open-Source Release
+- [ ] **Git history cleanup** — Scrub any remaining personal data from git history before public push
+- [ ] **Verify no personal data** — Final audit of all files for hardcoded paths, usernames, IPs
+- [ ] **Create public repo** — Push to public GitHub repository
+
+### Features
+- [ ] **File download/copy on mobile** — FilePreview needs a way to download or copy file content on mobile. Blob URL + `a.click()` navigates the page instead of downloading on mobile browsers, causing the SPA to reset on back navigation. Needs a mobile-safe approach (e.g., share API, copy to clipboard, or backend raw file endpoint).
 - [ ] **Plan mode awareness in web UI** — Detect when Claude Code is showing a plan approval prompt and show approve/reject buttons instead of text input. Currently, typing in the chat box during plan mode sends raw text to tmux, which Claude Code misinterprets (e.g., "4 test comment" got interpreted as approval)
 
 ## Backlog (Post-MVP)
@@ -215,17 +231,17 @@ cd ~/orchestrator
 
 | Date | Decision | Reasoning |
 |------|----------|-----------|
-| Feb 17 | Partner model, not PM | Solo operator doesn't need formal methodology |
+| Feb 17 | Worker model, not PM | Solo operator doesn't need formal methodology |
 | Feb 17 | Process tree, not project tree | Need to see workers + their children |
 | Feb 17 | YAML state files | Human-readable, git-friendly |
 | Feb 17 | Polling before WebSocket | Start simple, upgrade if needed |
 | Feb 20 | Polling terminal, not xterm.js | Simpler, good enough for MVP |
-| Feb 22 | CLI helper over API-only | Partner needs simple bash commands |
+| Feb 22 | CLI helper over API-only | Workers need simple bash commands |
 | Feb 23 | 3-column layout | Files + Activity more useful than duplicate terminals |
 | Feb 23 | Setup scripts | Make shareable without manual steps |
 | Feb 23 | Auto-discover projects | Scan for CLAUDE.md vs manual registry |
-| Feb 23 | Tab-based terminals | Workers as tabs, not replacing partner |
+| Feb 23 | Tab-based terminals | Each worker gets its own tab |
 
 ---
 
-*Last updated: March 2, 2026*
+*Last updated: March 11, 2026*

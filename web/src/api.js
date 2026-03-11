@@ -84,6 +84,12 @@ export async function deleteProposal(id) {
   return res.json();
 }
 
+export async function fetchProjects() {
+  const res = await fetch(`${API_BASE}/projects`);
+  if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`);
+  return res.json();
+}
+
 // Projects, Files, Changes, Activity
 
 export async function fetchHome() {

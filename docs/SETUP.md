@@ -178,9 +178,9 @@ List sessions:
 tmux -L orchestrator list-sessions
 ```
 
-Attach to partner:
+Attach to worker:
 ```bash
-tmux -L orchestrator attach -t orchestrator:partner
+tmux -L orchestrator attach -t orchestrator:worker-1
 ```
 
 Kill and restart:

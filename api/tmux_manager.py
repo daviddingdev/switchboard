@@ -16,6 +16,15 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs", "workers")
 
 
+def configure(socket_name=None, session_name=None):
+    """Override tmux socket and session names from config."""
+    global SOCKET_NAME, SESSION_NAME
+    if socket_name:
+        SOCKET_NAME = socket_name
+    if session_name:
+        SESSION_NAME = session_name
+
+
 def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     """Run a tmux command with the orchestrator socket."""
     cmd = ["tmux", "-L", SOCKET_NAME] + list(args)

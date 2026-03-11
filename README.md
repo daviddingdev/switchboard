@@ -7,7 +7,6 @@ Personal AI operating system for managing Claude Code sessions across projects.
 - Spawn and manage multiple Claude Code workers from one UI
 - See file trees and git changes across projects
 - Approve/reject worker proposals
-- Coordinate tasks via Partner session
 
 ## Requirements
 

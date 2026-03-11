@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=forking
-WorkingDirectory=/home/davidding/orchestrator
-Environment=PATH=/home/davidding/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/davidding/orchestrator/start.sh
-ExecStop=/home/davidding/orchestrator/stop.sh
+WorkingDirectory=%h/orchestrator
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/orchestrator/start.sh
+ExecStop=%h/orchestrator/stop.sh
 Restart=on-failure
 RestartSec=10
 

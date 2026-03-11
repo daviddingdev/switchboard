@@ -45,14 +45,23 @@ pip3 install -r api/requirements.txt --quiet
 echo "Installing Node dependencies..."
 cd web && npm install --silent && cd ..
 
+echo "Building web frontend..."
+cd web && npm run build && cd ..
+
 # Create directories
 mkdir -p state/proposals
 mkdir -p logs/workers
+
+# Create config from example if needed
+if [ ! -f config.yaml ]; then
+  echo "Creating default config.yaml..."
+  cp config.yaml.example config.yaml
+fi
 
 echo ""
 echo "=== Setup complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Ensure your projects have CLAUDE.md files (auto-discovered)"
-echo "  2. Run ./start.sh"
-echo "  3. Open http://localhost:3000"
+echo "  2. Edit config.yaml if needed"
+echo "  3. Run ./start.sh"

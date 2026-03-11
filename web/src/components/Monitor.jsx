@@ -535,8 +535,8 @@ export default function Monitor({ isMobile }) {
           <MetricRow name="Processes" value={system.processes} isMobile={m} />
         </div>
 
-        {/* System Updates — full width */}
-        <div style={m ? styles.card : styles.updatesCard}>
+        {/* System Updates — full width (hidden on unsupported platforms) */}
+        {updates?.supported !== false && <div style={m ? styles.card : styles.updatesCard}>
           <div style={styles.cardTitle}>
             System Updates
             {totalUpdates > 0 && !isRunning && (
@@ -598,7 +598,7 @@ export default function Monitor({ isMobile }) {
               </div>
             </>
           )}
-        </div>
+        </div>}
       </div>
       </div>
 
