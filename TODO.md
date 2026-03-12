@@ -9,7 +9,8 @@ All polling replaced with WebSocket push. Full feature set:
 - Keyboard shortcuts (n/m/u/Esc/?)
 - Dark/light theme toggle (desktop + mobile)
 - 3-column UI: Files | Terminal | Workers+Activity
-- Tab-based navigation: multiple terminals + file previews
+- Tab-based navigation: multiple terminals + file previews + drag reorder
+- Usage analytics with time range selector (7d/30d/90d/6m/1y/All) + adaptive charts
 - Auto-discover projects with CLAUDE.md files
 - Git status indicators (M/U/A/D) on files
 - Syntax-highlighted file preview + diff preview
@@ -32,6 +33,14 @@ cd ~/orchestrator
 ---
 
 ## Completed
+
+### Tab Reorder + Usage Time Ranges (Mar 13, 2026)
+- [x] Tab drag-and-drop reordering via native HTML5 drag events
+- [x] Usage time range selector: 7d / 30d / 90d / 6m / 1y / All
+- [x] Adaptive chart granularity (daily → weekly → monthly)
+- [x] Client-side filtering and aggregation from daily[] data
+- [x] All-time summary row when sub-range selected
+- [x] BarChart maxItems fix — time range filtering replaces hardcoded limit
 
 ### WebSocket Upgrade + UX Polish (Mar 12, 2026)
 - [x] Flask-SocketIO with `threading` async mode (not eventlet — subprocess-safe)
@@ -270,4 +279,4 @@ cd ~/orchestrator
 
 ---
 
-*Last updated: March 12, 2026*
+*Last updated: March 13, 2026*

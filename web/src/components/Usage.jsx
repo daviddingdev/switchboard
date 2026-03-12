@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchUsage, refreshUsage } from '../api'
 
+const TIME_RANGES = [
+  { key: '7d', label: '7d', days: 7 },
+  { key: '30d', label: '30d', days: 30 },
+  { key: '90d', label: '90d', days: 90 },
+  { key: '6m', label: '6m', days: 183 },
+  { key: '1y', label: '1y', days: 365 },
+  { key: 'all', label: 'All', days: null },
+]
+
 const styles = {
   container: {
     display: 'flex',
@@ -18,6 +27,8 @@ const styles = {
     justifyContent: 'space-between',
     padding: '12px 16px',
     flexShrink: 0,
+    gap: '10px',
+    flexWrap: 'wrap',
   },
   title: {
     fontSize: '13px',
@@ -35,6 +46,27 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+  },
+  rangePills: {
+    display: 'flex',
+    gap: '2px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: '6px',
+    padding: '2px',
+  },
+  rangePill: {
+    padding: '4px 10px',
+    borderRadius: '4px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontSize: '11px',
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  rangePillActive: {
+    background: 'var(--accent)',
+    color: 'white',
   },
   timestamp: {
     fontSize: '11px',
@@ -158,6 +190,19 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
   },
+  allTimeSummary: {
+    background: 'var(--bg-primary)',
+    borderRadius: '8px',
+    padding: '10px 16px',
+    border: '1px solid var(--border)',
+    marginBottom: '12px',
+    display: 'flex',
+    gap: '24px',
+    alignItems: 'center',
+    fontSize: '11px',
+    color: 'var(--text-secondary)',
+    flexWrap: 'wrap',
+  },
 }
 
 function formatNum(n) {
@@ -180,7 +225,63 @@ function shortDate(dateStr) {
   if (!dateStr) return ''
   const parts = dateStr.split('-')
   if (parts.length === 3) return `${parts[1]}/${parts[2]}`
+  if (parts.length === 2) return `${parts[0].slice(2)}/${parts[1]}`
   return dateStr
+}
+
+function filterDailyByRange(daily, rangeKey) {
+  if (!daily || rangeKey === 'all') return daily || []
+  const range = TIME_RANGES.find(r => r.key === rangeKey)
+  if (!range || !range.days) return daily || []
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - range.days)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+  return daily.filter(d => d.date >= cutoffStr)
+}
+
+function computeOverviewFromDaily(filteredDaily) {
+  let sessions = 0, messages = 0, tool_calls = 0
+  const tokens = { input: 0, output: 0, cache_read: 0, cache_creation: 0 }
+  for (const d of filteredDaily) {
+    sessions += d.sessions || 0
+    messages += d.messages || 0
+    tool_calls += d.tool_calls || 0
+    if (d.tokens) {
+      tokens.input += d.tokens.input || 0
+      tokens.output += d.tokens.output || 0
+      tokens.cache_read += d.tokens.cache_read || 0
+      tokens.cache_creation += d.tokens.cache_creation || 0
+    }
+  }
+  return { total_sessions: sessions, total_messages: messages, total_tool_calls: tool_calls, total_tokens: tokens, days_active: filteredDaily.length }
+}
+
+function aggregateToWeekly(dailyData) {
+  const weeks = {}
+  for (const d of dailyData) {
+    const dt = new Date(d.date + 'T00:00:00')
+    const day = dt.getDay()
+    const monday = new Date(dt)
+    monday.setDate(dt.getDate() - ((day + 6) % 7))
+    const weekKey = monday.toISOString().slice(0, 10)
+    if (!weeks[weekKey]) weeks[weekKey] = { date: weekKey, sessions: 0, messages: 0, tool_calls: 0 }
+    weeks[weekKey].sessions += d.sessions || 0
+    weeks[weekKey].messages += d.messages || 0
+    weeks[weekKey].tool_calls += d.tool_calls || 0
+  }
+  return Object.values(weeks).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function aggregateToMonthly(dailyData) {
+  const months = {}
+  for (const d of dailyData) {
+    const monthKey = d.date.slice(0, 7)
+    if (!months[monthKey]) months[monthKey] = { date: monthKey, sessions: 0, messages: 0, tool_calls: 0 }
+    months[monthKey].sessions += d.sessions || 0
+    months[monthKey].messages += d.messages || 0
+    months[monthKey].tool_calls += d.tool_calls || 0
+  }
+  return Object.values(months).sort((a, b) => a.date.localeCompare(b.date))
 }
 
 function MetricRow({ name, value, isMobile }) {
@@ -192,8 +293,8 @@ function MetricRow({ name, value, isMobile }) {
   )
 }
 
-function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems = 14 }) {
-  const items = data.slice(-maxItems)
+function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems }) {
+  const items = maxItems ? data.slice(-maxItems) : data
   const max = Math.max(...items.map(d => d[valueKey] || 0), 1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
@@ -201,11 +302,11 @@ function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems 
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span title={typeof d[labelKey] === 'string' ? d[labelKey] : undefined} style={{
             fontSize: '11px', color: 'var(--text-secondary)',
-            width: labelKey === 'name' ? '100px' : '50px', flexShrink: 0, textAlign: 'right',
+            width: '100px', flexShrink: 0, textAlign: 'right',
             fontVariantNumeric: 'tabular-nums',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {labelKey === 'name' ? d[labelKey] : (typeof d[labelKey] === 'string' ? shortDate(d[labelKey]) : d[labelKey])}
+            {d[labelKey]}
           </span>
           <div style={{
             flex: 1, height: '14px', background: 'var(--bg-tertiary)',
@@ -229,6 +330,162 @@ function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems 
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+function LineChart({ data, labelKey, valueKey, color = 'var(--accent)', height = 160 }) {
+  const [hover, setHover] = useState(null)
+  if (!data || data.length === 0) return null
+
+  const values = data.map(d => d[valueKey] || 0)
+  const max = Math.max(...values, 1)
+  const pad = { top: 20, right: 12, bottom: 28, left: 44 }
+
+  // Pick ~5 evenly spaced x-axis labels
+  const labelCount = Math.min(data.length, 6)
+  const labelIndices = data.length <= labelCount
+    ? data.map((_, i) => i)
+    : Array.from({ length: labelCount }, (_, i) => Math.round(i * (data.length - 1) / (labelCount - 1)))
+
+  // Y-axis: 4 ticks
+  const yTicks = Array.from({ length: 4 }, (_, i) => Math.round(max * (1 - i / 3)))
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 500 ${height}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {/* Grid lines */}
+        {yTicks.map((v, i) => {
+          const y = pad.top + ((max - v) / max) * (height - pad.top - pad.bottom)
+          return (
+            <g key={i}>
+              <line x1={pad.left} x2={500 - pad.right} y1={y} y2={y}
+                stroke="var(--border)" strokeWidth="0.5" />
+              <text x={pad.left - 6} y={y + 3} textAnchor="end"
+                fill="var(--text-secondary)" fontSize="9" fontFamily="inherit">
+                {formatNum(v)}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Area fill */}
+        {data.length > 1 && (
+          <path
+            d={(() => {
+              const w = 500 - pad.left - pad.right
+              const h = height - pad.top - pad.bottom
+              const points = data.map((d, i) => {
+                const x = pad.left + (i / (data.length - 1)) * w
+                const y = pad.top + ((max - (d[valueKey] || 0)) / max) * h
+                return `${x},${y}`
+              })
+              return `M${points.join(' L')} L${pad.left + w},${pad.top + h} L${pad.left},${pad.top + h} Z`
+            })()}
+            fill={color}
+            opacity="0.08"
+          />
+        )}
+
+        {/* Line */}
+        {data.length > 1 && (
+          <polyline
+            points={data.map((d, i) => {
+              const w = 500 - pad.left - pad.right
+              const h = height - pad.top - pad.bottom
+              const x = pad.left + (i / (data.length - 1)) * w
+              const y = pad.top + ((max - (d[valueKey] || 0)) / max) * h
+              return `${x},${y}`
+            }).join(' ')}
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+
+        {/* Data points (dots) */}
+        {data.map((d, i) => {
+          const w = 500 - pad.left - pad.right
+          const h = height - pad.top - pad.bottom
+          const x = pad.left + (data.length === 1 ? w / 2 : (i / (data.length - 1)) * w)
+          const y = pad.top + ((max - (d[valueKey] || 0)) / max) * h
+          return (
+            <circle key={i} cx={x} cy={y}
+              r={hover === i ? 4 : (data.length <= 14 ? 2.5 : 0)}
+              fill={color} stroke="var(--bg-primary)" strokeWidth="1.5"
+            />
+          )
+        })}
+
+        {/* Hover zones (invisible rects for mouse detection) */}
+        {data.map((d, i) => {
+          const w = 500 - pad.left - pad.right
+          const slotW = w / data.length
+          const x = pad.left + i * slotW
+          return (
+            <rect key={`h${i}`} x={x} y={pad.top} width={slotW} height={height - pad.top - pad.bottom}
+              fill="transparent"
+              onMouseEnter={() => setHover(i)}
+            />
+          )
+        })}
+
+        {/* Hover indicator */}
+        {hover !== null && (() => {
+          const w = 500 - pad.left - pad.right
+          const h = height - pad.top - pad.bottom
+          const x = pad.left + (data.length === 1 ? w / 2 : (hover / (data.length - 1)) * w)
+          const y = pad.top + ((max - (data[hover][valueKey] || 0)) / max) * h
+          return (
+            <g>
+              <line x1={x} x2={x} y1={pad.top} y2={pad.top + h}
+                stroke="var(--text-secondary)" strokeWidth="0.5" strokeDasharray="3,3" />
+              <circle cx={x} cy={y} r="4" fill={color} stroke="var(--bg-primary)" strokeWidth="2" />
+            </g>
+          )
+        })()}
+
+        {/* X-axis labels */}
+        {labelIndices.map(i => {
+          const w = 500 - pad.left - pad.right
+          const x = pad.left + (data.length === 1 ? w / 2 : (i / (data.length - 1)) * w)
+          return (
+            <text key={`x${i}`} x={x} y={height - 6} textAnchor="middle"
+              fill="var(--text-secondary)" fontSize="9" fontFamily="inherit">
+              {shortDate(data[i][labelKey])}
+            </text>
+          )
+        })}
+      </svg>
+
+      {/* Hover tooltip */}
+      {hover !== null && (
+        <div style={{
+          position: 'absolute', top: '4px',
+          right: '8px',
+          background: 'var(--bg-tertiary)',
+          border: '1px solid var(--border)',
+          borderRadius: '4px',
+          padding: '4px 8px',
+          fontSize: '11px',
+          color: 'var(--text-primary)',
+          pointerEvents: 'none',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>{data[hover][labelKey]}</span>
+          {' '}
+          <strong>{formatNum(data[hover][valueKey])}</strong>
+        </div>
+      )}
     </div>
   )
 }
@@ -305,6 +562,7 @@ export default function Usage({ isMobile }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [timeRange, setTimeRange] = useState('all')
   const prevJson = useRef('')
 
   const load = async () => {
@@ -332,7 +590,6 @@ export default function Usage({ isMobile }) {
     setRefreshing(true)
     try {
       await refreshUsage()
-      // Poll for completion (check every 2s, up to 60s)
       let attempts = 0
       const poll = setInterval(async () => {
         attempts++
@@ -384,13 +641,49 @@ export default function Usage({ isMobile }) {
     )
   }
 
-  const { overview, daily, weekly, by_project, by_model, by_hour, comparison } = data
+  const { overview: allTimeOverview, daily, by_project, by_model, by_hour, comparison } = data
+  const rangeConfig = TIME_RANGES.find(r => r.key === timeRange)
+
+  // Filter and aggregate based on selected time range
+  const filteredDaily = filterDailyByRange(daily, timeRange)
+  // Always compute from daily data for consistency across ranges
+  // (backend overview counts files; daily sums count session-days which can differ)
+  const rangeOverview = computeOverviewFromDaily(filteredDaily)
+
+  // Adaptive chart granularity
+  let chartData, chartLabel
+  if (timeRange === '7d' || timeRange === '30d') {
+    chartData = filteredDaily
+    chartLabel = 'Daily Activity (Messages)'
+  } else if (timeRange === '90d') {
+    chartData = aggregateToWeekly(filteredDaily)
+    chartLabel = 'Weekly Activity (Messages)'
+  } else {
+    chartData = aggregateToMonthly(filteredDaily)
+    chartLabel = 'Monthly Activity (Messages)'
+  }
+
+  const chartColor = (timeRange === '7d' || timeRange === '30d') ? 'var(--accent)' : '#8b5cf6'
 
   return (
     <div style={m ? styles.containerMobile : styles.container}>
       <div style={styles.header}>
         <span style={m ? styles.titleMobile : styles.title}>Usage Analytics</span>
         <div style={styles.headerRight}>
+          <div style={styles.rangePills}>
+            {TIME_RANGES.map(r => (
+              <button
+                key={r.key}
+                style={{
+                  ...styles.rangePill,
+                  ...(timeRange === r.key ? styles.rangePillActive : {}),
+                }}
+                onClick={() => setTimeRange(r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
           <span style={styles.timestamp}>{formatDate(data.computed_at)}</span>
           <button
             style={{ ...styles.refreshBtn, opacity: refreshing ? 0.5 : 1 }}
@@ -406,64 +699,67 @@ export default function Usage({ isMobile }) {
         {/* Overview cards */}
         <div style={m ? styles.gridMobile : styles.grid}>
           <div style={styles.card}>
-            <div style={styles.bigNumber}>{formatNum(overview.total_sessions)}</div>
-            <div style={styles.bigLabel}>Total Sessions</div>
+            <div style={styles.bigNumber}>{formatNum(rangeOverview.total_sessions)}</div>
+            <div style={styles.bigLabel}>{timeRange === 'all' ? 'Total Sessions' : `Sessions (${rangeConfig.label})`}</div>
           </div>
           <div style={styles.card}>
-            <div style={styles.bigNumber}>{formatNum(overview.total_messages)}</div>
-            <div style={styles.bigLabel}>Total Messages</div>
+            <div style={styles.bigNumber}>{formatNum(rangeOverview.total_messages)}</div>
+            <div style={styles.bigLabel}>{timeRange === 'all' ? 'Total Messages' : `Messages (${rangeConfig.label})`}</div>
           </div>
           <div style={styles.card}>
-            <div style={styles.bigNumber}>{formatNum(overview.total_tool_calls)}</div>
-            <div style={styles.bigLabel}>Tool Calls</div>
+            <div style={styles.bigNumber}>{formatNum(rangeOverview.total_tool_calls)}</div>
+            <div style={styles.bigLabel}>{timeRange === 'all' ? 'Tool Calls' : `Tool Calls (${rangeConfig.label})`}</div>
           </div>
           <div style={styles.card}>
-            <div style={styles.bigNumber}>{formatNum(overview.total_tokens?.output)}</div>
-            <div style={styles.bigLabel}>Output Tokens</div>
+            <div style={styles.bigNumber}>{formatNum(rangeOverview.total_tokens?.output)}</div>
+            <div style={styles.bigLabel}>{timeRange === 'all' ? 'Output Tokens' : `Output Tokens (${rangeConfig.label})`}</div>
           </div>
           <div style={styles.card}>
-            <div style={styles.bigNumber}>{overview.days_active}</div>
+            <div style={styles.bigNumber}>{rangeOverview.days_active}</div>
             <div style={styles.bigLabel}>Days Active</div>
           </div>
-          <div style={styles.card}>
-            <div style={styles.bigNumber}>{overview.projects_count}</div>
-            <div style={styles.bigLabel}>Projects</div>
-          </div>
+          {timeRange === 'all' && (
+            <div style={styles.card}>
+              <div style={styles.bigNumber}>{allTimeOverview.projects_count}</div>
+              <div style={styles.bigLabel}>Projects</div>
+            </div>
+          )}
         </div>
+
+        {/* All-time summary when viewing a sub-range */}
+        {timeRange !== 'all' && (
+          <div style={styles.allTimeSummary}>
+            <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>All Time</span>
+            <span>{formatNum(allTimeOverview.total_sessions)} sessions</span>
+            <span>{formatNum(allTimeOverview.total_messages)} messages</span>
+            <span>{formatNum(allTimeOverview.total_tokens?.output)} output tokens</span>
+            <span>{allTimeOverview.days_active} days</span>
+          </div>
+        )}
 
         {/* This week vs last week */}
         <ComparisonCard comparison={comparison} isMobile={m} />
 
-        {/* Daily activity */}
-        {daily && daily.length > 0 && (
+        {/* Adaptive activity chart */}
+        {chartData && chartData.length > 0 && (
           <div style={styles.cardWide}>
-            <div style={styles.cardTitle}>Daily Activity (Messages)</div>
-            <BarChart data={daily} labelKey="date" valueKey="messages" maxItems={14} />
-          </div>
-        )}
-
-        {/* Weekly trends */}
-        {weekly && weekly.length > 0 && (
-          <div style={styles.cardWide}>
-            <div style={styles.cardTitle}>Weekly Trends (Messages)</div>
-            <BarChart data={weekly} labelKey="week" valueKey="messages" color="#8b5cf6" />
+            <div style={styles.cardTitle}>{chartLabel}</div>
+            <LineChart data={chartData} labelKey="date" valueKey="messages" color={chartColor} />
           </div>
         )}
 
         {/* By project and By model side by side */}
         <div style={m ? styles.gridMobile : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          {/* By project */}
           {by_project && by_project.length > 0 && (
             <div style={styles.card}>
-              <div style={styles.cardTitle}>By Project</div>
+              <div style={styles.cardTitle}>By Project{timeRange !== 'all' ? ' (All Time)' : ''}</div>
               <BarChart data={by_project} labelKey="name" valueKey="messages" color="#22c55e" maxItems={10} />
             </div>
           )}
 
-          {/* By model */}
           {by_model && Object.keys(by_model).length > 0 && (
             <div style={styles.card}>
-              <div style={styles.cardTitle}>By Model</div>
+              <div style={styles.cardTitle}>By Model{timeRange !== 'all' ? ' (All Time)' : ''}</div>
               {Object.entries(by_model).map(([model, info]) => {
                 const shortModel = model.replace('claude-', '').replace(/-\d{8}$/, '')
                 return (
@@ -484,19 +780,23 @@ export default function Usage({ isMobile }) {
         {/* Hourly heatmap */}
         {by_hour && (
           <div style={styles.cardWide}>
-            <div style={styles.cardTitle}>Activity by Hour (Local Time)</div>
+            <div style={styles.cardTitle}>Activity by Hour (Local Time){timeRange !== 'all' ? ' — All Time' : ''}</div>
             <HourHeatmap hourCounts={by_hour} />
           </div>
         )}
 
         {/* Token breakdown */}
         <div style={styles.cardWide}>
-          <div style={styles.cardTitle}>All-Time Token Breakdown</div>
-          <MetricRow name="Input Tokens" value={formatNum(overview.total_tokens?.input)} isMobile={m} />
-          <MetricRow name="Output Tokens" value={formatNum(overview.total_tokens?.output)} isMobile={m} />
-          <MetricRow name="Cache Read" value={formatNum(overview.total_tokens?.cache_read)} isMobile={m} />
-          <MetricRow name="Cache Creation" value={formatNum(overview.total_tokens?.cache_creation)} isMobile={m} />
-          <MetricRow name="Since" value={overview.first_session || '--'} isMobile={m} />
+          <div style={styles.cardTitle}>
+            {timeRange === 'all' ? 'All-Time Token Breakdown' : `Token Breakdown (${rangeConfig.label})`}
+          </div>
+          <MetricRow name="Input Tokens" value={formatNum(rangeOverview.total_tokens?.input)} isMobile={m} />
+          <MetricRow name="Output Tokens" value={formatNum(rangeOverview.total_tokens?.output)} isMobile={m} />
+          <MetricRow name="Cache Read" value={formatNum(rangeOverview.total_tokens?.cache_read)} isMobile={m} />
+          <MetricRow name="Cache Creation" value={formatNum(rangeOverview.total_tokens?.cache_creation)} isMobile={m} />
+          {timeRange === 'all' && (
+            <MetricRow name="Since" value={allTimeOverview.first_session || '--'} isMobile={m} />
+          )}
         </div>
       </div>
     </div>

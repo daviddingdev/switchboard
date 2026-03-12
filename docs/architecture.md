@@ -2,23 +2,24 @@
 
 ## Overview
 
-Orchestrator manages Claude Code worker sessions
-across projects via a **Web UI** on `localhost:3000`
-backed by a **Flask-SocketIO API** on port 5001,
-which manages workers via **tmux**.
+Orchestrator runs on the machine where Claude Code
+sessions live. It manages workers via **tmux** and
+serves a **Web UI** accessible from any browser.
 
 Optional integrations (Telegram bot, hooks) live
 in `contrib/`.
 
 ```
-┌──────────┐
-│  Web UI  │  :3000
+Browser (any device)
+     │
+┌────┴─────┐
+│  Web UI  │  :3000 (static files served by API)
 └────┬─────┘
      │ WebSocket (persistent, server push)
      │ HTTP (one-off actions: spawn, kill, send)
 ┌────┴──────────┐
 │ Flask-SocketIO │  :5001 (threading async mode)
-│   server.py    │
+│   server.py    │  runs on the Claude Code machine
 └────┬───────────┘
      │ subprocess
 ┌────┴──────┐
@@ -133,8 +134,18 @@ Context % = (input + cache_read) / 200k.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/metrics` | GPU, CPU, memory, disk |
+| GET | `/metrics` | System metrics (see Monitor) |
 | GET | `/models` | Available Claude models |
+| GET | `/system/updates` | Available system updates |
+| POST | `/system/update` | Trigger system updates |
+
+**`/metrics`** returns:
+- `gpu` — configurable via `monitor.gpu` in config.yaml
+  (null if disabled, auto-detects NVIDIA by default)
+- `services` — dict of monitored processes, configurable
+  via `monitor.services` (default: Ollama)
+- `cpu`, `memory`, `disk`, `network`, `system` — always
+  present, cross-platform via psutil
 
 ---
 
@@ -252,6 +263,12 @@ Tab IDs: `file:<path>`, `diff:<project>:<path>`,
 Clicking a file opens a tab (desktop) or
 full-screen overlay (mobile).
 
+**Drag reorder**: Tabs support native HTML5
+drag-and-drop reordering. Dragged tab shows at
+reduced opacity, drop target shows accent-colored
+left border. State lives in App.jsx (`reorderTab`
+splice callback), visual feedback in TabBar.
+
 ### Components
 
 | Component | What it does |
@@ -262,9 +279,9 @@ full-screen overlay (mobile).
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
 | TerminalView | Real-time terminal streaming via WebSocket |
-| Monitor | System metrics (GPU, CPU, memory) |
-| Usage | Usage analytics with charts |
-| TabBar | Tab switching + close buttons |
+| Monitor | System metrics (GPU, CPU, memory, services, updates) |
+| Usage | Usage analytics with time range selector, adaptive charts |
+| TabBar | Tab switching, close buttons, drag-and-drop reorder |
 | SpawnDialog | Name + directory form for new workers |
 | MobileNav | Bottom navigation bar |
 | ErrorBoundary | Crash recovery with reload button |
@@ -283,7 +300,7 @@ full-screen overlay (mobile).
 - Spawn, kill, send — POST/DELETE via REST
 - Initial data fetch on mount — GET via REST
 - File content, diffs — GET via REST
-- Spark updates — polling (adaptive interval)
+- System updates — polling (adaptive interval)
 - File tree — light polling (10s)
 
 ### Keyboard Shortcuts
@@ -372,3 +389,6 @@ Worker submits POST /api/proposals
   to avoid re-registering keydown listener on every render
 - **CSS-based toast positioning** — media query for mobile
   centering instead of static JS check
+- **Config-driven monitor** — GPU command, services list,
+  and updates all configurable. Cards auto-hide when
+  hardware isn't present (no GPU = no GPU card)

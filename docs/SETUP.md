@@ -1,41 +1,33 @@
 # Orchestrator Setup Guide
 
-Detailed setup instructions for Linux and macOS.
+Orchestrator runs on the machine where your Claude Code sessions live (Linux box, Mac, always-on PC). The web UI is accessed from any browser on any device.
 
 ## Prerequisites
+
+Install these on the machine that will run Claude Code:
+
+### Ubuntu/Debian
+
+```bash
+sudo apt update
+sudo apt install tmux python3 python3-pip nodejs npm
+
+npm install -g @anthropic-ai/claude-code
+```
 
 ### macOS
 
 ```bash
-# Install Homebrew if not present
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install dependencies
 brew install tmux python node
 
-# Install Claude CLI
 npm install -g @anthropic-ai/claude-code
-
-# Verify
-python3 --version   # Should be 3.10+
-node --version      # Should be 18+
-tmux -V
-claude --version
 ```
 
-### Linux (Ubuntu/Debian)
+### Verify
 
 ```bash
-# Install dependencies
-sudo apt update
-sudo apt install tmux python3 python3-pip nodejs npm
-
-# Install Claude CLI
-npm install -g @anthropic-ai/claude-code
-
-# Verify
-python3 --version
-node --version
+python3 --version   # 3.10+
+node --version      # 18+
 tmux -V
 claude --version
 ```
@@ -43,84 +35,83 @@ claude --version
 ## Installation
 
 ```bash
-# Clone the repo
-git clone https://github.com/yourusername/orchestrator.git
+git clone https://github.com/dingod/orchestrator.git
 cd orchestrator
 
-# Make scripts executable
 chmod +x setup.sh start.sh stop.sh
-
-# Run setup (installs Python + Node dependencies)
 ./setup.sh
 ```
 
 ## Running
 
 ```bash
-# Start all services
 ./start.sh
+```
 
-# Open in browser
-open http://localhost:3000  # macOS
-xdg-open http://localhost:3000  # Linux
+Access the UI:
+- Same machine: http://localhost:3000
+- Other devices: http://\<machine-ip\>:3000
+
+## Configuration
+
+Copy `config.yaml.example` to `config.yaml` (done automatically by `setup.sh`).
+
+Key settings:
+- `port` — API port (default: 5001)
+- `monitor.gpu` — GPU monitoring command, or `enabled: false` to hide
+- `monitor.services` — processes to track (default: Ollama)
+- `monitor.disk_path` — mount point to monitor (default: `/`)
+- `spark` — optional platform dashboard integration
+
+See `config.yaml.example` for all options with inline docs.
+
+### Changing Ports
+
+API port: edit `port` in `config.yaml`
+
+Web UI port: edit `web/vite.config.js`:
+```js
+server: {
+  port: 3001,  // Change to available port
+}
 ```
 
 ## Stopping
 
 ```bash
-# Stop API and web server (keeps tmux session)
 ./stop.sh
 
-# Fully kill tmux session
+# To fully kill the tmux session:
 tmux -L orchestrator kill-session -t orchestrator
-```
-
-## Port Conflicts
-
-### Web UI (default: 3000)
-
-If port 3000 is in use, edit `web/vite.config.js`:
-
-```js
-export default defineConfig({
-  // ...
-  server: {
-    port: 3001,  // Change to available port
-    // ...
-  }
-})
-```
-
-### API (default: 5001)
-
-If port 5001 is in use, edit `api/server.py` (last line):
-
-```python
-app.run(host='0.0.0.0', port=5002, debug=True)  # Change port
-```
-
-Then update the proxy in `web/vite.config.js`:
-
-```js
-proxy: {
-  '/api': 'http://localhost:5002'  // Match new API port
-}
 ```
 
 ## Project Discovery
 
-Orchestrator automatically finds projects by scanning your home directory for folders containing a `CLAUDE.md` file.
+Orchestrator auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
 
-To add a project:
-1. Create a `CLAUDE.md` file in the project root
-2. Restart orchestrator (or it will be picked up on next API call)
+To add a project: create a `CLAUDE.md` in its root.
 
-Example minimal `CLAUDE.md`:
 ```markdown
 # My Project
 
-Brief description of the project for Claude context.
+Brief description for Claude context.
 ```
+
+## System Updates (Linux only)
+
+The Monitor tab can check for and apply apt/snap updates. For non-interactive updates, configure passwordless sudo:
+
+```bash
+sudo bash scripts/setup-sudo.sh
+```
+
+Or manually:
+```bash
+sudo visudo -f /etc/sudoers.d/orchestrator-updates
+# Add: <username> ALL=(ALL) NOPASSWD: /usr/bin/apt-get update *, /usr/bin/apt-get upgrade *, /usr/bin/snap refresh *
+```
+
+This feature is automatically hidden on macOS and Windows.
 
 ## Troubleshooting
 
@@ -128,63 +119,40 @@ Brief description of the project for Claude context.
 
 ```bash
 npm install -g @anthropic-ai/claude-code
-```
-
-Or check your PATH includes npm global bin:
-```bash
+# Or check PATH:
 export PATH="$PATH:$(npm bin -g)"
 ```
 
 ### "tmux: command not found"
 
 ```bash
+# Ubuntu/Debian
+sudo apt install tmux
+
 # macOS
 brew install tmux
-
-# Linux
-sudo apt install tmux
 ```
 
 ### API won't start
 
-Check logs:
 ```bash
 cat logs/api.log
 ```
 
-Common issues:
-- Port 5001 already in use
-- Missing Python dependencies: `pip3 install -r api/requirements.txt`
+Common: port 5001 in use, missing Python deps (`pip3 install -r api/requirements.txt`).
 
-### Web UI won't start
+### Web UI won't load
 
-Check logs:
 ```bash
 cat logs/web.log
 ```
 
-Common issues:
-- Port 3000 already in use
-- Missing Node dependencies: `cd web && npm install`
-
-### "No projects found"
-
-Create a `CLAUDE.md` file in at least one project directory under `~`.
+Common: port 3000 in use, missing Node deps (`cd web && npm install`).
 
 ### tmux session issues
 
-List sessions:
 ```bash
-tmux -L orchestrator list-sessions
-```
-
-Attach to worker:
-```bash
-tmux -L orchestrator attach -t orchestrator:worker-1
-```
-
-Kill and restart:
-```bash
-tmux -L orchestrator kill-session -t orchestrator
-./start.sh
+tmux -L orchestrator list-sessions              # List sessions
+tmux -L orchestrator attach -t orchestrator      # Attach
+tmux -L orchestrator kill-session -t orchestrator # Kill all
 ```

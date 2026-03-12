@@ -501,13 +501,10 @@ async def build_git_detail(project: str) -> tuple[str, InlineKeyboardMarkup]:
     return "\n".join(lines), InlineKeyboardMarkup([row])
 
 
-# Known services to check
+# Known services to check — customize for your setup
+# Format: "name": ("health_check_url", port)
 SERVICES = {
     "orchestrator": ("http://localhost:5001/api/health", 5001),
-    "family-vault": ("http://localhost:5000/health", 5000),
-    "research-pipeline": ("http://localhost:8085/health", 8085),
-    "ollama": ("http://localhost:11434/api/tags", 11434),
-    "open-webui": ("http://localhost:8080/health", 8080),
 }
 
 

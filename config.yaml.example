@@ -27,8 +27,73 @@ models:
     label: "Opus 4.6"
 default_model: "claude-opus-4-5-20250514"
 
-# Optional: DGX Spark integration (system updates via Spark dashboard)
+# ─── System Monitor ───────────────────────────────────────────────
+# Controls what appears in the Monitor tab (keyboard shortcut: m).
+# CPU, memory, disk, network, and uptime are always shown (cross-platform).
+# GPU and services are optional and configurable below.
+
+monitor:
+  # GPU monitoring
+  # Auto-detects NVIDIA GPUs via nvidia-smi. Set enabled: false to hide the
+  # GPU card entirely (e.g., on a Mac Mini or machine without a GPU).
+  #
+  # For non-NVIDIA setups, you can point to a custom command that outputs
+  # three comma-separated values: utilization%, temperature°C, memory%.
+  #
+  # Examples:
+  #   NVIDIA (default):  command: nvidia-smi
+  #   AMD (rocm-smi):    command: /opt/rocm/bin/rocm-smi  (needs custom args)
+  #   No GPU:            enabled: false
+  gpu:
+    enabled: true
+    command: "nvidia-smi"
+    args: "--query-gpu=utilization.gpu,temperature.gpu,utilization.memory --format=csv,noheader,nounits"
+
+  # Service monitoring — track any process by name
+  # Each entry creates a card in Monitor showing the process's CPU% and RAM.
+  # The "process" field is matched case-insensitively against running process names.
+  # If the process isn't running, the card shows "--" for both metrics.
+  #
+  # Examples:
+  #   - name: "Ollama"           # Card title
+  #     process: "ollama"        # Process name to search for
+  #   - name: "Postgres"
+  #     process: "postgres"
+  #   - name: "Docker"
+  #     process: "dockerd"
+  #   - name: "Open WebUI"
+  #     process: "open-webui"
+  services:
+    - name: "Ollama"
+      process: "ollama"
+
+  # Disk space monitoring — which mount point to track
+  # Default: "/" (root filesystem). Change if your data lives elsewhere.
+  # Examples:
+  #   disk_path: "/"           # Root filesystem (default)
+  #   disk_path: "/data"       # Separate data partition
+  #   disk_path: "/mnt/storage"  # External storage
+  disk_path: "/"
+
+# ─── System Updates (Linux only) ──────────────────────────────────
+# The Monitor tab can check for and apply apt/snap updates on Linux.
+# This feature is automatically hidden on macOS and Windows.
+#
+# For apt updates to work non-interactively, configure passwordless sudo:
+#   sudo visudo -f /etc/sudoers.d/orchestrator
+#   <username> ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/snap
+#
+# On macOS: use `brew update && brew outdated` manually. Orchestrator
+# doesn't manage macOS packages (yet).
+
+# ─── Platform Dashboard Integration (optional) ───────────────────
+# If your machine has a management dashboard API (e.g., DGX Spark),
+# Orchestrator can check for platform-level updates and trigger
+# update+reboot from the Monitor tab.
+# Leave commented out if your machine doesn't have a dashboard.
+#
 # spark:
-#   url: http://localhost:11000
+#   url: "http://localhost:11000"   # Dashboard API URL
 #   username: ""
 #   password: ""
+#   label: "Platform Update"        # Display name in Monitor (default: "Platform Update")

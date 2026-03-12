@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchMetrics, fetchSparkUpdates, triggerSparkUpdate } from '../api'
+import { fetchMetrics, fetchSystemUpdates, triggerSystemUpdate } from '../api'
 import socket from '../socket'
 import { useToast } from './Toast'
 
@@ -397,23 +397,23 @@ export default function Monitor({ isMobile }) {
     let active = true
     async function initialFetch() {
       try {
-        const data = await fetchSparkUpdates()
+        const data = await fetchSystemUpdates()
         if (active) setUpdates(data)
       } catch { /* ignore */ }
     }
     initialFetch()
 
-    // Keep polling for spark updates since they're less frequent
+    // Keep polling for system updates since they're less frequent
     // and not pushed via socket (adaptive interval)
     const interval = updates?.update_status?.running ? 5000 : 60000
-    const sparkInterval = setInterval(async () => {
+    const updatesInterval = setInterval(async () => {
       try {
-        const data = await fetchSparkUpdates()
+        const data = await fetchSystemUpdates()
         if (active) setUpdates(data)
       } catch { /* ignore */ }
     }, interval)
 
-    return () => { active = false; clearInterval(sparkInterval) }
+    return () => { active = false; clearInterval(updatesInterval) }
   }, [updates?.update_status?.running])
 
   const categories = updates?.categories?.filter(c =>
@@ -455,9 +455,9 @@ export default function Monitor({ isMobile }) {
     const cats = confirming.categories
     setConfirming(null)
     try {
-      await triggerSparkUpdate(cats)
+      await triggerSystemUpdate(cats)
       // Re-poll immediately
-      const data = await fetchSparkUpdates()
+      const data = await fetchSystemUpdates()
       setUpdates(data)
     } catch (err) {
       addToast('Update failed: ' + err.message, 'error')
@@ -465,13 +465,16 @@ export default function Monitor({ isMobile }) {
   }, [confirming])
 
   const m = isMobile
-  const gpu = metrics?.gpu || {}
-  const ollama = metrics?.ollama || {}
+  const gpu = metrics?.gpu
+  const services = metrics?.services || {}
   const cpu = metrics?.cpu || {}
   const memory = metrics?.memory || {}
   const network = metrics?.network || {}
   const disk = metrics?.disk || {}
   const system = metrics?.system || {}
+
+  // GPU card: only show if gpu object exists and has at least one non-null value
+  const hasGpu = gpu && (gpu.util != null || gpu.temp != null || gpu.mem != null)
 
   const totalRam = (memory.used_gb || 0) + (memory.available_gb || 0)
   const ramPct = totalRam > 0 ? ((memory.used_gb || 0) / totalRam) * 100 : 0
@@ -492,23 +495,27 @@ export default function Monitor({ isMobile }) {
 
       <div style={m ? styles.scrollAreaMobile : styles.scrollArea}>
       <div style={m ? styles.gridMobile : styles.grid}>
-        {/* GPU */}
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>GPU</div>
-          <MetricRow name="Utilization" value={gpu.util} unit="%" isMobile={m} />
-          <Bar percent={gpu.util} warn={70} crit={95} />
-          <MetricRow name="Temperature" value={gpu.temp} unit="°C" isMobile={m} />
-          <Bar percent={gpu.temp} warn={70} crit={85} />
-          <MetricRow name="Memory" value={gpu.mem} unit="%" isMobile={m} />
-          <Bar percent={gpu.mem} warn={80} crit={95} />
-        </div>
+        {/* GPU — hidden if no GPU detected */}
+        {hasGpu && (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>GPU</div>
+            <MetricRow name="Utilization" value={gpu.util} unit="%" isMobile={m} />
+            <Bar percent={gpu.util} warn={70} crit={95} />
+            <MetricRow name="Temperature" value={gpu.temp} unit="°C" isMobile={m} />
+            <Bar percent={gpu.temp} warn={70} crit={85} />
+            <MetricRow name="Memory" value={gpu.mem} unit="%" isMobile={m} />
+            <Bar percent={gpu.mem} warn={80} crit={95} />
+          </div>
+        )}
 
-        {/* Ollama */}
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>Ollama</div>
-          <MetricRow name="CPU" value={ollama.cpu} unit="%" isMobile={m} />
-          <MetricRow name="RAM" value={ollama.ram_gb} unit="GB" isMobile={m} />
-        </div>
+        {/* Configured services */}
+        {Object.entries(services).map(([name, svc]) => (
+          <div key={name} style={styles.card}>
+            <div style={styles.cardTitle}>{name}</div>
+            <MetricRow name="CPU" value={svc.cpu} unit="%" isMobile={m} />
+            <MetricRow name="RAM" value={svc.ram_gb} unit="GB" isMobile={m} />
+          </div>
+        ))}
 
         {/* CPU */}
         <div style={styles.card}>
@@ -594,7 +601,7 @@ export default function Monitor({ isMobile }) {
 
               {!updates?.sudo_configured && (
                 <div style={{ fontSize: '11px', color: '#eab308', marginTop: '8px' }}>
-                  Passwordless sudo not configured. Run: scripts/setup-sudo.sh
+                  Passwordless sudo not configured. See docs/SETUP.md for instructions.
                 </div>
               )}
 
@@ -630,7 +637,7 @@ export default function Monitor({ isMobile }) {
             </div>
             <div style={styles.confirmDesc}>
               {confirming.needsReboot
-                ? 'This will restart the Spark. Save all work before proceeding.'
+                ? 'This will restart the system. Save all work before proceeding.'
                 : 'Update selected packages?'}
             </div>
             <div style={styles.confirmButtons}>

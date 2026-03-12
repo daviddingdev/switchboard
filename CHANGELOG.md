@@ -1,5 +1,30 @@
 # Orchestrator Changelog
 
+## 2026-03-13
+
+### Configurable System Monitor
+- **GPU auto-detection** — GPU card hidden when no GPU present (Mac Mini, headless servers). Configurable command for non-NVIDIA GPUs (e.g., AMD via rocm-smi).
+- **Configurable services** — `monitor.services` in config.yaml replaces hardcoded Ollama monitoring. Track any process by name (Postgres, Docker, Open WebUI, etc.). Each service gets its own card.
+- **Configurable disk path** — `monitor.disk_path` for monitoring a specific mount point (default: `/`).
+- **Platform-aware updates** — System updates card auto-hidden on macOS/Windows. Linux apt/snap updates work on any Debian/Ubuntu system.
+- **Generic API routes** — `/api/system/*` for updates. Platform dashboard label configurable via `spark.label` in config.
+- **Load average guard** — `psutil.getloadavg()` now guarded for platforms where it's unavailable.
+- **Portable config.yaml** — Comprehensive `config.yaml.example` with inline documentation covering GPU, services, disk, updates, and platform dashboard integration.
+
+### Tab Drag-and-Drop Reordering
+- **Draggable tabs** — All tab types (terminal, file, diff, monitor, usage) can be reordered via native HTML5 drag-and-drop.
+- **Visual feedback** — Dragged tab dims to 40% opacity, drop target shows accent-colored left border insertion indicator.
+- **Implementation** — `reorderTab` splice callback in App.jsx, local drag state in TabBar.jsx. No external libraries.
+
+### Usage Analytics — Time Range Selector + Lifetime Stats
+- **Time range pills** — `7d | 30d | 90d | 6m | 1y | All` selector in Usage header. Overview cards, charts, and token breakdown update to reflect selected range.
+- **SVG line chart** — Replaced horizontal bar chart with SVG line/area chart for time series data. Hover tooltips, grid lines, adaptive dot visibility. Bar chart retained for categorical data (by-project).
+- **Adaptive chart granularity** — Daily lines for 7d/30d, weekly for 90d, monthly for 6m/1y/All. Scales to years of data.
+- **Client-side aggregation** — `filterDailyByRange`, `aggregateToWeekly`, `aggregateToMonthly` compute from daily[] data. No backend changes needed.
+- **All-time context** — When sub-range selected, a compact all-time summary row shows lifetime stats for reference. By-project, by-model, and hourly heatmap always show all-time with label.
+- **Subagent sessions** — `compute-usage.py` now includes subagent session files (`*/subagents/*.jsonl`) in all counts. Session count increased from ~385 to ~608.
+- **Consistent overview stats** — Frontend always derives overview from daily[] data regardless of time range, fixing "All" showing fewer sessions than sub-ranges.
+
 ## 2026-03-12
 
 ### WebSocket Upgrade — Real-Time Push (Upgrade v2)
@@ -51,7 +76,7 @@ Replaced all polling with WebSocket push. REST retained for actions and initial 
 
 - **Filter synthetic model entries** — Rate-limit error responses from Claude Code use `<synthetic>` as the model name; these are now excluded from usage stats (`compute-usage.py`)
 - **Fix project name overlap in bar chart** — Widened label column for project names (100px vs 50px), added text truncation with hover tooltip (`Usage.jsx`)
-- **Historical Mac data** — Synced `~/.claude/projects/` from Mac to Spark for complete usage history
+- **Historical data merge** — Support merging `~/.claude/projects/` data from another machine for complete usage history
 
 ### Usage Analytics Tab
 
@@ -67,7 +92,7 @@ Replaced all polling with WebSocket push. REST retained for actions and initial 
 ### Multi-Instance Worker Spawning
 
 - **Auto-increment names** — Spawning a worker with an existing name now creates a new instance (e.g., partner, partner-2, partner-3) instead of returning a 409 error
-- **Session naming** — Workers now type the folder name + instance number as first message (e.g., "family-vault 1") so sessions have meaningful names in the Claude Code UI
+- **Session naming** — Workers now type the folder name + instance number as first message (e.g., "my-project 1") so sessions have meaningful names in the Claude Code UI
 - **Trust prompt detection** — Only sends "1" to confirm trust when the trust prompt is actually showing, preventing "1" from becoming the session name
 
 ### Mobile-Responsive UI Redesign
@@ -180,7 +205,7 @@ Replaced all polling with WebSocket push. REST retained for actions and initial 
 ### Documentation Improvements
 
 - **Removed end-of-session checklist from CLAUDE.md** — Orchestrator now handles doc updates at push time, workers don't need manual checklist
-- **Added `docs/NEW_PROJECT.md`** — Setup guide for creating new projects on Spark
+- **Added `docs/NEW_PROJECT.md`** — Setup guide for creating new projects
   - Git init, CLAUDE.md template, GitHub repo creation
   - Connect and push instructions
   - Common .gitignore template
@@ -314,7 +339,7 @@ Workers no longer need to update docs — this is handled at push time.
 
 - **Auto-discover projects** — Scans for directories with CLAUDE.md files instead of manual registry
   - `discover_projects()` recursively finds projects up to depth 3
-  - Shows `~/*.md` files (SOUL.md, INFRASTRUCTURE.md, WORKER.md) at root
+  - Shows `~/*.md` files at root level
   - Projects appear as collapsible folders below
 - **Git status indicators** — Files show status badges:
   - `M` (yellow) = modified
@@ -428,7 +453,7 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-### Partner Orchestration + SOUL Integration
+### Worker Orchestration CLI
 
 - **Created `scripts/orch`** — CLI helper for partner automation:
   - `orch spawn <name> <dir>` — Spawn worker in directory
@@ -445,14 +470,11 @@ cp state/projects.example.yaml state/projects.yaml
   - Added `POST /api/plans` — Create plans with auto_approve support
   - Fixed datetime sorting bug in list_plans
 - **Updated `CLAUDE.md`**:
-  - Added SOUL.md/INFRASTRUCTURE.md header
+  - Added shared context header
   - Added Partner Orchestration section with commands and workflows
   - Added worker shutdown protocol
-- **Updated `~/SOUL.md` and `~/INFRASTRUCTURE.md`** — Shared context files
-- **Updated all project CLAUDE.md files** with SOUL header:
-  - `~/orchestrator/CLAUDE.md` ✓
-  - `~/family-vault/CLAUDE.md` ✓
-  - `~/services/research-pipeline/CLAUDE.md` ✓
+- **Updated shared context files** for cross-project use
+- **Updated all project CLAUDE.md files** with SOUL header
 
 **Partner can now:**
 1. Spawn workers using `orch spawn`
@@ -540,7 +562,7 @@ cp state/projects.example.yaml state/projects.yaml
 **All automated verification tests passed:**
 1. Dev server starts at :3000
 2. API proxy works (/api/processes via :3000)
-3. UI accessible from Mac via Tailscale
+3. UI accessible from remote device
 
 ---
 
@@ -566,12 +588,9 @@ cp state/projects.example.yaml state/projects.yaml
   - `GET /api/processes/<name>/output` — Capture worker output
 - **All 11 verification tests passed**
 
-**Infrastructure notes discovered:**
-- Port 5000: Family Vault API (`~/family-vault/api_server.py`)
+**Infrastructure notes:**
 - Port 5001: Orchestrator API (this project)
-- Port 8080: Open WebUI
-- Port 11434: Ollama
-- Port 9200: OpenSearch
+- Check for port conflicts with existing services before starting
 
 ---
 
@@ -579,7 +598,7 @@ cp state/projects.example.yaml state/projects.yaml
 
 ### Project Initialized
 
-- **Created directory structure** on Spark (`~/orchestrator/`)
+- **Created directory structure** (`~/orchestrator/`)
   - `docs/` — architecture, chat summary, mockups
   - `state/` — processes.yaml, plans/
   - `api/` — Flask backend (to build)

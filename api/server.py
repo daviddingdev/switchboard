@@ -554,7 +554,7 @@ def list_projects():
 def get_home_tree():
     """
     Get home directory tree showing:
-    - Root-level .md files (SOUL.md, INFRASTRUCTURE.md, etc.)
+    - Root-level .md files (CLAUDE.md, README.md, etc.)
     - Only directories that are projects (have CLAUDE.md)
     """
     home_dir = os.path.expanduser('~')
@@ -591,7 +591,7 @@ def get_home_tree():
         children = build_file_tree(proj_dir, git_status=git_status, base_dir=proj_dir)
         has_changes = any(c.get('status') or c.get('has_changes') for c in children)
 
-        # Get relative path from home (e.g., "services/research-pipeline" or just "orchestrator")
+        # Get relative path from home (e.g., "projects/my-app" or just "my-project")
         rel_path = os.path.relpath(proj_dir, home_dir)
         parts = rel_path.split(os.sep)
 
@@ -606,7 +606,7 @@ def get_home_tree():
                 'children': children
             })
         else:
-            # Nested (e.g., ~/services/research-pipeline)
+            # Nested (e.g., ~/projects/my-app)
             # Find or create parent directories
             parent_name = parts[0]
             existing_parent = next((r for r in result if r['name'] == parent_name and r['type'] == 'dir'), None)
@@ -637,7 +637,7 @@ def get_home_tree():
             if has_changes:
                 existing_parent['has_changes'] = True
 
-    # Sort: files first (SOUL.md etc.), then directories
+    # Sort: files first (.md files etc.), then directories
     result.sort(key=lambda x: (0 if x['type'] == 'file' else 1, x['name'].lower()))
 
     return jsonify({
@@ -1373,11 +1373,15 @@ _prev_time = None
 
 
 def _gpu_metrics():
-    """Read GPU metrics via nvidia-smi."""
+    """Read GPU metrics via configured command (default: nvidia-smi)."""
+    gpu_cfg = CONFIG.get('monitor', {}).get('gpu', {})
+    if gpu_cfg.get('enabled') is False:
+        return None
+    cmd = gpu_cfg.get('command', 'nvidia-smi')
+    args = gpu_cfg.get('args', '--query-gpu=utilization.gpu,temperature.gpu,utilization.memory --format=csv,noheader,nounits')
     try:
         out = subprocess.run(
-            ['nvidia-smi', '--query-gpu=utilization.gpu,temperature.gpu,utilization.memory',
-             '--format=csv,noheader,nounits'],
+            [cmd] + args.split(),
             capture_output=True, text=True, timeout=3
         )
         if out.returncode == 0:
@@ -1388,16 +1392,26 @@ def _gpu_metrics():
     return {'util': None, 'temp': None, 'mem': None}
 
 
-def _ollama_metrics():
-    """Read Ollama process metrics via psutil."""
-    for p in psutil.process_iter(['name', 'cpu_percent', 'memory_info']):
-        try:
-            if p.info['name'] and 'ollama' in p.info['name'].lower():
-                rss = p.info['memory_info'].rss if p.info['memory_info'] else 0
-                return {'cpu': round(p.info['cpu_percent'] or 0), 'ram_gb': round(rss / 1e9, 1)}
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return {'cpu': None, 'ram_gb': None}
+def _service_metrics():
+    """Read metrics for configured services (processes monitored by name)."""
+    services_cfg = CONFIG.get('monitor', {}).get('services', [{'name': 'Ollama', 'process': 'ollama'}])
+    results = {}
+    for svc in services_cfg:
+        proc_name = svc.get('process', '').lower()
+        label = svc.get('name', proc_name)
+        found = False
+        for p in psutil.process_iter(['name', 'cpu_percent', 'memory_info']):
+            try:
+                if p.info['name'] and proc_name in p.info['name'].lower():
+                    rss = p.info['memory_info'].rss if p.info['memory_info'] else 0
+                    results[label] = {'cpu': round(p.info['cpu_percent'] or 0), 'ram_gb': round(rss / 1e9, 1)}
+                    found = True
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if not found:
+            results[label] = {'cpu': None, 'ram_gb': None}
+    return results
 
 
 def _get_metrics_data():
@@ -1408,10 +1422,10 @@ def _get_metrics_data():
     now = _time.time()
     result = {
         'gpu': _gpu_metrics(),
-        'ollama': _ollama_metrics(),
+        'services': _service_metrics(),
         'cpu': {
             'usage': round(psutil.cpu_percent()),
-            'load': round(psutil.getloadavg()[0], 2),
+            'load': round(psutil.getloadavg()[0], 2) if hasattr(psutil, 'getloadavg') else None,
         },
         'memory': {
             'used_gb': round(psutil.virtual_memory().used / 1e9, 1),
@@ -1421,7 +1435,7 @@ def _get_metrics_data():
         'disk': {
             'read_mbs': None,
             'write_mbs': None,
-            'space_pct': round(psutil.disk_usage('/').percent),
+            'space_pct': round(psutil.disk_usage(CONFIG.get('monitor', {}).get('disk_path', '/')).percent),
         },
         'system': {
             'uptime_secs': round(now - psutil.boot_time()),
@@ -1454,26 +1468,30 @@ def system_metrics():
     return jsonify(_get_metrics_data())
 
 
-# --- Spark System Updates ---
+# --- Platform Dashboard Integration (optional) ---
 
-class SparkClient:
-    """Proxy client for DGX Spark dashboard API with token caching."""
+class PlatformClient:
+    """Proxy client for platform dashboard API with token caching.
+
+    Connects to a management dashboard (configured via 'spark' key in config.yaml)
+    that provides system-level updates and reboot capabilities.
+    """
 
     def __init__(self):
         self._token = None
 
-    def _get_spark_config(self):
-        """Get spark config from global CONFIG."""
+    def _get_config(self):
+        """Get platform config from global CONFIG."""
         return CONFIG.get('spark', {})
 
     @property
     def configured(self):
-        cfg = self._get_spark_config()
+        cfg = self._get_config()
         return bool(cfg.get('url') and cfg.get('username') and cfg.get('password'))
 
     def _login(self):
         """Authenticate and cache bearer token."""
-        cfg = self._get_spark_config()
+        cfg = self._get_config()
         resp = http_requests.post(
             f"{cfg['url']}/api/login",
             json={'username': cfg['username'], 'password': cfg['password']},
@@ -1484,7 +1502,7 @@ class SparkClient:
 
     def _request(self, method, path, **kwargs):
         """Make authenticated request, auto-retry on 401."""
-        cfg = self._get_spark_config()
+        cfg = self._get_config()
         if not self.configured:
             return None
         url = f"{cfg['url']}/api/v1{path}"
@@ -1509,7 +1527,7 @@ class SparkClient:
         return self._request('POST', '/update_reboot')
 
 
-_spark = SparkClient()
+_platform = PlatformClient()
 _update_proc = None  # Track background update subprocess
 _update_status = {'running': False, 'category': None, 'error': None}
 
@@ -1572,15 +1590,15 @@ def _parse_snap_updates():
 def _categorize_apt_packages(packages):
     """Sort apt packages into categories."""
     import re
-    # Match nvidia-related packages using word-boundary-aware patterns
-    nvidia_pattern = re.compile(
+    # Match GPU-related packages (NVIDIA ecosystem)
+    gpu_pattern = re.compile(
         r'(nvidia|cuda-|cudnn|jetpack|tegra|tensorrt|nccl|'
         r'(?:^|[-_])l4t(?:[-_]|$))', re.I
     )
     firmware_keywords = {'firmware', 'linux-firmware'}
 
     categories = {
-        'nvidia': {'name': 'NVIDIA Packages', 'packages': [], 'requires_reboot': True},
+        'gpu': {'name': 'GPU Packages', 'packages': [], 'requires_reboot': True},
         'firmware': {'name': 'Firmware', 'packages': [], 'requires_reboot': True},
         'system': {'name': 'System Packages', 'packages': [], 'requires_reboot': False},
     }
@@ -1589,8 +1607,8 @@ def _categorize_apt_packages(packages):
         name_lower = pkg['name'].lower()
         if any(kw in name_lower for kw in firmware_keywords):
             categories['firmware']['packages'].append(pkg)
-        elif nvidia_pattern.search(name_lower):
-            categories['nvidia']['packages'].append(pkg)
+        elif gpu_pattern.search(name_lower):
+            categories['gpu']['packages'].append(pkg)
         else:
             categories['system']['packages'].append(pkg)
 
@@ -1611,25 +1629,25 @@ def _check_sudoers_setup():
         return False
 
 
-@app.route('/api/spark/updates')
-def spark_updates():
-    """Return categorized available updates from apt, snap, and Spark platform."""
+@app.route('/api/system/updates')
+def system_updates():
+    """Return categorized available updates from apt, snap, and platform dashboard."""
     apt_pkgs = _parse_apt_updates()
     apt_cats = _categorize_apt_packages(apt_pkgs)
     snap_pkgs = _parse_snap_updates()
 
-    # Check Spark platform update
+    # Check platform dashboard update
     platform_available = False
-    spark_error = None
-    if _spark.configured:
+    platform_error = None
+    if _platform.configured:
         try:
-            data = _spark.get_updates()
+            data = _platform.get_updates()
             platform_available = (data or {}).get('available', False)
         except Exception:
-            spark_error = 'Failed to reach Spark dashboard'
+            platform_error = 'Failed to reach platform dashboard'
 
     categories = []
-    for cat_id in ['system', 'nvidia', 'firmware']:
+    for cat_id in ['system', 'gpu', 'firmware']:
         cat = apt_cats[cat_id]
         if cat['packages']:
             categories.append({
@@ -1651,12 +1669,12 @@ def spark_updates():
 
     categories.append({
         'id': 'platform',
-        'name': 'Spark Platform',
+        'name': CONFIG.get('spark', {}).get('label', 'Platform Update'),
         'count': 1 if platform_available else 0,
         'packages': [],
         'requires_reboot': True,
         'available': platform_available,
-        'error': spark_error,
+        'error': platform_error,
     })
 
     sudo_ok = _check_sudoers_setup()
@@ -1666,12 +1684,12 @@ def spark_updates():
         'categories': categories,
         'update_status': _update_status,
         'sudo_configured': sudo_ok,
-        'supported': is_linux or _spark.configured,
+        'supported': is_linux or _platform.configured,
     })
 
 
-@app.route('/api/spark/update', methods=['POST'])
-def spark_trigger_update():
+@app.route('/api/system/update', methods=['POST'])
+def system_trigger_update():
     """Trigger updates for selected categories."""
     global _update_proc, _update_status
 
@@ -1684,14 +1702,14 @@ def spark_trigger_update():
     if not categories:
         return jsonify({'error': 'No categories specified'}), 400
 
-    # Platform update goes through Spark dashboard API
+    # Platform update goes through dashboard API
     if 'platform' in categories:
-        if not _spark.configured:
-            return jsonify({'error': 'Spark not configured'}), 400
+        if not _platform.configured:
+            return jsonify({'error': 'Platform dashboard not configured'}), 400
         try:
             with _update_lock:
                 _update_status = {'running': True, 'category': 'platform', 'error': None}
-            _spark.trigger_update()
+            _platform.trigger_update()
             return jsonify({'status': 'started', 'category': 'platform',
                             'note': 'System will reboot shortly'})
         except Exception as e:
@@ -1703,7 +1721,7 @@ def spark_trigger_update():
     cmd_lists = []
     cat_names = []
 
-    apt_cats_needed = [c for c in categories if c in ('system', 'nvidia', 'firmware')]
+    apt_cats_needed = [c for c in categories if c in ('system', 'gpu', 'firmware')]
     if apt_cats_needed:
         # Get the specific packages for requested categories
         apt_pkgs = _parse_apt_updates()

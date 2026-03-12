@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const styles = {
   container: {
     display: 'flex',
@@ -19,6 +21,7 @@ const styles = {
     background: 'var(--bg-secondary)',
     flexShrink: 0,
     maxWidth: '180px',
+    userSelect: 'none',
   },
   tabActive: {
     background: 'var(--bg-primary)',
@@ -57,15 +60,53 @@ const styles = {
   },
 }
 
-export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
+export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTabReorder }) {
+  const [dragIndex, setDragIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
+
+  const handleDragStart = (e, index) => {
+    setDragIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (index !== dragOverIndex) setDragOverIndex(index)
+  }
+
+  const handleDrop = (e, index) => {
+    e.preventDefault()
+    if (dragIndex !== null && dragIndex !== index) {
+      onTabReorder(dragIndex, index)
+    }
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }
+
   return (
     <div style={styles.container}>
-      {tabs.map(tab => (
+      {tabs.map((tab, index) => (
         <div
           key={tab.id}
+          draggable
+          onDragStart={(e) => handleDragStart(e, index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDrop={(e) => handleDrop(e, index)}
+          onDragEnd={handleDragEnd}
           style={{
             ...styles.tab,
             ...(activeTab === tab.id ? styles.tabActive : {}),
+            ...(dragIndex === index ? { opacity: 0.4 } : {}),
+            ...(dragOverIndex === index && dragIndex !== null && dragIndex !== index
+              ? { borderLeft: '2px solid var(--accent)' }
+              : {}),
           }}
           onClick={() => onTabSelect(tab.id)}
         >

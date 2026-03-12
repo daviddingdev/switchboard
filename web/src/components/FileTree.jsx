@@ -115,9 +115,6 @@ function FileItem({ item, depth = 0, onFileSelect, isMobile }) {
       if (item.is_project) return expanded ? '📂' : '📁'
       return expanded ? '📂' : '📁'
     }
-    if (item.name === 'SOUL.md') return '✨'
-    if (item.name === 'INFRASTRUCTURE.md') return '🏗️'
-    if (item.name === 'WORKER.md') return '👷'
     if (item.name === 'CLAUDE.md') return '🤖'
     if (item.name.endsWith('.md')) return '📝'
     if (item.name.endsWith('.py')) return '🐍'

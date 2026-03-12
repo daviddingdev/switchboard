@@ -195,16 +195,16 @@ export async function fetchMetrics() {
   return res.json();
 }
 
-// Spark system updates
+// System updates
 
-export async function fetchSparkUpdates() {
-  const res = await fetch(`${API_BASE}/spark/updates`);
-  if (!res.ok) throw new Error(`Failed to fetch spark updates: ${res.status}`);
+export async function fetchSystemUpdates() {
+  const res = await fetch(`${API_BASE}/system/updates`);
+  if (!res.ok) throw new Error(`Failed to fetch system updates: ${res.status}`);
   return res.json();
 }
 
-export async function triggerSparkUpdate(categories) {
-  const res = await fetch(`${API_BASE}/spark/update`, {
+export async function triggerSystemUpdate(categories) {
+  const res = await fetch(`${API_BASE}/system/update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ categories }),

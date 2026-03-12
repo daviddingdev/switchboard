@@ -264,6 +264,16 @@ export default function App() {
     })
   }, [])
 
+  const reorderTab = useCallback((fromIndex, toIndex) => {
+    setTabs(prev => {
+      if (fromIndex === toIndex) return prev
+      const next = [...prev]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
+    })
+  }, [])
+
   // --- File/diff opening ---
 
   const handleFileSelect = useCallback((file) => {
@@ -515,6 +525,7 @@ export default function App() {
               activeTab={activeTabId}
               onTabSelect={setActiveTabId}
               onTabClose={closeTab}
+              onTabReorder={reorderTab}
             />
           )}
           <div style={desktopStyles.previewContent}>

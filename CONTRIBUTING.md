@@ -5,7 +5,7 @@ Thanks for your interest in Orchestrator! This guide covers how to set up, devel
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/orchestrator.git
+git clone https://github.com/dingod/orchestrator.git
 cd orchestrator
 ./setup.sh        # installs Python + Node dependencies
 ./start.sh        # starts API + web dev server

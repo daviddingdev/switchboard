@@ -308,14 +308,17 @@ def compute_all():
 
     for proj_dir in sorted(project_dirs):
         proj_name = dir_name_to_project(proj_dir.name)
+        # Include both direct sessions and subagent sessions
         jsonl_files = list(proj_dir.glob("*.jsonl"))
+        subagent_files = list(proj_dir.glob("*/subagents/*.jsonl"))
+        all_files = jsonl_files + subagent_files
 
-        if not jsonl_files:
+        if not all_files:
             continue
 
-        print(f"  {proj_name}: {len(jsonl_files)} sessions", end='')
+        print(f"  {proj_name}: {len(jsonl_files)} sessions + {len(subagent_files)} subagents", end='')
 
-        for jsonl_path in jsonl_files:
+        for jsonl_path in all_files:
             session_id = jsonl_path.stem
 
             # Skip subagent dirs (they're directories, not files)
