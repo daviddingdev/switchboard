@@ -3,50 +3,44 @@
 ## Overview
 
 Orchestrator manages Claude Code worker sessions
-across projects. Three interfaces:
-
-- **Web UI** — `localhost:3000` (desktop + mobile)
-- **Telegram bot** — remote control from phone
-- **CLI** — `scripts/orch` for shell access
-
-All talk to the **Flask API** on port 5001,
+across projects via a **Web UI** on `localhost:3000`
+backed by a **Flask API** on port 5001,
 which manages workers via **tmux**.
 
+Optional integrations (Telegram bot, hooks) live
+in `contrib/`.
+
 ```
-┌──────────┐  ┌──────────┐  ┌──────┐
-│  Web UI  │  │ Telegram │  │ CLI  │
-└────┬─────┘  └────┬─────┘  └──┬───┘
-     │             │            │
-     └──────┬──────┴────────────┘
-            │ HTTP
-     ┌──────┴──────┐
-     │  Flask API  │  :5001
-     │  server.py  │
-     └──────┬──────┘
-            │ subprocess
-     ┌──────┴──────┐
-     │    tmux     │  socket: orchestrator
-     │  manager    │
-     └──────┬──────┘
-            │ windows
-    ┌───────┼───────┐
-    │       │       │
-  partner worker1 worker2 ...
-  (claude) (claude) (claude)
+┌──────────┐
+│  Web UI  │  :3000
+└────┬─────┘
+     │ HTTP
+┌────┴──────┐
+│ Flask API │  :5001
+│ server.py │
+└────┬──────┘
+     │ subprocess
+┌────┴──────┐
+│   tmux    │  socket: orchestrator
+│  manager  │
+└────┬──────┘
+     │ windows
+ ┌───┼───┐
+ │   │   │
+ w1  w2  w3 ...
 ```
 
 ## Startup / Shutdown
 
 ```bash
-./start.sh    # tmux session + API + web dev server
+./start.sh    # API + web dev server
 ./stop.sh     # kills API + web (leaves tmux alive)
 ```
 
 start.sh sequence:
-1. Create tmux session `orchestrator` (if missing)
-2. Start partner window running `claude`
-3. Launch API → `logs/api.log`, PID → `logs/api.pid`
-4. Launch web → `logs/web.log`, PID → `logs/web.pid`
+1. Launch API → `logs/api.log`, PID → `logs/api.pid`
+2. Launch web → `logs/web.log`, PID → `logs/web.pid`
+3. tmux session created lazily on first worker spawn
 
 To fully kill tmux:
 ```bash
@@ -125,14 +119,11 @@ all projects. Polled every 3s by web UI.
 Flow: load context → update CHANGELOG/TODO
 via `claude -p` → commit doc changes → push.
 
-### Partner & Context
+### Workers & Context
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/workers/usage` | Token counts, context % |
-| GET | `/partner/history` | Conversation messages |
-| POST | `/partner/reset` | Soft reset (Ctrl-C + restart) |
-| POST | `/partner/hard-reset` | Kill window + recreate |
 
 **Usage** parses Claude session JSONL files.
 Context % = (input + cache_read) / 200k.
@@ -154,16 +145,20 @@ Session: `orchestrator`.
 
 ### spawn_worker(name, directory, session_label)
 
+Fast path (returns immediately):
 1. Expand `~` in directory
 2. Rotate existing log → `name-timestamp.log`
 3. Create tmux window: `new-window -n {name} -c {dir}`
 4. Set `history-limit 50000`
 5. Pipe output → `logs/workers/{name}.log`
 6. Send `unset CLAUDECODE && claude`
-7. Wait 2s for Claude to start
-8. Auto-confirm trust prompt if present
-9. Send session label
-10. Return `{name, directory, status, pid, log_file}`
+7. Return `{name, directory, status, pid, log_file}`
+
+Background setup (via `setup_worker` in thread):
+8. Wait for Claude prompt
+9. Auto-confirm trust prompt if present
+10. Send session label
+11. Enable remote control (`/rc`)
 
 ### Other Functions
 
@@ -210,7 +205,7 @@ proxies `/api` to :5001.
 ### Tab System
 
 Tab IDs: `file:<path>`, `diff:<project>:<path>`,
-`monitor`, `push`, `commit`, `history`.
+`terminal:<name>`, `monitor`.
 
 Clicking a file opens a tab (desktop) or
 full-screen overlay (mobile).
@@ -220,20 +215,16 @@ full-screen overlay (mobile).
 | Component | What it does |
 |-----------|-------------|
 | WorkerDashboard | Worker cards, spawn button, quick actions |
-| WorkerList | Individual worker detail + kill/send |
 | FileTree | Project browser with git status badges |
 | Activity | Proposals + changed files + unpushed commits |
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
+| TerminalView | Raw tmux output viewer (per worker) |
 | Monitor | System metrics (GPU, CPU, memory) |
 | TabBar | Tab switching + close buttons |
 | SpawnDialog | Name + directory form for new workers |
 | MobileNav | Bottom navigation bar |
-| PushPanel | Multi-step push workflow |
-| CommitPanel | Stage + commit with message |
-| PartnerHistory | Filtered conversation viewer |
-| QuickActions | 1-4, Y/N, Enter, Esc, Plan buttons |
-| ChatInput | Text input for worker messages |
+| ErrorBoundary | Crash recovery with reload button |
 
 ### Polling
 
@@ -244,69 +235,10 @@ full-screen overlay (mobile).
 | Activity | 3s | `/activity` |
 | Files | 5s | `/home` |
 | Metrics | 2s | `/metrics` |
-| History | 5s | `/partner/history` |
+| Terminal | 1s | `/processes/<name>/output` |
 
 Each component manages its own `setInterval`.
 No centralized state or WebSocket.
-
----
-
-## Telegram Bot
-
-`bot/telegram_bot.py` — async Python bot
-using python-telegram-bot library.
-
-### Config (`bot/config.env`)
-
-```
-TELEGRAM_BOT_TOKEN=...
-ALLOWED_USER_ID=...
-API_URL=http://localhost:5001
-OLLAMA_URL=http://localhost:11434
-CONTEXT_WARN_PCT=80
-CONTEXT_COMPACT_PCT=90
-CONTEXT_CHECK_INTERVAL=300
-RESPONSE_POLL_TIMEOUT=90
-```
-
-### Commands
-
-| Command | Action |
-|---------|--------|
-| `/status` | Health + worker summary |
-| `/workers` | Cards with context bars |
-| `/spawn <name> <dir>` | Spawn + auto /rc |
-| `/kill <name>` | End-of-session → kill (60s) |
-| `/kill_now <name>` | Immediate kill |
-| `/send <name> <msg>` | Send to worker |
-| `/output <name>` | Recent terminal lines |
-| `/proposals` | List with approve/reject buttons |
-| `/approve <id>` | Approve proposal |
-| `/reject <id>` | Reject proposal |
-| `/ask <question>` | Route to Ollama |
-| `/reset` | Soft reset partner |
-| `/compact [name]` | Compact context |
-| `/restart <name>` | Kill + respawn + /rc |
-| `/last [n]` | Last N terminal lines |
-| `/p` | Quick worker picker |
-| `/conversation` | Enter conversation mode |
-| `/later <time> <cmd>` | Schedule command |
-| `/dashboard` | Live metrics |
-| *(plain text)* | Send to partner |
-
-### Background Tasks
-
-- **Context health** — every 5min, warn at 80%,
-  auto-compact at 90%
-- **Proposal polling** — notify on new proposals
-- **Scheduled commands** — execute queued `/later`
-- **Conversation mode** — route text to partner
-
-### Hooks
-
-`hooks/notify-telegram.sh` — standalone script,
-no bot process needed. Fires on Claude Code
-Stop + Notification events via direct Bot API curl.
 
 ---
 
@@ -330,8 +262,7 @@ No manual registration needed.
 `discover_projects()` scans `~` for directories
 containing `CLAUDE.md` (max depth 3).
 
-`/api/home` also shows root-level `~/*.md` files
-(SOUL.md, INFRASTRUCTURE.md, WORKER.md).
+`/api/home` also shows root-level `~/*.md` files.
 
 ### Proposal Lifecycle
 
@@ -349,12 +280,17 @@ Worker submits POST /api/proposals
 
 - **No WebSocket** — polling only, upgrade later
 - **No auth on web** — localhost assumption
-- **Single Telegram user** — ALLOWED_USER_ID gate
 - **File-based state** — YAML/JSON, git-friendly
 - **tmux named socket** — `-L orchestrator`
+- **Lazy session creation** — tmux session created
+  on first worker spawn, not at startup
+- **Async spawn** — window creation returns immediately,
+  setup (trust, label, RC) runs in background thread
 - **CLAUDECODE env stripping** — prevents nested
   session detection errors in spawned workers
 - **Log rotation** — old log renamed on spawn,
   fresh log for current session
 - **Auto-trust** — spawn detects trust prompt
-  and auto-confirms after 2s delay
+  and auto-confirms
+- **Error boundary** — React crash recovery with
+  reload button, prevents white screen

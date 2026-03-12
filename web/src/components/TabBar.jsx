@@ -72,7 +72,7 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose }) {
           <span style={{
             ...styles.tabIcon,
             ...(tab.type === 'terminal' ? styles.tabIconTerminal : {}),
-            ...(tab.type === 'diff' ? { color: 'var(--warning)' } : {}),
+            ...(tab.type === 'diff' ? { color: '#eab308' } : {}),
             ...(tab.type === 'push' ? { color: 'var(--accent)' } : {}),
             ...(tab.type === 'commit' ? { color: 'var(--success)' } : {}),
             ...(tab.type === 'preview' ? { color: 'var(--accent)' } : {})

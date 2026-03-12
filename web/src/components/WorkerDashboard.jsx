@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage } from '../api'
+import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage, fetchModels } from '../api'
 
 const styles = {
   container: {
@@ -64,7 +64,7 @@ const styles = {
     borderRadius: '8px',
     padding: '12px 14px',
     minWidth: '180px',
-    maxWidth: '260px',
+    maxWidth: '280px',
     flex: '1 1 180px',
   },
   cardMobile: {
@@ -164,23 +164,25 @@ const styles = {
   },
   actions: {
     display: 'flex',
-    gap: '6px',
+    gap: '4px',
+    flexWrap: 'wrap',
   },
   actionsMobile: {
     display: 'flex',
     gap: '8px',
   },
   actionBtn: {
-    flex: 1,
+    flex: '1 1 auto',
     background: 'var(--bg-tertiary)',
     color: 'var(--text-primary)',
     border: '1px solid var(--border)',
     borderRadius: '4px',
-    padding: '5px 8px',
+    padding: '5px 6px',
     fontSize: '11px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.1s',
+    whiteSpace: 'nowrap',
   },
   actionBtnMobile: {
     flex: 1,
@@ -299,9 +301,10 @@ function getUsageColor(pct) {
   return '#22c55e'
 }
 
-export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage }) {
+export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal }) {
   const [workers, setWorkers] = useState([])
   const [usage, setUsage] = useState({})
+  const [modelLabels, setModelLabels] = useState({})
   const [acting, setActing] = useState(null)
   const [confirming, setConfirming] = useState(null) // { name, action } awaiting confirmation
 
@@ -330,6 +333,13 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
   useEffect(() => {
     loadWorkers()
     loadUsage()
+    fetchModels()
+      .then(data => {
+        const map = {}
+        for (const m of data.models || []) map[m.id] = m.label
+        setModelLabels(map)
+      })
+      .catch(() => {})
     const workerInterval = setInterval(loadWorkers, 2000)
     const usageInterval = setInterval(loadUsage, 5000)
     return () => {
@@ -429,7 +439,19 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                       background: worker.pid ? '#22c55e' : '#6b7280',
                     }}
                   />
-                  <span style={m ? styles.nameMobile : styles.name}>{worker.name}</span>
+                  <span style={m ? styles.nameMobile : styles.name}>
+                    {worker.name}
+                    {worker.model && (
+                      <span style={{
+                        fontSize: m ? '11px' : '10px',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 400,
+                        marginLeft: '6px',
+                      }}>
+                        ({modelLabels[worker.model] || worker.model})
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 {worker.directory && (
@@ -454,6 +476,14 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                 </div>
 
                 <div style={m ? styles.actionsMobile : styles.actions}>
+                  {!m && onTerminal && (
+                    <button
+                      style={styles.actionBtn}
+                      onClick={() => onTerminal(worker.name)}
+                    >
+                      Term
+                    </button>
+                  )}
                   {['rc', 'compact', 'reset', 'kill'].map(action => {
                     const key = `${worker.name}:${action}`
                     const isActing = acting === key

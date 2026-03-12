@@ -1,14 +1,14 @@
 const styles = {
   container: {
     position: 'fixed',
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
+    zIndex: 50,
     background: 'var(--bg-secondary)',
     borderTop: '1px solid var(--border)',
     display: 'flex',
     alignItems: 'stretch',
-    zIndex: 50,
     paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   },
   tab: {

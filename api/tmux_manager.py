@@ -7,6 +7,7 @@ allowing multiple Claude Code workers to run in parallel.
 
 import subprocess
 import os
+import re
 import time
 from datetime import datetime
 
@@ -93,12 +94,12 @@ def list_windows() -> list[dict]:
     return windows
 
 
-def spawn_worker(name: str, directory: str, session_label: str = None, enable_rc: bool = True) -> dict:
+def spawn_worker(name: str, directory: str, session_label: str = None, enable_rc: bool = True, model: str = None) -> dict:
     """
     Spawn a new Claude Code worker in a tmux window.
 
-    Creates the tmux session if it doesn't exist. Waits for Claude to be
-    ready before sending session label and /rc (readiness-based, not blind sleep).
+    Creates the tmux window and starts Claude Code immediately (fast),
+    then configures the session (wait for prompt, label, RC) in the background.
 
     Args:
         name: Window name for the worker
@@ -131,7 +132,7 @@ def spawn_worker(name: str, directory: str, session_label: str = None, enable_rc
     # Create window (and session if needed)
     if _session_exists():
         result = _run_tmux(
-            "new-window", "-t", SESSION_NAME, "-n", name, "-c", expanded_dir,
+            "new-window", "-t", f"{SESSION_NAME}:", "-n", name, "-c", expanded_dir,
             check=False
         )
     else:
@@ -149,46 +150,54 @@ def spawn_worker(name: str, directory: str, session_label: str = None, enable_rc
     _run_tmux("pipe-pane", "-t", f"{SESSION_NAME}:{name}", f"cat > {log_file}", check=False)
 
     # Start Claude Code
-    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "unset CLAUDECODE && claude", "Enter", check=False)
+    claude_cmd = "unset CLAUDECODE && claude"
+    if model:
+        claude_cmd += f" --model {model}"
+    _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", claude_cmd, "Enter", check=False)
 
-    # Wait for Claude to be ready (replaces blind sleep)
-    if not _wait_for_prompt(name, timeout=30):
-        # Fall back: Claude may have a trust prompt or be slow
-        time.sleep(2)
-
-    # Check if trust prompt is showing (only appears for new/untrusted directories)
-    output = capture_output(name, lines=20)
-    if 'trust' in output.lower():
-        # Auto-confirm trust prompt (select "1. Yes, I trust this folder")
-        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
-        time.sleep(0.2)
-        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
-        # Wait for Claude to be ready after trust confirmation
-        _wait_for_prompt(name, timeout=30)
-
-    # Send session label as first message (sets session name in Claude Code UI)
-    if session_label:
-        _run_tmux("send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", session_label, check=False)
-        time.sleep(0.1)
-        _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
-        # Wait for Claude to process the label and return to prompt
-        if enable_rc:
-            _wait_for_prompt(name, timeout=30)
-
-    # Enable remote control if requested
-    if enable_rc:
-        send_keys(name, '/rc', raw=False)
-
-    # Get the pane PID
+    # Get the pane PID (available immediately after window creation)
     pid = get_pane_pid(name)
 
     return {
         "name": name,
         "directory": expanded_dir,
-        "status": "running",
+        "status": "starting",
         "pid": pid,
         "log_file": log_file
     }
+
+
+def setup_worker(name: str, session_label: str = None, enable_rc: bool = True):
+    """
+    Configure a spawned worker (wait for prompt, handle trust, send label, enable RC).
+    Called in a background thread after spawn_worker returns.
+    """
+    try:
+        # Wait for Claude to be ready
+        if not _wait_for_prompt(name, timeout=30):
+            time.sleep(2)
+
+        # Check if trust prompt is showing
+        output = capture_output(name, lines=20)
+        if re.search(r'trust this (folder|directory|project|workspace)', output, re.IGNORECASE):
+            _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "1", check=False)
+            time.sleep(0.2)
+            _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
+            _wait_for_prompt(name, timeout=30)
+
+        # Send session label
+        if session_label:
+            _run_tmux("send-keys", "-l", "-t", f"{SESSION_NAME}:{name}", "--", session_label, check=False)
+            time.sleep(0.1)
+            _run_tmux("send-keys", "-t", f"{SESSION_NAME}:{name}", "Enter", check=False)
+            if enable_rc:
+                _wait_for_prompt(name, timeout=30)
+
+        # Enable remote control
+        if enable_rc:
+            send_keys(name, '/rc', raw=False)
+    except Exception:
+        pass  # Worker may have been killed during setup
 
 
 def kill_worker(name: str) -> bool:

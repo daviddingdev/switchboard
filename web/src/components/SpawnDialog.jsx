@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { spawnProcess, fetchProjects } from '../api'
+import { spawnProcess, fetchProjects, fetchModels } from '../api'
 
 const styles = {
   overlay: {
@@ -140,6 +140,8 @@ const styles = {
 
 export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
   const [projects, setProjects] = useState([])
+  const [models, setModels] = useState([])
+  const [model, setModel] = useState('')
   const [name, setName] = useState('')
   const [directory, setDirectory] = useState('')
   const [selectedProject, setSelectedProject] = useState(null)
@@ -149,6 +151,12 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
   useEffect(() => {
     fetchProjects()
       .then(data => setProjects(data))
+      .catch(() => {})
+    fetchModels()
+      .then(data => {
+        setModels(data.models || [])
+        setModel(data.default || '')
+      })
       .catch(() => {})
   }, [])
 
@@ -174,11 +182,11 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
     setError(null)
 
     try {
-      await spawnProcess(name.trim(), directory.trim())
+      await spawnProcess(name.trim(), directory.trim(), model || undefined)
       onSpawned()
+      onClose()
     } catch (err) {
       setError(err.message)
-    } finally {
       setLoading(false)
     }
   }
@@ -253,6 +261,20 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
             />
             <div style={styles.hint}>Where Claude Code will run</div>
           </div>
+          {models.length > 0 && (
+            <div style={styles.field}>
+              <label style={styles.label}>Model</label>
+              <select
+                style={{ ...styles.input, cursor: 'pointer' }}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                {models.map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {error && <div style={styles.error}>{error}</div>}
 

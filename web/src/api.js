@@ -6,11 +6,19 @@ export async function fetchProcesses() {
   return res.json();
 }
 
-export async function spawnProcess(name, directory) {
+export async function fetchModels() {
+  const res = await fetch(`${API_BASE}/models`);
+  if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+  return res.json();
+}
+
+export async function spawnProcess(name, directory, model) {
+  const body = { name, directory };
+  if (model) body.model = model;
   const res = await fetch(`${API_BASE}/processes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, directory })
+    body: JSON.stringify(body)
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

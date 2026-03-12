@@ -8,14 +8,17 @@ import os
 import platform
 import subprocess
 import json
+import re
+import logging
+import threading
 import glob as glob_module
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests as http_requests
 import yaml
 import psutil
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import tmux_manager as tmux
 
@@ -57,6 +60,16 @@ def load_config():
 
 
 CONFIG = load_config()
+logger = logging.getLogger(__name__)
+
+# Thread lock for update status
+_update_lock = threading.Lock()
+
+# Valid ID pattern for proposals and other user-supplied identifiers
+_SAFE_ID = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+# Track model per worker (in-memory, lost on API restart)
+_worker_models = {}
 
 # Serve built frontend if available
 STATIC_DIR = PROJECT_ROOT / 'web' / 'dist'
@@ -71,7 +84,9 @@ CORS(app)
 def index():
     """Serve frontend if built, otherwise show API info."""
     if STATIC_DIR.exists():
-        return app.send_static_file('index.html')
+        response = make_response(app.send_static_file('index.html'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
     return {
         "name": "Orchestrator API",
         "version": "0.5.0",
@@ -83,7 +98,9 @@ def index():
 def not_found(e):
     """Serve index.html for client-side routes, 404 for API routes."""
     if STATIC_DIR.exists() and not request.path.startswith('/api'):
-        return app.send_static_file('index.html')
+        response = make_response(app.send_static_file('index.html'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
     return {"error": "not found"}, 404
 
 
@@ -93,10 +110,21 @@ def health():
     return {"status": "ok", "session": tmux.ensure_session()}
 
 
+@app.route('/api/models')
+def list_models():
+    """Return available models from config."""
+    models = CONFIG.get('models', [])
+    default = CONFIG.get('default_model', '')
+    return jsonify({"models": models, "default": default})
+
+
 @app.route('/api/processes')
 def list_processes():
     """List all worker windows."""
     windows = tmux.list_windows()
+    for w in windows:
+        if w['name'] in _worker_models:
+            w['model'] = _worker_models[w['name']]
     return jsonify(windows)
 
 
@@ -106,6 +134,7 @@ def spawn_process():
     data = request.json or {}
     name = data.get('name')
     directory = data.get('directory', '~')
+    model = data.get('model')
 
     # Validation
     if not name:
@@ -127,7 +156,15 @@ def spawn_process():
     session_label = f"{folder_name} {instance_number}"
 
     try:
-        result = tmux.spawn_worker(actual_name, directory, session_label=session_label)
+        result = tmux.spawn_worker(actual_name, directory, session_label=session_label, model=model)
+        if model:
+            _worker_models[actual_name] = model
+        # Configure worker in background (wait for prompt, label, RC)
+        threading.Thread(
+            target=tmux.setup_worker,
+            args=(actual_name, session_label, True),
+            daemon=True
+        ).start()
         return jsonify(result), 201
     except ValueError as e:
         return {"error": str(e)}, 400
@@ -145,6 +182,7 @@ def kill_process(name):
 
     success = tmux.kill_worker(name)
     if success:
+        _worker_models.pop(name, None)
         return {"status": "killed"}
     return {"error": "failed to kill worker"}, 500
 
@@ -208,6 +246,10 @@ def create_proposal():
 
     if not proposal_id or not title:
         return {"error": "id and title required"}, 400
+    if not _SAFE_ID.match(proposal_id):
+        return {"error": "id must contain only alphanumeric, hyphen, underscore"}, 400
+    if not isinstance(steps, list):
+        return {"error": "steps must be a list"}, 400
 
     proposal = {
         'id': proposal_id,
@@ -216,7 +258,7 @@ def create_proposal():
         'steps': steps,
         'status': 'approved' if auto_approve else 'pending',
         'auto_approve': auto_approve,
-        'created_at': datetime.utcnow().isoformat() + 'Z'
+        'created_at': datetime.now(timezone.utc).isoformat()
     }
 
     PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
@@ -230,6 +272,8 @@ def create_proposal():
 @app.route('/api/proposals/<proposal_id>', methods=['PATCH'])
 def update_proposal(proposal_id):
     """Update a proposal's status."""
+    if not _SAFE_ID.match(proposal_id):
+        return {"error": "invalid proposal id"}, 400
     data = request.json or {}
     new_status = data.get('status')
 
@@ -257,6 +301,8 @@ def update_proposal(proposal_id):
 @app.route('/api/proposals/<proposal_id>', methods=['DELETE'])
 def delete_proposal(proposal_id):
     """Delete a proposal."""
+    if not _SAFE_ID.match(proposal_id):
+        return {"error": "invalid proposal id"}, 400
     proposal_file = PROPOSALS_DIR / f"{proposal_id}.yaml"
     if not proposal_file.exists():
         return {"error": "proposal not found"}, 404
@@ -716,8 +762,8 @@ def get_diff():
                             'path': file_path,
                             'status': 'untracked'
                         })
-                    except:
-                        pass
+                    except (UnicodeDecodeError, IOError):
+                        pass  # Binary or unreadable file, fall through to git diff
 
         return jsonify({
             'diff': result.stdout,
@@ -819,7 +865,7 @@ def get_doc_context():
                 )
                 if stat_result.returncode == 0:
                     diff_stat = stat_result.stdout.strip()
-            except:
+            except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
 
             # Look for worker log (current session)
@@ -831,7 +877,7 @@ def get_doc_context():
                         # Read last 500 lines max to keep context manageable
                         lines = f.readlines()
                         worker_log = ''.join(lines[-500:]) if len(lines) > 500 else ''.join(lines)
-                except:
+                except (IOError, OSError):
                     pass
 
             # Check for CHANGELOG.md and TODO.md
@@ -898,7 +944,7 @@ def update_docs():
             context_parts.append(stat_result.stdout.strip())
             context_parts.append("```")
             context_parts.append("")
-    except:
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         pass
 
     # Full diff (limited)
@@ -917,7 +963,7 @@ def update_docs():
             context_parts.append(diff_text)
             context_parts.append("```")
             context_parts.append("")
-    except:
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         pass
 
     # Worker log if available
@@ -932,7 +978,7 @@ def update_docs():
                     context_parts.append("```")
                     context_parts.append(log_text.strip())
                     context_parts.append("```")
-        except:
+        except (IOError, OSError):
             pass
 
     context = '\n'.join(context_parts)
@@ -1042,7 +1088,7 @@ def push_project():
                 remote, branch = 'origin', upstream
         else:
             remote, branch = 'origin', 'main'  # Fallback
-    except:
+    except (subprocess.TimeoutExpired, Exception):
         remote, branch = 'origin', 'main'
 
     # Push to the correct remote/branch
@@ -1605,8 +1651,9 @@ def spark_trigger_update():
     """Trigger updates for selected categories."""
     global _update_proc, _update_status
 
-    if _update_status['running']:
-        return jsonify({'error': 'Update already in progress'}), 409
+    with _update_lock:
+        if _update_status['running']:
+            return jsonify({'error': 'Update already in progress'}), 409
 
     data = request.get_json() or {}
     categories = data.get('categories', [])
@@ -1618,16 +1665,18 @@ def spark_trigger_update():
         if not _spark.configured:
             return jsonify({'error': 'Spark not configured'}), 400
         try:
-            _update_status = {'running': True, 'category': 'platform', 'error': None}
+            with _update_lock:
+                _update_status = {'running': True, 'category': 'platform', 'error': None}
             _spark.trigger_update()
             return jsonify({'status': 'started', 'category': 'platform',
                             'note': 'System will reboot shortly'})
         except Exception as e:
-            _update_status = {'running': False, 'category': None, 'error': str(e)}
+            with _update_lock:
+                _update_status = {'running': False, 'category': None, 'error': str(e)}
             return jsonify({'error': str(e)}), 502
 
-    # For apt/snap categories, build a script and run in background
-    cmds = []
+    # For apt/snap categories, build command lists and run in background
+    cmd_lists = []
     cat_names = []
 
     apt_cats_needed = [c for c in categories if c in ('system', 'nvidia', 'firmware')]
@@ -1640,44 +1689,56 @@ def spark_trigger_update():
             pkg_names.extend(p['name'] for p in apt_cats[cat_id]['packages'])
             cat_names.append(apt_cats[cat_id]['name'])
         if pkg_names:
-            cmds.append('sudo apt-get update -qq')
-            cmds.append(f"sudo apt-get upgrade -y {' '.join(pkg_names)}")
+            # Validate package names contain only safe characters
+            safe_pkg = re.compile(r'^[a-zA-Z0-9_.+:~-]+$')
+            pkg_names = [p for p in pkg_names if safe_pkg.match(p)]
+            if pkg_names:
+                cmd_lists.append(['sudo', 'apt-get', 'update', '-qq'])
+                cmd_lists.append(['sudo', 'apt-get', 'upgrade', '-y'] + pkg_names)
 
     if 'snap' in categories:
         snap_pkgs = _parse_snap_updates()
         snap_names = [s['name'] for s in snap_pkgs]
         cat_names.append('Snap Packages')
-        if snap_names:
-            for sn in snap_names:
-                cmds.append(f"sudo snap refresh {sn}")
+        safe_snap = re.compile(r'^[a-zA-Z0-9_-]+$')
+        for sn in snap_names:
+            if safe_snap.match(sn):
+                cmd_lists.append(['sudo', 'snap', 'refresh', sn])
 
-    if not cmds:
+    if not cmd_lists:
         return jsonify({'error': 'No packages to update'}), 400
 
     label = ', '.join(cat_names)
-    _update_status = {'running': True, 'category': label, 'error': None}
+    with _update_lock:
+        _update_status = {'running': True, 'category': label, 'error': None}
 
-    script = ' && '.join(cmds)
-    _update_proc = subprocess.Popen(
-        ['bash', '-c', script],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
-    )
+    # Chain commands: run each sequentially, stop on first failure
+    def _run_updates():
+        global _update_proc, _update_status
+        try:
+            for cmd in cmd_lists:
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+                )
+                _update_proc = proc
+                proc.wait()
+                if proc.returncode != 0:
+                    stderr = ''
+                    try:
+                        stderr = proc.stderr.read().decode('utf-8', errors='replace')[-200:]
+                    except Exception:
+                        pass
+                    with _update_lock:
+                        _update_status = {'running': False, 'category': None,
+                                          'error': f'Update failed (exit {proc.returncode}): {stderr}'}
+                    return
+            with _update_lock:
+                _update_status = {'running': False, 'category': None, 'error': None}
+        except Exception as e:
+            with _update_lock:
+                _update_status = {'running': False, 'category': None, 'error': str(e)}
 
-    # Monitor in a thread
-    import threading
-
-    def _watch():
-        global _update_status
-        proc = _update_proc
-        proc.wait()
-        if proc.returncode == 0:
-            _update_status = {'running': False, 'category': None, 'error': None}
-        else:
-            stderr = proc.stderr.read().decode()[-200:] if proc.stderr else ''
-            _update_status = {'running': False, 'category': None,
-                              'error': f'Update failed (exit {proc.returncode}): {stderr}'}
-
-    threading.Thread(target=_watch, daemon=True).start()
+    threading.Thread(target=_run_updates, daemon=True).start()
 
     return jsonify({'status': 'started', 'categories': categories})
 
@@ -1747,10 +1808,12 @@ def refresh_usage():
     return {"status": "started", "pid": _usage_refresh_proc.pid}
 
 
+# Configure tmux at import time (works under both gunicorn and direct invocation)
+tmux.configure(
+    socket_name=CONFIG.get('tmux_socket'),
+    session_name=CONFIG.get('tmux_session'),
+)
+tmux.ensure_session()
+
 if __name__ == '__main__':
-    tmux.configure(
-        socket_name=CONFIG.get('tmux_socket'),
-        session_name=CONFIG.get('tmux_session'),
-    )
-    tmux.ensure_session()
     app.run(host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001))

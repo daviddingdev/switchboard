@@ -10,6 +10,7 @@ import SpawnDialog from './components/SpawnDialog'
 import MobileNav from './components/MobileNav'
 import Monitor from './components/Monitor'
 import Usage from './components/Usage'
+import TerminalView from './components/TerminalView'
 
 // Desktop panel constraints
 const MIN_FILES = 140
@@ -138,13 +139,14 @@ const mobileStyles = {
     flexDirection: 'column',
     background: 'var(--bg-primary)',
     paddingTop: 'env(safe-area-inset-top, 0px)',
+    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
   },
   content: {
     flex: 1,
-    overflowY: 'scroll',
+    overflowY: 'auto',
     WebkitOverflowScrolling: 'touch',
+    overscrollBehavior: 'contain',
     minHeight: 0,
-    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
   },
   previewOverlay: {
     position: 'fixed',
@@ -155,6 +157,11 @@ const mobileStyles = {
     zIndex: 40,
     paddingTop: 'env(safe-area-inset-top, 0px)',
     paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
+  },
+  previewBody: {
+    flex: 1,
+    overflow: 'auto',
+    overscrollBehavior: 'contain',
   },
   previewHeader: {
     display: 'flex',
@@ -180,10 +187,6 @@ const mobileStyles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-  },
-  previewBody: {
-    flex: 1,
-    overflow: 'auto',
   },
 }
 
@@ -215,8 +218,8 @@ export default function App() {
   // --- Tab management ---
 
   const openTab = useCallback((type, path, project) => {
-    const id = type === 'monitor' ? 'monitor' : type === 'usage' ? 'usage' : type === 'diff' ? `diff:${project}:${path}` : `file:${path}`
-    const label = type === 'monitor' ? 'Monitor' : type === 'usage' ? 'Usage' : path.split('/').pop()
+    const id = type === 'monitor' ? 'monitor' : type === 'usage' ? 'usage' : type === 'terminal' ? `terminal:${path}` : type === 'diff' ? `diff:${project}:${path}` : `file:${path}`
+    const label = type === 'monitor' ? 'Monitor' : type === 'usage' ? 'Usage' : type === 'terminal' ? path : path.split('/').pop()
 
     setTabs(prev => {
       if (prev.find(t => t.id === id)) return prev
@@ -228,14 +231,14 @@ export default function App() {
   const closeTab = useCallback((id) => {
     setTabs(prev => {
       const next = prev.filter(t => t.id !== id)
+      // Update active tab if we're closing the active one
+      setActiveTabId(activeId => {
+        if (activeId !== id) return activeId
+        return next.length > 0 ? next[next.length - 1].id : null
+      })
       return next
     })
-    setActiveTabId(prev => {
-      if (prev !== id) return prev
-      const remaining = tabs.filter(t => t.id !== id)
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null
-    })
-  }, [tabs])
+  }, [])
 
   // --- File/diff opening ---
 
@@ -400,6 +403,7 @@ export default function App() {
           key={refreshKey}
           onSpawn={() => setShowSpawnDialog(true)}
           onRefresh={() => setRefreshKey(k => k + 1)}
+          onTerminal={(name) => openTab('terminal', name)}
           onMonitor={() => openTab('monitor')}
           onUsage={() => openTab('usage')}
         />
@@ -470,7 +474,9 @@ export default function App() {
           )}
           <div style={desktopStyles.previewContent}>
             {activeTab ? (
-              activeTab.type === 'usage' ? (
+              activeTab.type === 'terminal' ? (
+                <TerminalView workerName={activeTab.path} />
+              ) : activeTab.type === 'usage' ? (
                 <Usage />
               ) : activeTab.type === 'monitor' ? (
                 <Monitor />
