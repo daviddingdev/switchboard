@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage, fetchModels } from '../api'
+import socket from '../socket'
+import { useToast } from './Toast'
 
 const styles = {
   container: {
@@ -301,12 +303,14 @@ function getUsageColor(pct) {
   return '#22c55e'
 }
 
-export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal }) {
+export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal, onThemeToggle, theme }) {
   const [workers, setWorkers] = useState([])
   const [usage, setUsage] = useState({})
   const [modelLabels, setModelLabels] = useState({})
   const [acting, setActing] = useState(null)
   const [confirming, setConfirming] = useState(null) // { name, action } awaiting confirmation
+  const [loading, setLoading] = useState(true)
+  const { addToast } = useToast()
 
   const loadWorkers = async () => {
     try {
@@ -331,7 +335,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
   }
 
   useEffect(() => {
-    loadWorkers()
+    loadWorkers().finally(() => setLoading(false))
     loadUsage()
     fetchModels()
       .then(data => {
@@ -340,11 +344,29 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
         setModelLabels(map)
       })
       .catch(() => {})
-    const workerInterval = setInterval(loadWorkers, 2000)
-    const usageInterval = setInterval(loadUsage, 5000)
+
+    const onWorkersUpdate = (data) => {
+      for (const w of data) {
+        if (w.name in modelLabels) w.model = modelLabels[w.name]
+      }
+      setWorkers(data)
+      setLoading(false)
+    }
+    const onUsageUpdate = (data) => {
+      const map = {}
+      for (const w of data.workers || []) map[w.name] = w
+      setUsage(map)
+    }
+    const onConnect = () => { loadWorkers(); loadUsage() }
+
+    socket.on('workers:update', onWorkersUpdate)
+    socket.on('usage:update', onUsageUpdate)
+    socket.on('connect', onConnect)
+
     return () => {
-      clearInterval(workerInterval)
-      clearInterval(usageInterval)
+      socket.off('workers:update', onWorkersUpdate)
+      socket.off('usage:update', onUsageUpdate)
+      socket.off('connect', onConnect)
     }
   }, [])
 
@@ -362,21 +384,25 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       switch (action) {
         case 'rc':
           await sendToProcess(name, '/rc')
+          addToast(`Sent rc to '${name}'`, 'success')
           break
         case 'compact':
           await sendToProcess(name, '/compact')
+          addToast(`Sent compact to '${name}'`, 'success')
           break
         case 'reset':
           await sendToProcess(name, '\x03', true)
+          addToast(`Sent reset to '${name}'`, 'success')
           break
         case 'kill':
           await killProcess(name)
           await loadWorkers()
           onRefresh?.()
+          addToast(`Worker '${name}' killed`, 'success')
           break
       }
     } catch (err) {
-      alert(`Failed to ${action} ${name}: ${err.message}`)
+      addToast(`Failed to ${action} ${name}: ${err.message}`, 'error')
     } finally {
       setActing(null)
     }
@@ -405,6 +431,12 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
               📊 Monitor
             </button>
           )}
+          <button
+            style={{ ...(m ? styles.spawnBtnMobile : styles.spawnBtn), background: 'var(--bg-tertiary)' }}
+            onClick={onThemeToggle}
+          >
+            {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
           {workers.length > 0 && (
             <button style={m ? styles.spawnBtnMobile : styles.spawnBtn} onClick={onSpawn}>
               + Spawn
@@ -413,7 +445,17 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
         </div>
       </div>
 
-      {workers.length === 0 ? (
+      {loading && workers.length === 0 ? (
+        <div style={m ? styles.gridMobile : styles.grid}>
+          {[0, 1].map(i => (
+            <div key={i} style={styles.card}>
+              <div style={{ width: '60%', height: 14, background: 'var(--bg-tertiary)', borderRadius: 6, marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ width: '80%', height: 10, background: 'var(--bg-tertiary)', borderRadius: 4, marginBottom: 10, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ width: '100%', height: 8, background: 'var(--bg-tertiary)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            </div>
+          ))}
+        </div>
+      ) : !loading && workers.length === 0 ? (
         <div style={styles.emptyContainer}>
           <span style={styles.emptyText}>No workers running</span>
           <button

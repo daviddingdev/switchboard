@@ -1,9 +1,13 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**MVP Complete — Ready for Self-Orchestration**
+**WebSocket Upgrade Complete — Real-Time Push**
 
-Core functionality working:
+All polling replaced with WebSocket push. Full feature set:
+- Real-time worker/terminal/activity/metrics via WebSocket
+- Connection banner, toast notifications, skeleton loading
+- Keyboard shortcuts (n/m/u/Esc/?)
+- Dark/light theme toggle (desktop + mobile)
 - 3-column UI: Files | Terminal | Workers+Activity
 - Tab-based navigation: multiple terminals + file previews
 - Auto-discover projects with CLAUDE.md files
@@ -11,7 +15,6 @@ Core functionality working:
 - Syntax-highlighted file preview + diff preview
 - Spawn/kill workers, send messages
 - Approve/reject worker proposals
-- Quick actions: 1-4, Y/N, Enter, Esc, Plan
 - Unpushed commits tracking in Activity panel
 - Shareable setup with setup.sh/start.sh/stop.sh
 
@@ -29,6 +32,26 @@ cd ~/orchestrator
 ---
 
 ## Completed
+
+### WebSocket Upgrade + UX Polish (Mar 12, 2026)
+- [x] Flask-SocketIO with `threading` async mode (not eventlet — subprocess-safe)
+- [x] 5 background monitor threads: workers(2s), usage(5s), activity(3s), metrics(2s), terminal(500ms)
+- [x] Hash-based change detection — only push when data changes
+- [x] Terminal subscribe/unsubscribe model for on-demand streaming
+- [x] Socket.IO client singleton with auto-reconnect
+- [x] ConnectionBanner — disconnect/reconnect indicator
+- [x] Toast notifications — replaced all alert() calls
+- [x] Skeleton loading states in WorkerDashboard, Activity
+- [x] ErrorState component with retry button
+- [x] Keyboard shortcuts: n (spawn), m (monitor), u (usage), Esc (close), ? (help)
+- [x] Dark/light theme toggle with CSS variables, persisted to localStorage
+- [x] Worker count in page title
+- [x] Terminal theme-aware colors (CSS variables instead of hardcoded)
+- [x] Socket cleanup fix — handler refs in socket.off()
+- [x] Keyboard shortcuts stability — useRef to avoid re-registration
+- [x] Toast animation deduplication — moved to index.css
+- [x] Mobile theme toggle (was desktop-only)
+- [x] Toast mobile positioning via CSS media query
 
 ### Open-Source Prep (Mar 11, 2026)
 - [x] Moved Telegram bot to `contrib/telegram/`
@@ -221,7 +244,7 @@ cd ~/orchestrator
 - [ ] Claude Desktop MCP integration
 - [x] Phone PWA — Telegram bot provides mobile interface
 - [ ] Child process tracking
-- [ ] Real-time WebSocket (replace polling)
+- [x] Real-time WebSocket (replace polling)
 - [ ] Editable file preview
 - [ ] Terminal resize handling
 
@@ -241,7 +264,10 @@ cd ~/orchestrator
 | Feb 23 | Setup scripts | Make shareable without manual steps |
 | Feb 23 | Auto-discover projects | Scan for CLAUDE.md vs manual registry |
 | Feb 23 | Tab-based terminals | Each worker gets its own tab |
+| Mar 12 | threading over eventlet | eventlet monkey-patches subprocess, breaks tmux_manager |
+| Mar 12 | WebSocket + REST hybrid | WebSocket for push, REST for actions + initial data |
+| Mar 12 | Hash-based dedup | Server only emits when data actually changes |
 
 ---
 
-*Last updated: March 11, 2026*
+*Last updated: March 12, 2026*

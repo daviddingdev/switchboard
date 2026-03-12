@@ -1,5 +1,7 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useIsMobile } from './hooks/useMediaQuery'
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
+import socket from './socket'
 import FileTree from './components/FileTree'
 import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
@@ -11,6 +13,8 @@ import MobileNav from './components/MobileNav'
 import Monitor from './components/Monitor'
 import Usage from './components/Usage'
 import TerminalView from './components/TerminalView'
+import ConnectionBanner from './components/ConnectionBanner'
+import ShortcutsHelp from './components/ShortcutsHelp'
 
 // Desktop panel constraints
 const MIN_FILES = 140
@@ -195,6 +199,14 @@ export default function App() {
 
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Theme
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+  useEffect(() => {
+    document.documentElement.className = theme === 'light' ? 'light' : ''
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   // Tab state
   const [tabs, setTabs] = useState([])
@@ -214,6 +226,18 @@ export default function App() {
   // Mobile state
   const [mobileSection, setMobileSection] = useState('workers')
   const [mobilePreview, setMobilePreview] = useState(null)
+
+  // Worker count for page title
+  const [workerCount, setWorkerCount] = useState(0)
+  useEffect(() => {
+    const onWorkers = (data) => setWorkerCount(Array.isArray(data) ? data.length : 0)
+    socket.on('workers:update', onWorkers)
+    return () => socket.off('workers:update', onWorkers)
+  }, [])
+
+  useEffect(() => {
+    document.title = workerCount > 0 ? `(${workerCount}) Orchestrator` : 'Orchestrator'
+  }, [workerCount])
 
   // --- Tab management ---
 
@@ -258,6 +282,20 @@ export default function App() {
       openTab('diff', file.path, project.project)
     }
   }, [isMobile, openTab])
+
+  // --- Keyboard shortcuts (desktop only) ---
+
+  useKeyboardShortcuts({
+    'n': () => setShowSpawnDialog(true),
+    'Escape': () => {
+      if (showShortcuts) { setShowShortcuts(false); return }
+      if (showSpawnDialog) { setShowSpawnDialog(false); return }
+      if (activeTabId) closeTab(activeTabId)
+    },
+    'm': () => openTab('monitor'),
+    'u': () => openTab('usage'),
+    '?': () => setShowShortcuts(s => !s),
+  })
 
   // --- Unified drag resize ---
 
@@ -314,6 +352,7 @@ export default function App() {
   if (isMobile) {
     return (
       <div style={mobileStyles.layout}>
+        <ConnectionBanner />
         <div style={mobileStyles.content}>
           {mobileSection === 'workers' && (
             <WorkerDashboard
@@ -321,6 +360,8 @@ export default function App() {
               isMobile
               onSpawn={() => setShowSpawnDialog(true)}
               onRefresh={() => setRefreshKey(k => k + 1)}
+              onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              theme={theme}
             />
           )}
           {mobileSection === 'files' && (
@@ -391,6 +432,8 @@ export default function App() {
       onMouseUp={dragging ? handleMouseUp : undefined}
       onMouseLeave={dragging ? handleMouseUp : undefined}
     >
+      <ConnectionBanner />
+
       {/* Top: Workers */}
       <div
         id="top-section"
@@ -406,6 +449,8 @@ export default function App() {
           onTerminal={(name) => openTab('terminal', name)}
           onMonitor={() => openTab('monitor')}
           onUsage={() => openTab('usage')}
+          onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          theme={theme}
         />
       </div>
 
@@ -534,6 +579,10 @@ export default function App() {
           onClose={() => setShowSpawnDialog(false)}
           onSpawned={handleSpawned}
         />
+      )}
+
+      {showShortcuts && (
+        <ShortcutsHelp onClose={() => setShowShortcuts(false)} />
       )}
     </div>
   )

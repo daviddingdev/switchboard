@@ -8,6 +8,22 @@
   --danger: #ef4444;
   --success: #22c55e;
   --border: #3f3f46;
+  --terminal-bg: #0d0d0d;
+  --terminal-text: #d4d4d4;
+}
+
+:root.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --text-primary: #1a1a2e;
+  --text-secondary: #6b7280;
+  --accent: #2563eb;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --border: #d1d5db;
+  --terminal-bg: #f5f5f5;
+  --terminal-text: #1a1a2e;
 }
 
 * {
@@ -82,5 +98,26 @@ select {
 select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Skeleton pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* Toast slide-in animation */
+@keyframes toast-slide-in {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Toast container mobile positioning */
+@media (max-width: 639px) {
+  .toast-container {
+    right: 50% !important;
+    transform: translateX(50%);
+    max-width: calc(100vw - 32px) !important;
+  }
 }
 

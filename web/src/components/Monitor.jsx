@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { fetchMetrics, fetchSparkUpdates, triggerSparkUpdate } from '../api'
+import socket from '../socket'
+import { useToast } from './Toast'
 
 const styles = {
   container: {
@@ -360,46 +362,58 @@ export default function Monitor({ isMobile }) {
   const [updates, setUpdates] = useState(null)
   const [selected, setSelected] = useState({})
   const [confirming, setConfirming] = useState(null) // { categories, needsReboot }
-  const intervalRef = useRef(null)
-  const sparkIntervalRef = useRef(null)
-  const prevJson = useRef('')
+  const { addToast } = useToast()
 
-  // Metrics polling (2s)
   useEffect(() => {
     let active = true
-    async function poll() {
+    async function initialFetch() {
       try {
         const data = await fetchMetrics()
-        if (active) {
-          const json = JSON.stringify(data)
-          if (json !== prevJson.current) {
-            prevJson.current = json
-            setMetrics(data)
-          }
-          setConnected(true)
-        }
+        if (active) { setMetrics(data); setConnected(true) }
       } catch {
         if (active) setConnected(false)
       }
     }
-    poll()
-    intervalRef.current = setInterval(poll, 2000)
-    return () => { active = false; clearInterval(intervalRef.current) }
+    initialFetch()
+
+    const onMetrics = (data) => {
+      if (active) { setMetrics(data); setConnected(true) }
+    }
+    const onConnect = () => initialFetch()
+    const onDisconnect = () => { if (active) setConnected(false) }
+
+    socket.on('metrics:update', onMetrics)
+    socket.on('connect', onConnect)
+    socket.on('disconnect', onDisconnect)
+    return () => {
+      active = false
+      socket.off('metrics:update', onMetrics)
+      socket.off('connect', onConnect)
+      socket.off('disconnect', onDisconnect)
+    }
   }, [])
 
-  // Updates polling (60s, faster when update running)
   useEffect(() => {
     let active = true
-    async function pollUpdates() {
+    async function initialFetch() {
       try {
         const data = await fetchSparkUpdates()
         if (active) setUpdates(data)
       } catch { /* ignore */ }
     }
-    pollUpdates()
+    initialFetch()
+
+    // Keep polling for spark updates since they're less frequent
+    // and not pushed via socket (adaptive interval)
     const interval = updates?.update_status?.running ? 5000 : 60000
-    sparkIntervalRef.current = setInterval(pollUpdates, interval)
-    return () => { active = false; clearInterval(sparkIntervalRef.current) }
+    const sparkInterval = setInterval(async () => {
+      try {
+        const data = await fetchSparkUpdates()
+        if (active) setUpdates(data)
+      } catch { /* ignore */ }
+    }, interval)
+
+    return () => { active = false; clearInterval(sparkInterval) }
   }, [updates?.update_status?.running])
 
   const categories = updates?.categories?.filter(c =>
@@ -446,7 +460,7 @@ export default function Monitor({ isMobile }) {
       const data = await fetchSparkUpdates()
       setUpdates(data)
     } catch (err) {
-      alert(`Update failed: ${err.message}`)
+      addToast('Update failed: ' + err.message, 'error')
     }
   }, [confirming])
 

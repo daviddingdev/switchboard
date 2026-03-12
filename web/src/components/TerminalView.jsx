@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { getOutput } from '../api'
+import socket from '../socket'
 
 const styles = {
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#0d0d0d',
+    background: 'var(--terminal-bg, #0d0d0d)',
     overflow: 'hidden',
   },
   output: {
@@ -20,7 +21,7 @@ const styles = {
     fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace',
     fontSize: '12px',
     lineHeight: 1.5,
-    color: '#d4d4d4',
+    color: 'var(--terminal-text, #d4d4d4)',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
   },
@@ -43,21 +44,41 @@ export default function TerminalView({ workerName }) {
   useEffect(() => {
     let alive = true
 
-    const poll = async () => {
-      try {
-        const data = await getOutput(workerName, 200)
-        if (alive) {
-          setOutput(data.output || '')
-          setConnected(true)
-        }
-      } catch {
-        if (alive) setConnected(false)
+    // Initial REST fetch for immediate data
+    getOutput(workerName, 200)
+      .then(data => { if (alive) { setOutput(data.output || ''); setConnected(true) } })
+      .catch(() => { if (alive) setConnected(false) })
+
+    // Subscribe to terminal updates via WebSocket
+    socket.emit('terminal:subscribe', { name: workerName })
+
+    const handler = (data) => {
+      if (data.name === workerName && alive) {
+        setOutput(data.output)
+        setConnected(true)
       }
     }
 
-    poll()
-    const interval = setInterval(poll, 1000)
-    return () => { alive = false; clearInterval(interval) }
+    const reconnectHandler = () => {
+      socket.emit('terminal:subscribe', { name: workerName })
+      getOutput(workerName, 200)
+        .then(data => { if (alive) { setOutput(data.output || ''); setConnected(true) } })
+        .catch(() => {})
+    }
+
+    const disconnectHandler = () => { if (alive) setConnected(false) }
+
+    socket.on('worker:output', handler)
+    socket.on('connect', reconnectHandler)
+    socket.on('disconnect', disconnectHandler)
+
+    return () => {
+      alive = false
+      socket.emit('terminal:unsubscribe', { name: workerName })
+      socket.off('worker:output', handler)
+      socket.off('connect', reconnectHandler)
+      socket.off('disconnect', disconnectHandler)
+    }
   }, [workerName])
 
   // Track whether user is scrolled to bottom

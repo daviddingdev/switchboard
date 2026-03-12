@@ -1,8 +1,12 @@
 # Orchestrator Upgrade Plan
 
-This document describes the next round of improvements to bring Orchestrator from a working personal tool to a polished, standard-practice application. Each section is self-contained with reasoning, scope, and implementation details.
+This document describes the upgrade from polling to WebSocket and related UX improvements.
 
-**Current state (after commit 76a2845):** Security hardened, terminal viewer, model selection, error boundary, async spawn, 19 API tests, open-source docs.
+**All items implemented.** See architecture.md for current state.
+
+**Previous state (before upgrade):** Security hardened, terminal viewer, model selection, error boundary, async spawn, 19 API tests, open-source docs. All polling, no WebSocket.
+
+**Current state (after upgrade):** WebSocket push for all live data, connection banner, toast notifications, skeleton loading states, keyboard shortcuts, dark/light theme toggle, error states. REST retained for actions and initial data.
 
 ---
 
@@ -279,46 +283,46 @@ useEffect(() => {
 
 ---
 
-## Recommended Implementation Order
+## Implementation Order (all complete)
 
-1. **WebSocket upgrade** (#1) — foundational, everything else builds on it
-2. **Connection status** (#6) — comes almost free with WebSocket
-3. **Toast notifications** (#3) — independent, high UX impact
-4. **Loading skeletons** (#2) — independent, high visual polish impact
-5. **Error handling** (#5) — builds on connection awareness
-6. **Keyboard shortcuts** (#4) — independent, power user feature
-7. **Theme toggle** (#7) — independent, cosmetic, lowest priority
-
-Items 2-7 are independent of each other and can be done in any order or in parallel. Item 1 should be done first as it's the biggest architectural change and items 2 and 6 build on it.
+1. **WebSocket upgrade** (#1) — done. `flask-socketio` with `threading` async mode (not eventlet — avoids monkey-patching subprocess). 5 background threads push data on change.
+2. **Connection status** (#6) — done. `ConnectionBanner` component with socket connect/disconnect events.
+3. **Toast notifications** (#3) — done. `ToastProvider` context with `useToast()` hook. Replaced all `alert()` calls.
+4. **Loading skeletons** (#2) — done. Pulse animation skeletons in WorkerDashboard, Activity.
+5. **Error handling** (#5) — done. `ErrorState` component. Components show error state on fetch failure.
+6. **Keyboard shortcuts** (#4) — done. `useKeyboardShortcuts` hook. n/m/u/Esc/? shortcuts.
+7. **Theme toggle** (#7) — done. Dark/light via CSS variables on `:root.light`. Persisted to localStorage.
 
 ---
 
-## Gunicorn Note
+## Post-upgrade polish pass
 
-Gunicorn was attempted in this session but had issues with sync workers blocking on tmux subprocess calls. The WebSocket upgrade solves this naturally — `flask-socketio` with `eventlet` provides its own production-grade async server. Do NOT add gunicorn separately; let the WebSocket upgrade handle production serving.
+After the main upgrade, a review identified and fixed 6 issues:
 
-The `gunicorn` entry in `requirements.txt` can be removed during the WebSocket upgrade since `flask-socketio` + `eventlet` replaces it.
+1. **TerminalView hardcoded colors** — `#0d0d0d`/`#d4d4d4` replaced with `--terminal-bg`/`--terminal-text` CSS variables. Terminal now adapts to light theme.
+2. **WorkerDashboard socket.off() bug** — cleanup called `socket.off('event')` without handler refs, removing all listeners including App.jsx's. Fixed to pass specific handler references.
+3. **useKeyboardShortcuts re-registration** — `[keyMap]` dependency caused effect to re-run every render (new object reference). Fixed with `useRef` — handler registered once, ref always has current callbacks.
+4. **Toast animation duplication** — Each `ToastItem` rendered its own `<style>` tag with `@keyframes`. Moved to `index.css` once.
+5. **Mobile theme toggle missing** — Theme toggle only rendered on desktop (`!m` guard). Now renders on both layouts.
+6. **Toast mobile detection static** — `window.innerWidth < 640` checked once at render. Replaced with CSS `@media` query for reactive positioning.
 
 ---
 
-## Quick Reference: Current Architecture
+## Key Decision: threading over eventlet
 
-```
-Web UI (React, :3000 dev / served by Flask prod)
-  ↓ HTTP (polling every 1-5s)
-Flask API (:5001)
-  ↓ subprocess
-tmux manager (socket: orchestrator)
-  ↓ windows
-workers (claude --model <model>)
-```
+The original plan recommended `eventlet` as the async driver. This was changed to `threading` mode with `simple-websocket` because eventlet monkey-patches Python's standard library including `subprocess`, which would break `tmux_manager.py`'s subprocess calls. The `threading` mode works with standard Python threading and subprocess without issues.
 
-After WebSocket upgrade:
+`gunicorn` was removed from requirements — `flask-socketio` handles its own server.
+
+---
+
+## Architecture (current)
+
 ```
 Web UI (React)
   ↓ WebSocket (persistent connection, server push)
   ↓ HTTP (one-off actions: spawn, kill, send)
-Flask-SocketIO (:5001, eventlet async server)
+Flask-SocketIO (:5001, threading async mode)
   ↓ subprocess
 tmux manager (socket: orchestrator)
   ↓ windows

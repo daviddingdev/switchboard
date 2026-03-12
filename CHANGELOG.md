@@ -1,5 +1,50 @@
 # Orchestrator Changelog
 
+## 2026-03-12
+
+### WebSocket Upgrade — Real-Time Push (Upgrade v2)
+
+Replaced all polling with WebSocket push. REST retained for actions and initial data.
+
+- **Flask-SocketIO backend** — Added `flask-socketio` with `threading` async mode (not eventlet — avoids monkey-patching subprocess). Replaced `gunicorn` dependency.
+- **5 background monitor threads** — Push workers (2s), usage (5s), activity (3s), metrics (2s), terminal output (500ms). All use hash-based change detection — only emit when data changes.
+- **Terminal streaming** — Client sends `terminal:subscribe`/`terminal:unsubscribe`, server streams output for subscribed workers only. Near-instant vs old 1s polling.
+- **Socket.IO client** — `web/src/socket.js` singleton with auto-reconnect. Components listen for events instead of polling.
+- **Vite WebSocket proxy** — Added `/socket.io` proxy with `ws: true` in `vite.config.js`.
+
+### UX Improvements
+
+- **Connection banner** — `ConnectionBanner.jsx` shows yellow "Reconnecting..." on disconnect, green "Reconnected" for 2s on reconnect.
+- **Toast notifications** — `ToastProvider` context with `useToast()` hook. Success/error/info toasts replace all `alert()` calls. Auto-dismiss, stacking, slide animation.
+- **Skeleton loading** — Pulse animation placeholders in WorkerDashboard and Activity before first data load.
+- **Error states** — `ErrorState.jsx` with retry button, shown on fetch failure.
+- **Keyboard shortcuts** — `useKeyboardShortcuts` hook. `n` (spawn), `m` (monitor), `u` (usage), `Esc` (close), `?` (help overlay).
+- **Dark/light theme** — CSS variables on `:root.light`. Toggle persisted to localStorage. Available on both desktop and mobile.
+- **Worker count in page title** — Shows `(N) Orchestrator` when workers are active.
+
+### Post-Upgrade Polish
+
+- **Terminal theme-aware colors** — Replaced hardcoded `#0d0d0d`/`#d4d4d4` with `--terminal-bg`/`--terminal-text` CSS variables.
+- **Socket cleanup fix** — WorkerDashboard `socket.off()` now passes handler references to avoid removing other components' listeners.
+- **Keyboard shortcuts stability** — `useKeyboardShortcuts` uses `useRef` for keyMap to register listener once instead of every render.
+- **Toast animation deduplication** — Moved `@keyframes toast-slide-in` from per-instance `<style>` tags to `index.css`.
+- **Mobile theme toggle** — Theme button now renders on mobile (was desktop-only).
+- **Toast mobile positioning** — Replaced static `window.innerWidth` check with CSS `@media` query for reactive centering.
+
+### Files Added
+- `web/src/socket.js` — Socket.IO singleton
+- `web/src/components/ConnectionBanner.jsx` — Disconnect/reconnect banner
+- `web/src/components/Toast.jsx` — Toast notification system
+- `web/src/components/ErrorState.jsx` — Error display with retry
+- `web/src/components/ShortcutsHelp.jsx` — Keyboard shortcuts overlay
+- `web/src/hooks/useKeyboardShortcuts.js` — Keyboard shortcut hook
+
+### Dependencies
+- Added: `flask-socketio>=5.3.0`, `simple-websocket>=1.0.0`, `socket.io-client@^4.7.0`
+- Removed: `gunicorn>=21.2.0`
+
+---
+
 ## 2026-03-02
 
 ### Usage Fixes
@@ -571,4 +616,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: March 2, 2026*
+*Last updated: March 12, 2026*

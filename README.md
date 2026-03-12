@@ -66,9 +66,7 @@ tmux -L orchestrator kill-session -t orchestrator
 | Web UI  | 3000         |
 | API     | 5001         |
 
-To change ports, edit:
-- `web/vite.config.js` for web UI port
-- `api/server.py` (bottom of file) for API port
+To change ports, copy `config.yaml.example` to `config.yaml` and edit the `port` value. Web UI port is in `web/vite.config.js`.
 
 ## Architecture
 

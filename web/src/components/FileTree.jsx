@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchHome } from '../api'
+import socket from '../socket'
 
 const styles = {
   container: {
@@ -202,9 +203,18 @@ export default function FileTree({ onFileSelect, isMobile }) {
 
   useEffect(() => {
     loadFiles()
-    // Refresh every 5 seconds to pick up git changes
-    const interval = setInterval(loadFiles, 5000)
-    return () => clearInterval(interval)
+
+    // No dedicated socket event for files - keep light polling
+    // since file tree changes are infrequent
+    const interval = setInterval(loadFiles, 10000)
+
+    const onConnect = () => loadFiles()
+    socket.on('connect', onConnect)
+
+    return () => {
+      clearInterval(interval)
+      socket.off('connect', onConnect)
+    }
   }, [])
 
   return (

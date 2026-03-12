@@ -11,6 +11,7 @@ import json
 import re
 import logging
 import threading
+import hashlib
 import glob as glob_module
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ import yaml
 import psutil
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 import tmux_manager as tmux
 
 # Claude session files location
@@ -78,6 +80,16 @@ if STATIC_DIR.exists():
 else:
     app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Terminal subscriptions: {sid: set of worker names}
+_terminal_subs = {}
+_terminal_subs_lock = threading.Lock()
+
+
+def _data_hash(data):
+    """Hash data for change detection."""
+    return hashlib.md5(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
 
 @app.route('/')
@@ -777,9 +789,8 @@ def get_diff():
         return {"error": str(e)}, 500
 
 
-@app.route('/api/activity')
-def get_activity():
-    """Get combined activity feed: pending proposals + changes + unpushed + recent."""
+def _get_activity_data():
+    """Get combined activity feed data (used by REST endpoint and socket monitor)."""
     result = {'pending': [], 'changes': [], 'unpushed': [], 'recent': []}
 
     # Pending proposals
@@ -832,7 +843,13 @@ def get_activity():
     except Exception:
         pass
 
-    return jsonify(result)
+    return result
+
+
+@app.route('/api/activity')
+def get_activity():
+    """Get combined activity feed: pending proposals + changes + unpushed + recent."""
+    return jsonify(_get_activity_data())
 
 
 @app.route('/api/doc-context')
@@ -1295,12 +1312,8 @@ def filter_conversation(session_file, limit=100):
     return messages[-limit:] if limit else messages
 
 
-@app.route('/api/workers/usage')
-def get_workers_usage():
-    """
-    Get context usage stats for all active workers.
-    Returns token counts and percentage estimates.
-    """
+def _get_workers_usage_data():
+    """Get context usage stats data (used by REST endpoint and socket monitor)."""
     result = []
 
     # Get active workers from tmux
@@ -1343,7 +1356,13 @@ def get_workers_usage():
                 'pct': 0
             })
 
-    return jsonify({'workers': result})
+    return {'workers': result}
+
+
+@app.route('/api/workers/usage')
+def get_workers_usage():
+    """Get context usage stats for all active workers."""
+    return jsonify(_get_workers_usage_data())
 
 
 # --- System Metrics (direct) ---
@@ -1381,9 +1400,8 @@ def _ollama_metrics():
     return {'cpu': None, 'ram_gb': None}
 
 
-@app.route('/api/metrics')
-def system_metrics():
-    """System metrics read directly from OS."""
+def _get_metrics_data():
+    """Get system metrics data (used by REST endpoint and socket monitor)."""
     global _prev_net, _prev_disk, _prev_time
     import time as _time
 
@@ -1427,7 +1445,13 @@ def system_metrics():
     _prev_disk = disk
     _prev_time = now
 
-    return jsonify(result)
+    return result
+
+
+@app.route('/api/metrics')
+def system_metrics():
+    """System metrics read directly from OS."""
+    return jsonify(_get_metrics_data())
 
 
 # --- Spark System Updates ---
@@ -1815,5 +1839,153 @@ tmux.configure(
 )
 tmux.ensure_session()
 
+# =============================================================================
+# WebSocket event handlers
+# =============================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    logger.info('Client connected: %s', getattr(request, 'sid', '?'))
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = getattr(request, 'sid', None)
+    logger.info('Client disconnected: %s', sid)
+    with _terminal_subs_lock:
+        _terminal_subs.pop(sid, None)
+
+
+@socketio.on('terminal:subscribe')
+def handle_terminal_subscribe(data):
+    name = data.get('name') if isinstance(data, dict) else None
+    if name:
+        sid = getattr(request, 'sid', None)
+        with _terminal_subs_lock:
+            if sid not in _terminal_subs:
+                _terminal_subs[sid] = set()
+            _terminal_subs[sid].add(name)
+        logger.debug('Client %s subscribed to terminal: %s', sid, name)
+
+
+@socketio.on('terminal:unsubscribe')
+def handle_terminal_unsubscribe(data):
+    name = data.get('name') if isinstance(data, dict) else None
+    if name:
+        sid = getattr(request, 'sid', None)
+        with _terminal_subs_lock:
+            if sid in _terminal_subs:
+                _terminal_subs[sid].discard(name)
+        logger.debug('Client %s unsubscribed from terminal: %s', sid, name)
+
+
+# =============================================================================
+# Background monitoring threads (server-push via WebSocket)
+# =============================================================================
+
+def _bg_workers_monitor():
+    """Push worker list changes every 2s."""
+    prev = None
+    while True:
+        try:
+            windows = tmux.list_windows()
+            for w in windows:
+                if w['name'] in _worker_models:
+                    w['model'] = _worker_models[w['name']]
+            h = _data_hash(windows)
+            if h != prev:
+                prev = h
+                socketio.emit('workers:update', windows)
+        except Exception:
+            pass
+        socketio.sleep(2)
+
+
+def _bg_usage_monitor():
+    """Push worker usage changes every 5s."""
+    prev = None
+    while True:
+        try:
+            data = _get_workers_usage_data()
+            h = _data_hash(data)
+            if h != prev:
+                prev = h
+                socketio.emit('usage:update', data)
+        except Exception:
+            pass
+        socketio.sleep(5)
+
+
+def _bg_activity_monitor():
+    """Push activity changes every 3s."""
+    prev = None
+    while True:
+        try:
+            data = _get_activity_data()
+            h = _data_hash(data)
+            if h != prev:
+                prev = h
+                socketio.emit('activity:update', data)
+        except Exception:
+            pass
+        socketio.sleep(3)
+
+
+def _bg_metrics_monitor():
+    """Push system metrics every 2s."""
+    prev = None
+    while True:
+        try:
+            data = _get_metrics_data()
+            h = _data_hash(data)
+            if h != prev:
+                prev = h
+                socketio.emit('metrics:update', data)
+        except Exception:
+            pass
+        socketio.sleep(2)
+
+
+def _bg_terminal_monitor():
+    """Push terminal output for subscribed workers every 500ms."""
+    prev_outputs = {}
+    while True:
+        try:
+            # Collect all subscribed workers across all clients
+            with _terminal_subs_lock:
+                subscribed = set()
+                for names in _terminal_subs.values():
+                    subscribed.update(names)
+
+            for name in subscribed:
+                try:
+                    output = tmux.capture_output(name, 200)
+                    h = _data_hash(output)
+                    if h != prev_outputs.get(name):
+                        prev_outputs[name] = h
+                        socketio.emit('worker:output', {'name': name, 'output': output})
+                except Exception:
+                    pass
+
+            # Clean up cache for unsubscribed workers
+            for name in list(prev_outputs):
+                if name not in subscribed:
+                    del prev_outputs[name]
+        except Exception:
+            pass
+        socketio.sleep(0.5)
+
+
+def _start_background_monitors():
+    """Start all background monitoring threads."""
+    socketio.start_background_task(_bg_workers_monitor)
+    socketio.start_background_task(_bg_usage_monitor)
+    socketio.start_background_task(_bg_activity_monitor)
+    socketio.start_background_task(_bg_metrics_monitor)
+    socketio.start_background_task(_bg_terminal_monitor)
+
+
 if __name__ == '__main__':
-    app.run(host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001))
+    _start_background_monitors()
+    socketio.run(app, host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001),
+                 allow_unsafe_werkzeug=True)

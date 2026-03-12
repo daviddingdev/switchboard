@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchActivity } from '../api'
+import socket from '../socket'
 
 const styles = {
   container: {
@@ -164,6 +165,7 @@ function getStatusStyle(status) {
 
 export default function Activity({ onFileClick, onCollapse, isMobile }) {
   const [activity, setActivity] = useState({ changes: [], unpushed: [] })
+  const [loading, setLoading] = useState(true)
   const [hoveredFile, setHoveredFile] = useState(null)
 
   useEffect(() => {
@@ -173,12 +175,25 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
         setActivity(data)
       } catch (err) {
         console.error('Failed to load activity:', err)
+      } finally {
+        setLoading(false)
       }
     }
 
     loadActivity()
-    const interval = setInterval(loadActivity, 3000)
-    return () => clearInterval(interval)
+
+    const onUpdate = (data) => {
+      setActivity(data)
+      setLoading(false)
+    }
+    const onConnect = () => loadActivity()
+
+    socket.on('activity:update', onUpdate)
+    socket.on('connect', onConnect)
+    return () => {
+      socket.off('activity:update', onUpdate)
+      socket.off('connect', onConnect)
+    }
   }, [])
 
   const changesCount = activity.changes?.reduce((sum, p) => sum + p.files.length, 0) || 0
@@ -196,65 +211,78 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
       </div>
 
       <div style={isMobile ? styles.scrollAreaMobile : styles.scrollArea}>
-        {/* Git Changes */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <span>Changes</span>
-            {changesCount > 0 && (
-              <span style={styles.countBadge}>{changesCount}</span>
-            )}
-          </div>
-          {changesCount === 0 ? (
-            <div style={styles.empty}>No uncommitted changes</div>
-          ) : (
-            activity.changes?.map(project => (
-              <div key={project.project} style={styles.projectGroup}>
-                <div style={styles.projectName}>{project.project}</div>
-                {project.files.map((file, i) => {
-                  const fileKey = `${project.project}:${file.path}`
-                  const isHovered = hoveredFile === fileKey
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        ...(isMobile ? styles.fileItemMobile : styles.fileItem),
-                        ...(isHovered ? styles.fileItemHover : {}),
-                      }}
-                      onMouseEnter={() => setHoveredFile(fileKey)}
-                      onMouseLeave={() => setHoveredFile(null)}
-                      onClick={() => onFileClick?.(project, file)}
-                    >
-                      <span style={{ ...styles.statusBadge, ...getStatusStyle(file.status) }}>
-                        {file.status}
-                      </span>
-                      <span style={styles.fileName}>{file.path}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Unpushed Commits */}
-        {unpushedCount > 0 && (
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <span>Unpushed</span>
-              <span style={styles.countPush}>{unpushedCount}</span>
-            </div>
-            {activity.unpushed.map(project => (
-              <div key={project.project} style={styles.projectGroup}>
-                <div style={styles.projectName}>{project.project}</div>
-                {project.commits.map((commit, i) => (
-                  <div key={i} style={styles.commitItem}>
-                    <span style={styles.commitHash}>{commit.hash}</span>
-                    <span style={styles.commitMessage}>{commit.message}</span>
-                  </div>
-                ))}
+        {loading && changesCount === 0 && unpushedCount === 0 ? (
+          <div style={{ padding: '8px' }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ padding: '6px 8px', marginBottom: 8 }}>
+                <div style={{ width: '40%', height: 10, background: 'var(--bg-tertiary)', borderRadius: 4, marginBottom: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                <div style={{ width: '70%', height: 10, background: 'var(--bg-tertiary)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
               </div>
             ))}
           </div>
+        ) : (
+          <>
+            {/* Git Changes */}
+            <div style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <span>Changes</span>
+                {changesCount > 0 && (
+                  <span style={styles.countBadge}>{changesCount}</span>
+                )}
+              </div>
+              {changesCount === 0 ? (
+                <div style={styles.empty}>No uncommitted changes</div>
+              ) : (
+                activity.changes?.map(project => (
+                  <div key={project.project} style={styles.projectGroup}>
+                    <div style={styles.projectName}>{project.project}</div>
+                    {project.files.map((file, i) => {
+                      const fileKey = `${project.project}:${file.path}`
+                      const isHovered = hoveredFile === fileKey
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            ...(isMobile ? styles.fileItemMobile : styles.fileItem),
+                            ...(isHovered ? styles.fileItemHover : {}),
+                          }}
+                          onMouseEnter={() => setHoveredFile(fileKey)}
+                          onMouseLeave={() => setHoveredFile(null)}
+                          onClick={() => onFileClick?.(project, file)}
+                        >
+                          <span style={{ ...styles.statusBadge, ...getStatusStyle(file.status) }}>
+                            {file.status}
+                          </span>
+                          <span style={styles.fileName}>{file.path}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Unpushed Commits */}
+            {unpushedCount > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
+                  <span>Unpushed</span>
+                  <span style={styles.countPush}>{unpushedCount}</span>
+                </div>
+                {activity.unpushed.map(project => (
+                  <div key={project.project} style={styles.projectGroup}>
+                    <div style={styles.projectName}>{project.project}</div>
+                    {project.commits.map((commit, i) => (
+                      <div key={i} style={styles.commitItem}>
+                        <span style={styles.commitHash}>{commit.hash}</span>
+                        <span style={styles.commitMessage}>{commit.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

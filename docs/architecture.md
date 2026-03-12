@@ -4,7 +4,7 @@
 
 Orchestrator manages Claude Code worker sessions
 across projects via a **Web UI** on `localhost:3000`
-backed by a **Flask API** on port 5001,
+backed by a **Flask-SocketIO API** on port 5001,
 which manages workers via **tmux**.
 
 Optional integrations (Telegram bot, hooks) live
@@ -14,11 +14,12 @@ in `contrib/`.
 ┌──────────┐
 │  Web UI  │  :3000
 └────┬─────┘
-     │ HTTP
-┌────┴──────┐
-│ Flask API │  :5001
-│ server.py │
-└────┬──────┘
+     │ WebSocket (persistent, server push)
+     │ HTTP (one-off actions: spawn, kill, send)
+┌────┴──────────┐
+│ Flask-SocketIO │  :5001 (threading async mode)
+│   server.py    │
+└────┬───────────┘
      │ subprocess
 ┌────┴──────┐
 │   tmux    │  socket: orchestrator
@@ -83,7 +84,7 @@ blanks, returns last N non-empty lines.
 | PATCH | `/proposals/<id>` | Update status |
 | DELETE | `/proposals/<id>` | Delete |
 
-Proposals stored as JSON in `state/proposals/`.
+Proposals stored as YAML in `state/proposals/`.
 Workers submit via curl to POST endpoint.
 
 ### Files & Git
@@ -97,7 +98,7 @@ Workers submit via curl to POST endpoint.
 | GET | `/activity` | Changes + proposals |
 
 **`/projects`** returns project list with name +
-directory. Used by Telegram bot for spawn picker.
+directory.
 
 **`/home`** auto-discovers projects by scanning `~`
 for directories with `CLAUDE.md` files (max depth 3).
@@ -105,7 +106,7 @@ Returns tree with git status per file (M/U/A/D).
 
 **`/activity`** aggregates: pending proposals,
 uncommitted changes, unpushed commits across
-all projects. Polled every 3s by web UI.
+all projects. Pushed via WebSocket every 3s.
 
 ### Push Workflow
 
@@ -133,6 +134,43 @@ Context % = (input + cache_read) / 200k.
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/metrics` | GPU, CPU, memory, disk |
+| GET | `/models` | Available Claude models |
+
+---
+
+## WebSocket Events
+
+Flask-SocketIO with `threading` async mode
+(no monkey-patching — safe with subprocess calls).
+
+### Server → Client (push)
+
+| Event | Interval | Data |
+|-------|----------|------|
+| `workers:update` | 2s | Worker list (only on change) |
+| `usage:update` | 5s | Worker usage stats (only on change) |
+| `activity:update` | 3s | Git changes + proposals (only on change) |
+| `metrics:update` | 2s | System metrics (only on change) |
+| `worker:output` | 500ms | Terminal output for subscribed workers |
+
+All server-push events use hash-based change
+detection — only emit when data actually changes.
+
+### Client → Server
+
+| Event | Data | Purpose |
+|-------|------|---------|
+| `terminal:subscribe` | `{name}` | Start streaming worker output |
+| `terminal:unsubscribe` | `{name}` | Stop streaming worker output |
+
+### Background Threads
+
+5 background threads started on API boot:
+1. `_bg_workers_monitor` — polls tmux, pushes worker list
+2. `_bg_usage_monitor` — polls session files, pushes usage
+3. `_bg_activity_monitor` — polls git status, pushes activity
+4. `_bg_metrics_monitor` — reads system metrics, pushes
+5. `_bg_terminal_monitor` — captures terminal output for subscribed workers
 
 ---
 
@@ -174,7 +212,7 @@ Background setup (via `setup_worker` in thread):
 ## Web UI
 
 React + Vite. Dev server on :3000,
-proxies `/api` to :5001.
+proxies `/api` and `/socket.io` to :5001.
 
 ### Layout
 
@@ -182,6 +220,8 @@ proxies `/api` to :5001.
 
 ```
 ┌─────────────────────────────────┐
+│      ConnectionBanner           │
+├─────────────────────────────────┤
 │      WorkerDashboard            │
 ├─────────┬───────────┬───────────┤
 │FileTree │ TabBar    │ Activity  │
@@ -194,6 +234,8 @@ proxies `/api` to :5001.
 
 ```
 ┌─────────────────┐
+│ConnectionBanner  │
+├─────────────────┤
 │  Active Section │
 │  (full width)   │
 │                 │
@@ -205,7 +247,7 @@ proxies `/api` to :5001.
 ### Tab System
 
 Tab IDs: `file:<path>`, `diff:<project>:<path>`,
-`terminal:<name>`, `monitor`.
+`terminal:<name>`, `monitor`, `usage`.
 
 Clicking a file opens a tab (desktop) or
 full-screen overlay (mobile).
@@ -214,31 +256,54 @@ full-screen overlay (mobile).
 
 | Component | What it does |
 |-----------|-------------|
-| WorkerDashboard | Worker cards, spawn button, quick actions |
+| WorkerDashboard | Worker cards, spawn button, quick actions, theme toggle |
 | FileTree | Project browser with git status badges |
 | Activity | Proposals + changed files + unpushed commits |
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
-| TerminalView | Raw tmux output viewer (per worker) |
+| TerminalView | Real-time terminal streaming via WebSocket |
 | Monitor | System metrics (GPU, CPU, memory) |
+| Usage | Usage analytics with charts |
 | TabBar | Tab switching + close buttons |
 | SpawnDialog | Name + directory form for new workers |
 | MobileNav | Bottom navigation bar |
 | ErrorBoundary | Crash recovery with reload button |
+| ConnectionBanner | WebSocket connection status indicator |
+| Toast | Toast notification system (success/error/info) |
+| ErrorState | Error display with retry button |
+| ShortcutsHelp | Keyboard shortcuts overlay |
 
-### Polling
+### Data Flow
 
-| What | Interval | Endpoint |
-|------|----------|----------|
-| Workers | 2s | `/processes` |
-| Usage | 5s | `/workers/usage` |
-| Activity | 3s | `/activity` |
-| Files | 5s | `/home` |
-| Metrics | 2s | `/metrics` |
-| Terminal | 1s | `/processes/<name>/output` |
+**WebSocket** (real-time push from server):
+- Workers, usage, activity, metrics — server pushes on change
+- Terminal output — server pushes for subscribed workers
 
-Each component manages its own `setInterval`.
-No centralized state or WebSocket.
+**REST** (one-off actions + initial data):
+- Spawn, kill, send — POST/DELETE via REST
+- Initial data fetch on mount — GET via REST
+- File content, diffs — GET via REST
+- Spark updates — polling (adaptive interval)
+- File tree — light polling (10s)
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `n` | Open spawn dialog |
+| `m` | Open monitor tab |
+| `u` | Open usage tab |
+| `Esc` | Close dialog/tab |
+| `?` | Toggle shortcuts help |
+
+### Theme
+
+Dark/light theme via CSS variables on `:root`.
+Toggle persisted to `localStorage`. Available on both
+desktop and mobile (in WorkerDashboard header).
+
+Terminal view uses dedicated `--terminal-bg` and
+`--terminal-text` CSS variables for theme-aware colors.
 
 ---
 
@@ -247,7 +312,7 @@ No centralized state or WebSocket.
 ```
 state/
 ├── projects.yaml          # project registry
-├── proposals/*.json       # pending/resolved proposals
+├── proposals/*.yaml       # pending/resolved proposals
 └── usage-stats.json       # worker context stats
 
 logs/
@@ -268,8 +333,9 @@ containing `CLAUDE.md` (max depth 3).
 
 ```
 Worker submits POST /api/proposals
-  → JSON file in state/proposals/
-  → Web UI polls, shows in Activity
+  → YAML file in state/proposals/
+  → Server pushes via activity:update
+  → Web UI shows in Activity panel
   → User approves/rejects via PATCH
   → Worker checks status
 ```
@@ -278,7 +344,10 @@ Worker submits POST /api/proposals
 
 ## Key Patterns
 
-- **No WebSocket** — polling only, upgrade later
+- **WebSocket + REST hybrid** — WebSocket for live data push,
+  REST for actions and initial data
+- **Hash-based deduplication** — server only pushes when data changes
+- **threading async mode** — no monkey-patching, subprocess-safe
 - **No auth on web** — localhost assumption
 - **File-based state** — YAML/JSON, git-friendly
 - **tmux named socket** — `-L orchestrator`
@@ -294,3 +363,12 @@ Worker submits POST /api/proposals
   and auto-confirms
 - **Error boundary** — React crash recovery with
   reload button, prevents white screen
+- **Toast notifications** — visual feedback for all actions
+- **Skeleton loading** — pulse animation placeholders before data loads
+- **Connection banner** — auto-show/hide on disconnect/reconnect
+- **Stable event cleanup** — socket.off() uses handler refs
+  to avoid removing other components' listeners
+- **Ref-based shortcuts** — useKeyboardShortcuts uses ref
+  to avoid re-registering keydown listener on every render
+- **CSS-based toast positioning** — media query for mobile
+  centering instead of static JS check

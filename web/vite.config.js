@@ -7,7 +7,11 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     proxy: {
-      '/api': 'http://localhost:5001'
+      '/api': 'http://localhost:5001',
+      '/socket.io': {
+        target: 'http://localhost:5001',
+        ws: true,
+      }
     }
   }
 })
