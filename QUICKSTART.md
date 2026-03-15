@@ -18,16 +18,11 @@
 
 2. **Spawn a worker** — Click **+Spawn** (or press `n`). Pick a project and click Spawn.
 
-3. **Watch it start** — The terminal tab opens automatically. You'll see Claude Code loading, then its input prompt.
+3. **Watch it work** — Click the **Term** button on the worker card to open a terminal tab streaming the worker's output in real-time.
 
-4. **Send a message** — Type in the input bar at the bottom and press Enter. Try something simple:
-   ```
-   What files are in this project?
-   ```
+4. **Interact via remote control** — Workers start with remote control (`/rc`) enabled. Use Claude Code's remote-control feature to send tasks, or use the worker card buttons (RC, Compact, Reset, Kill).
 
-5. **See results** — Terminal streams output in real-time. When Claude is done, you'll see the `>` prompt again.
-
-6. **Check Activity** — The right panel shows git changes, pending proposals, and unpushed commits across all projects.
+5. **Check Activity** — The right panel shows git changes and unpushed commits across all projects.
 
 ## Key Workflows
 
@@ -37,21 +32,8 @@ Spawn workers in different projects to work in parallel. Each gets its own termi
 
 - **Spawn**: Click +Spawn or press `n`
 - **Switch**: Click terminal tabs to switch between workers
-- **Kill**: Click the X on a worker card, or use the kill button
-- **Send to any**: Select a worker, type in the input bar
-
-### Proposals
-
-Workers can submit proposals for your approval before taking action:
-
-```bash
-# From a worker's perspective, it POSTs to the API:
-curl -X POST http://localhost:5001/api/proposals \
-  -H "Content-Type: application/json" \
-  -d '{"id": "refactor-auth", "title": "Refactor auth module", "worker": "my-project"}'
-```
-
-You approve or reject in the Activity panel (right side).
+- **Kill**: Use the Kill button on the worker card
+- **Actions**: Use worker card buttons — RC, Compact, Reset, Kill
 
 ### Keyboard Shortcuts
 
@@ -84,46 +66,6 @@ Press `u` to see token usage across all sessions. Features:
 - Activity and cost trend charts
 - Breakdown by project, model, and hour
 
-### Quick Actions
-
-When viewing a worker's terminal, use the quick action buttons:
-- **Y / N** — Quick approve/reject (sends text + Enter)
-- **1-4** — Send numbered responses
-- **Esc** — Send Escape key to terminal
-- **Shift+click** — Populate input bar instead of sending immediately
-
-## Example Prompts for Workers
-
-### Starting a new feature
-```
-Add a dark mode toggle to the settings page. Use CSS variables for theming.
-```
-
-### Bug investigation
-```
-The login form submits twice on click. Investigate and fix the root cause.
-```
-
-### Code review
-```
-Review the changes in the last 3 commits. Flag any security issues or bugs.
-```
-
-### Refactoring
-```
-Refactor the API routes in server.py to use blueprints. Keep all existing behavior.
-```
-
-### Documentation
-```
-Update the README to reflect the new CLI flags added in the last release.
-```
-
-### Testing
-```
-Write unit tests for the auth module. Cover the login, logout, and token refresh flows.
-```
-
 ## Tips
 
 - **Multiple workers per project** — You can spawn multiple workers in the same project. They get auto-incremented names (e.g., `myproject`, `myproject-2`).
@@ -154,8 +96,8 @@ helm spawn myworker ~/proj   # Spawn worker
 helm send myworker "fix bug" # Send message
 helm output myworker         # View output
 helm kill myworker           # Kill worker
-helm proposals               # List proposals
-helm approve <id>            # Approve proposal
+helm proposals               # List proposals (API only, no UI yet)
+helm approve <id>            # Approve proposal (API only, no UI yet)
 ```
 
 Override the API URL: `export HELM_URL=http://other-machine:5001`

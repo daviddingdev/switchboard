@@ -2,14 +2,13 @@
 
 Personal AI operating system for managing Claude Code sessions across projects.
 
-Spawn and manage multiple Claude Code workers from one web UI. Monitor system metrics, track usage analytics with estimated API costs, approve worker proposals, and browse files — all in real-time via WebSocket.
+Spawn and manage multiple Claude Code workers from one web UI. Monitor system metrics, track usage analytics with estimated API costs, and browse files — all in real-time via WebSocket.
 
 ## What It Does
 
-- **Multi-worker management** — Spawn, kill, and message Claude Code sessions from one interface
+- **Multi-worker management** — Spawn, monitor, and control Claude Code sessions from one interface
 - **Real-time terminals** — Stream worker output via WebSocket, no polling
 - **File browser** — Browse project files with syntax highlighting and git status badges
-- **Proposals** — Workers submit proposals for approval before taking action
 - **System monitor** — CPU, memory, GPU, disk, network, and configurable services
 - **Usage analytics** — Token usage tracking with estimated API cost comparison
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
@@ -94,7 +93,7 @@ helm/
 ├── web/              # React frontend (Vite)
 │   └── src/
 ├── scripts/          # CLI helper, systemd, usage compute
-├── state/            # Runtime state (proposals, usage archive)
+├── state/            # Runtime state (usage archive)
 ├── docs/             # Architecture docs
 ├── contrib/          # Optional integrations (Telegram bot)
 ├── setup.sh          # Install dependencies

@@ -25,6 +25,7 @@ const styles = {
   container: {
     height: '100%',
     overflow: 'auto',
+    WebkitOverflowScrolling: 'touch',
     background: 'var(--bg-primary)',
   },
   loading: {
@@ -52,6 +53,7 @@ const styles = {
     fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
     fontSize: '13px',
     lineHeight: 1.6,
+    whiteSpace: 'pre',
   },
   lineNumbers: {
     display: 'flex',
@@ -66,10 +68,6 @@ const styles = {
     fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
     fontSize: '13px',
     lineHeight: 1.6,
-  },
-  content: {
-    flex: 1,
-    overflow: 'auto',
   },
 }
 

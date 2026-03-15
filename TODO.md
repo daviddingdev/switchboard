@@ -86,8 +86,9 @@ cd ~/helm
 ## Next
 
 ### Features
+- [ ] **Proposals UI** — Web UI for viewing, approving, and rejecting worker proposals (backend API exists, no frontend yet)
 - [ ] **File download/copy on mobile** — FilePreview needs mobile-safe download (share API, clipboard, or backend raw file endpoint)
-- [ ] **Plan mode awareness** — Detect Claude Code plan approval prompt, show approve/reject buttons instead of text input
+- [ ] **Plan mode awareness** — Detect Claude Code plan approval prompt, show approve/reject buttons in worker card
 - [ ] **Terminal scrolling** — Output panel scroll behavior improvements
 
 ## Backlog

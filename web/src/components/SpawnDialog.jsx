@@ -154,8 +154,9 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
       .catch(() => {})
     fetchModels()
       .then(data => {
-        setModels(data.models || [])
-        setModel(data.default || '')
+        const models = data.models || []
+        setModels(models)
+        setModel(data.default || (models.length > 0 ? models[0].id : ''))
       })
       .catch(() => {})
   }, [])

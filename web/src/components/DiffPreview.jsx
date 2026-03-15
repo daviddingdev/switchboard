@@ -5,6 +5,7 @@ const styles = {
   container: {
     height: '100%',
     overflow: 'auto',
+    WebkitOverflowScrolling: 'touch',
     background: 'var(--bg-primary)',
   },
   loading: {
@@ -64,7 +65,6 @@ const styles = {
     paddingLeft: '12px',
     paddingRight: '16px',
     whiteSpace: 'pre',
-    overflow: 'hidden',
   },
   addition: {
     background: 'rgba(46, 160, 67, 0.15)',

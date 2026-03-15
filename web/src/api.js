@@ -102,7 +102,7 @@ export async function fetchDiff(project, path) {
   return res.json();
 }
 
-// Partner context management
+// Workers usage
 
 export async function fetchWorkersUsage() {
   const res = await fetch(`${API_BASE}/workers/usage`);

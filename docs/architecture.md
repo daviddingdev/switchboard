@@ -69,14 +69,15 @@ All routes prefixed with `/api`.
 **Spawn** auto-increments name on collision.
 Returns `{name, directory, status, pid, log_file}`.
 
-**Send** accepts `{text, raw}`.
+**Send** accepts `{text, raw}`. Used by worker card
+actions (RC, Compact, Reset) and CLI helper.
 `raw: true` for special keys (Escape, Enter, C-c).
 `raw: false` for text (auto-appends Enter).
 
 **Output** default 50 lines. Captures 5x, filters
 blanks, returns last N non-empty lines.
 
-### Proposals
+### Proposals (API only, no UI yet)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -87,6 +88,7 @@ blanks, returns last N non-empty lines.
 
 Proposals stored as YAML in `state/proposals/`.
 Workers submit via curl to POST endpoint.
+**Note:** No web UI for proposals yet — API and CLI only.
 
 ### Files & Git
 
@@ -96,7 +98,7 @@ Workers submit via curl to POST endpoint.
 | GET | `/home` | File tree (all projects) |
 | GET | `/file?path=` | File content |
 | GET | `/diff?project=&path=` | Git diff |
-| GET | `/activity` | Changes + proposals |
+| GET | `/activity` | Changes + unpushed commits |
 
 **`/projects`** returns project list with name +
 directory.
@@ -105,9 +107,9 @@ directory.
 for directories with `CLAUDE.md` files (max depth 3).
 Returns tree with git status per file (M/U/A/D).
 
-**`/activity`** aggregates: pending proposals,
-uncommitted changes, unpushed commits across
-all projects. Pushed via WebSocket every 3s.
+**`/activity`** aggregates: uncommitted changes
+and unpushed commits across all projects.
+Pushed via WebSocket every 5s.
 
 ### Workers & Context
 
@@ -148,7 +150,7 @@ Flask-SocketIO with `threading` async mode
 |-------|----------|------|
 | `workers:update` | 2s | Worker list (only on change) |
 | `usage:update` | 5s | Worker usage stats (only on change) |
-| `activity:update` | 5s | Git changes + proposals (only on change) |
+| `activity:update` | 5s | Git changes + unpushed commits (only on change) |
 | `metrics:update` | 2s | System metrics (only on change) |
 | `worker:output` | 500ms | Terminal output (targeted via rooms) |
 | `files:update` | 5s | File tree (only on change) |
@@ -264,7 +266,7 @@ splice callback), visual feedback in TabBar.
 |-----------|-------------|
 | WorkerDashboard | Worker cards, spawn button, quick actions, theme toggle |
 | FileTree | Project browser with git status badges |
-| Activity | Proposals + changed files + unpushed commits |
+| Activity | Changed files + unpushed commits |
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
 | TerminalView | Real-time terminal streaming via WebSocket |
@@ -315,7 +317,7 @@ Terminal view uses dedicated `--terminal-bg` and
 
 ```
 state/
-├── proposals/*.yaml       # pending/resolved proposals
+├── proposals/*.yaml       # proposals (API only, no UI yet)
 └── usage-archive.json     # persistent daily usage data
 
 logs/
@@ -332,14 +334,12 @@ containing `CLAUDE.md` (max depth 3).
 
 `/api/home` also shows root-level `~/*.md` files.
 
-### Proposal Lifecycle
+### Proposal Lifecycle (API only, no UI yet)
 
 ```
 Worker submits POST /api/proposals
   → YAML file in state/proposals/
-  → Server pushes via activity:update
-  → Web UI shows in Activity panel
-  → User approves/rejects via PATCH
+  → Approve/reject via PATCH (CLI or API)
   → Worker checks status
 ```
 
