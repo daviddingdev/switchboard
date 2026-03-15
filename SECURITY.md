@@ -2,13 +2,13 @@
 
 ## Design Assumptions
 
-Orchestrator is designed for **localhost use only**. It assumes:
+Helm is designed for **localhost use only**. It assumes:
 
-- The API (port 5001) and web UI (port 3000) are not exposed to the internet
+- The API and web UI (port 5001) are not exposed to the internet
 - Only trusted users have access to the host machine
 - No authentication is implemented — all API endpoints are open
 
-**Do not expose Orchestrator ports to the public internet.**
+**Do not expose Helm ports to the public internet.**
 
 ## Reporting Vulnerabilities
 

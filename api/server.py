@@ -1,5 +1,5 @@
 """
-Flask API server for orchestrator.
+Flask API server for Helm.
 
 Provides HTTP endpoints for managing Claude Code worker sessions.
 """
@@ -45,8 +45,8 @@ def load_config():
         'host': '0.0.0.0',
         'project_root': '~',
         'scan_depth': 3,
-        'tmux_socket': 'orchestrator',
-        'tmux_session': 'orchestrator',
+        'tmux_socket': 'helm',
+        'tmux_session': 'helm',
     }
     config_path = PROJECT_ROOT / 'config.yaml'
     if config_path.exists():
@@ -157,7 +157,7 @@ def index():
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
     return {
-        "name": "Orchestrator API",
+        "name": "Helm API",
         "version": "0.5.0",
         "note": "Run 'cd web && npm run build' to enable the web UI",
     }
@@ -654,7 +654,7 @@ def _get_home_tree_data():
         parts = rel_path.split(os.sep)
 
         if len(parts) == 1:
-            # Direct child of home (e.g., ~/orchestrator)
+            # Direct child of home (e.g., ~/helm)
             result.append({
                 'name': proj_name,
                 'path': proj_dir,
@@ -1133,7 +1133,7 @@ def _get_workers_usage_data():
         session_file = _worker_sessions.get(name)
         if not session_file or not os.path.exists(session_file):
             session_dir = get_project_session_dir(proj_dir)
-            # Derive session label from worker name (e.g. "orchestrator-2" -> "orchestrator 2")
+            # Derive session label from worker name (e.g. "myproject-2" -> "myproject 2")
             folder = os.path.basename(proj_dir.rstrip('/'))
             match = re.match(r'^(.+?)-(\d+)$', name)
             label = f"{folder} {match.group(2)}" if match else f"{folder} 1"

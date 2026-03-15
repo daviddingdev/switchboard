@@ -1,6 +1,6 @@
-# Telegram Bot for Orchestrator
+# Telegram Bot for Helm
 
-Optional mobile control interface for the orchestrator via Telegram.
+Optional mobile control interface for Helm via Telegram.
 
 ## Setup
 
@@ -12,11 +12,11 @@ Optional mobile control interface for the orchestrator via Telegram.
 ## Systemd Service (Linux)
 
 ```bash
-cp orchestrator-telegram.service ~/.config/systemd/user/
+cp helm-telegram.service ~/.config/systemd/user/
 # Edit paths in the service file to match your setup
 systemctl --user daemon-reload
-systemctl --user enable orchestrator-telegram
-systemctl --user start orchestrator-telegram
+systemctl --user enable helm-telegram
+systemctl --user start helm-telegram
 ```
 
 ## Notification Hook
@@ -36,5 +36,5 @@ To use it, add it as a hook in your project's `.claude/settings.local.json`:
 
 ## Architecture
 
-The bot talks to the orchestrator API (default: `http://localhost:5001`).
-The main orchestrator has zero Telegram dependencies — this is fully optional.
+The bot talks to the Helm API (default: `http://localhost:5001`).
+Helm has zero Telegram dependencies — this is fully optional.

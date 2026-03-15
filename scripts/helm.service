@@ -1,14 +1,14 @@
 [Unit]
-Description=Orchestrator API + Web Server
+Description=Helm API + Web Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=forking
-WorkingDirectory=%h/orchestrator
+WorkingDirectory=%h/helm
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/orchestrator/start.sh
-ExecStop=%h/orchestrator/stop.sh
+ExecStart=%h/helm/start.sh
+ExecStop=%h/helm/stop.sh
 Restart=on-failure
 RestartSec=10
 

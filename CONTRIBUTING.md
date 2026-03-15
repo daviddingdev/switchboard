@@ -1,30 +1,30 @@
 # Contributing
 
-Thanks for your interest in Orchestrator! This guide covers how to set up, develop, and submit changes.
+Thanks for your interest in Helm! This guide covers how to set up, develop, and submit changes.
 
 ## Setup
 
 ```bash
-git clone https://github.com/dingod/orchestrator.git
-cd orchestrator
+git clone <your-repo-url>/helm.git
+cd helm
 ./setup.sh        # installs Python + Node dependencies
-./start.sh        # starts API + web dev server
+./start.sh        # starts API + web server
 ```
 
-Open http://localhost:3000 to verify everything works.
+Open http://localhost:5001 to verify everything works.
 
 ## Development
 
-**API** (Flask, port 5001):
+**API** (Flask-SocketIO, port 5001):
 ```bash
 # Edit api/server.py or api/tmux_manager.py
-# API auto-restarts if you restart via start.sh
+# Restart via ./stop.sh && ./start.sh
 ```
 
-**Web UI** (React + Vite, port 3000):
+**Web UI** (React + Vite):
 ```bash
 cd web
-npm run dev       # hot-reload dev server
+npm run dev       # hot-reload dev server on :3000 (proxies to :5001)
 npm run build     # production build (served by Flask)
 ```
 

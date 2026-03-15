@@ -1,6 +1,6 @@
-# Orchestrator Setup Guide
+# Helm Setup Guide
 
-Orchestrator runs on the machine where your Claude Code sessions live (Linux box, Mac, always-on PC). The web UI is accessed from any browser on any device.
+Helm runs on the machine where your Claude Code sessions live (Linux box, Mac, always-on PC). The web UI is accessed from any browser on any device.
 
 ## Prerequisites
 
@@ -35,8 +35,8 @@ claude --version
 ## Installation
 
 ```bash
-git clone https://github.com/dingod/orchestrator.git
-cd orchestrator
+git clone <your-repo-url>/helm.git
+cd helm
 
 chmod +x setup.sh start.sh stop.sh
 ./setup.sh
@@ -61,7 +61,7 @@ Key settings:
 - `monitor.gpu` — GPU monitoring command, or `enabled: false` to hide
 - `monitor.services` — processes to track (default: Ollama)
 - `monitor.disk_path` — mount point to monitor (default: `/`)
-- `spark` — optional platform dashboard integration
+- `pricing` — API cost estimation rates (see config.yaml.example for all model rates)
 
 See `config.yaml.example` for all options with inline docs.
 
@@ -75,12 +75,12 @@ API + Web UI port: edit `port` in `config.yaml` (default: 5001)
 ./stop.sh
 
 # To fully kill the tmux session:
-tmux -L orchestrator kill-session -t orchestrator
+tmux -L helm kill-session -t helm
 ```
 
 ## Project Discovery
 
-Orchestrator auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
+Helm auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
 
 To add a project: create a `CLAUDE.md` in its root.
 
@@ -100,7 +100,7 @@ sudo bash scripts/setup-sudo.sh
 
 Or manually:
 ```bash
-sudo visudo -f /etc/sudoers.d/orchestrator-updates
+sudo visudo -f /etc/sudoers.d/helm-updates
 # Add: <username> ALL=(ALL) NOPASSWD: /usr/bin/apt-get update *, /usr/bin/apt-get upgrade *, /usr/bin/snap refresh *
 ```
 
@@ -137,7 +137,7 @@ Common: port 5001 in use, missing Python deps (`pip3 install -r api/requirements
 ### Web UI won't load
 
 ```bash
-cat logs/web.log
+cat logs/api.log
 ```
 
 Common: port 5001 in use, missing Node deps (`cd web && npm install`).
@@ -145,7 +145,7 @@ Common: port 5001 in use, missing Node deps (`cd web && npm install`).
 ### tmux session issues
 
 ```bash
-tmux -L orchestrator list-sessions              # List sessions
-tmux -L orchestrator attach -t orchestrator      # Attach
-tmux -L orchestrator kill-session -t orchestrator # Kill all
+tmux -L helm list-sessions              # List sessions
+tmux -L helm attach -t helm             # Attach
+tmux -L helm kill-session -t helm       # Kill all
 ```

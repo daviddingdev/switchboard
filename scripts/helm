@@ -1,42 +1,42 @@
 #!/bin/bash
-# Orchestrator CLI - partner automation helper
-# Usage: orch <command> [args]
+# Helm CLI - worker automation helper
+# Usage: helm <command> [args]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-API="${ORCHESTRATOR_URL:-http://localhost:5001}"
+API="${HELM_URL:-http://localhost:5001}"
 
 case "$1" in
   spawn)
-    # orch spawn <name> <directory>
+    # helm spawn <name> <directory>
     curl -s -X POST "$API/api/processes" \
       -H "Content-Type: application/json" \
       -d "{\"name\": \"$2\", \"directory\": \"$3\"}" | jq .
     ;;
   kill)
-    # orch kill <name>
+    # helm kill <name>
     curl -s -X DELETE "$API/api/processes/$2" | jq .
     ;;
   list)
-    # orch list
+    # helm list
     curl -s "$API/api/processes" | jq -r '.[] | "\(.name)\t\(.pid)"'
     ;;
   send)
-    # orch send <name> "<message>"
+    # helm send <name> "<message>"
     curl -s -X POST "$API/api/processes/$2/send" \
       -H "Content-Type: application/json" \
       -d "{\"text\": \"$3\"}" | jq .
     ;;
   output)
-    # orch output <name> [lines]
+    # helm output <name> [lines]
     LINES="${3:-100}"
     curl -s "$API/api/processes/$2/output?lines=$LINES" | jq -r '.output'
     ;;
   proposals)
-    # orch proposals
+    # helm proposals
     curl -s "$API/api/proposals" | jq -r '.[] | "\(.id)\t\(.status)\t\(.title)"'
     ;;
   propose)
-    # orch propose <id> <title> <worker> [--auto]
+    # helm propose <id> <title> <worker> [--auto]
     ID="$2"; TITLE="$3"; WORKER="$4"
     AUTO="false"; [[ "$5" == "--auto" ]] && AUTO="true"
     curl -s -X POST "$API/api/proposals" \
@@ -44,25 +44,25 @@ case "$1" in
       -d "{\"id\": \"$ID\", \"title\": \"$TITLE\", \"worker\": \"$WORKER\", \"auto_approve\": $AUTO}" | jq .
     ;;
   approve)
-    # orch approve <id>
+    # helm approve <id>
     curl -s -X PATCH "$API/api/proposals/$2" \
       -H "Content-Type: application/json" \
       -d '{"status": "approved"}' | jq .
     ;;
   reject)
-    # orch reject <id>
+    # helm reject <id>
     curl -s -X PATCH "$API/api/proposals/$2" \
       -H "Content-Type: application/json" \
       -d '{"status": "rejected"}' | jq .
     ;;
   projects)
-    # orch projects (auto-discovered from API)
+    # helm projects (auto-discovered from API)
     curl -s "$API/api/projects" | jq -r '.[] | "\(.name)\t\(.directory)"'
     ;;
   *)
-    echo "Orchestrator CLI"
+    echo "Helm CLI"
     echo ""
-    echo "Usage: orch <command> [args]"
+    echo "Usage: helm <command> [args]"
     echo ""
     echo "Workers:"
     echo "  spawn <name> <dir>     Spawn worker in directory"

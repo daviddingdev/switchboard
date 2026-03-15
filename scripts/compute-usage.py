@@ -6,13 +6,14 @@ Scans ~/.claude/projects/ for session JSONLs, aggregates token usage,
 and writes stats to state/usage-stats.json.
 
 Run: python3 scripts/compute-usage.py
-Cron: 0 2 * * 0 cd ~/orchestrator && python3 scripts/compute-usage.py
+Cron: 0 2 * * 0 cd ~/helm && python3 scripts/compute-usage.py
 """
 
 import json
 import re
 import sys
 import time
+import yaml
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -26,6 +27,70 @@ STATE_DIR = PROJECT_ROOT / "state"
 OUTPUT_FILE = STATE_DIR / "usage-stats.json"
 
 CHUNK_SIZE = 1024 * 1024  # 1MB chunks for large file regex scanning
+
+CONFIG_FILE = PROJECT_ROOT / "config.yaml"
+
+DEFAULT_PRICING = {
+    'subscription': 100,
+    'models': {
+        'claude-opus-4-5': {'input': 5, 'output': 25},
+        'claude-opus-4-6': {'input': 5, 'output': 25},
+        'claude-sonnet-4-5': {'input': 3, 'output': 15},
+        'claude-sonnet-4-6': {'input': 3, 'output': 15},
+        'claude-haiku-4-5': {'input': 1, 'output': 5},
+    },
+    'cache': {
+        'read_discount': 0.90,
+        'creation_premium': 0.25,
+    }
+}
+
+
+def load_pricing():
+    """Load pricing from config.yaml, falling back to defaults."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = yaml.safe_load(f) or {}
+            if 'pricing' in cfg:
+                p = cfg['pricing']
+                return {
+                    'subscription': p.get('subscription', DEFAULT_PRICING['subscription']),
+                    'models': p.get('models', DEFAULT_PRICING['models']),
+                    'cache': p.get('cache', DEFAULT_PRICING['cache']),
+                }
+        except Exception:
+            pass
+    return DEFAULT_PRICING
+
+
+def get_model_pricing(model_id, pricing):
+    """Match a full model ID (e.g., claude-opus-4-5-20251101) to pricing config."""
+    models = pricing['models']
+    for key in sorted(models.keys(), key=len, reverse=True):
+        if model_id.startswith(key):
+            return models[key]
+    return None
+
+
+def calculate_cost(tokens, model_id, pricing):
+    """Calculate estimated API cost in USD for token counts from a specific model."""
+    model_pricing = get_model_pricing(model_id, pricing)
+    if not model_pricing:
+        return 0.0
+
+    input_rate = model_pricing['input']
+    output_rate = model_pricing['output']
+    cache_read_rate = input_rate * (1 - pricing['cache']['read_discount'])
+    cache_creation_rate = input_rate * (1 + pricing['cache']['creation_premium'])
+
+    cost = (
+        tokens.get('input', 0) / 1_000_000 * input_rate +
+        tokens.get('output', 0) / 1_000_000 * output_rate +
+        tokens.get('cache_read', 0) / 1_000_000 * cache_read_rate +
+        tokens.get('cache_creation', 0) / 1_000_000 * cache_creation_rate
+    )
+    return round(cost, 4)
 
 
 def utc_to_local_date(utc_str):
@@ -72,7 +137,7 @@ def build_session_project_map():
 
 def dir_name_to_project(dir_name):
     """Convert project dir hash to readable name.
-    e.g., '-home-username-orchestrator' -> 'orchestrator'
+    e.g., '-home-username-myproject' -> 'myproject'
     """
     parts = dir_name.lstrip('-').split('-')
     # Skip 'home' and username, take the rest
@@ -183,7 +248,8 @@ def extract_daily_breakdown(filepath):
     Returns (daily_stats, hourly_counts).
     """
     daily = defaultdict(lambda: {'sessions': set(), 'messages': 0, 'tool_calls': 0,
-                                  'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0})
+                                  'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0,
+                                  'by_model': defaultdict(lambda: {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0})})
     hourly = defaultdict(int)
     session_id = filepath.stem
 
@@ -254,6 +320,14 @@ def extract_daily_breakdown(filepath):
                         daily[date_str]['cache_read'] += usage.get('cache_read_input_tokens', 0)
                         daily[date_str]['cache_creation'] += usage.get('cache_creation_input_tokens', 0)
 
+                        # Track per-model tokens per day for cost calculation
+                        model = msg.get('model', '')
+                        if model and model.startswith('claude'):
+                            daily[date_str]['by_model'][model]['input'] += usage.get('input_tokens', 0)
+                            daily[date_str]['by_model'][model]['output'] += usage.get('output_tokens', 0)
+                            daily[date_str]['by_model'][model]['cache_read'] += usage.get('cache_read_input_tokens', 0)
+                            daily[date_str]['by_model'][model]['cache_creation'] += usage.get('cache_creation_input_tokens', 0)
+
                         content = msg.get('content', [])
                         if isinstance(content, list):
                             for block in content:
@@ -270,6 +344,8 @@ def compute_all():
     """Main compute function. Scans all sessions, builds stats."""
     start_time = time.time()
     print("Computing usage stats...")
+
+    pricing = load_pricing()
 
     session_project_map = build_session_project_map()
     print(f"  Found {len(session_project_map)} sessions in history")
@@ -296,7 +372,10 @@ def compute_all():
         'messages': 0,
         'tokens': {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}
     })
+    project_model_agg = defaultdict(lambda: defaultdict(lambda: {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}))
+    daily_model_agg = defaultdict(lambda: defaultdict(lambda: {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}))
     hourly_agg = defaultdict(int)
+    unpriced_models = set()
     all_dates = set()
 
     if not PROJECTS_DIR.exists():
@@ -357,6 +436,12 @@ def compute_all():
                 model_agg[model]['messages'] += m_data['messages']
                 for k in ['input', 'output', 'cache_read', 'cache_creation']:
                     model_agg[model]['tokens'][k] += m_data.get(k, 0)
+                # Track per-project model usage for cost
+                for k in ['input', 'output', 'cache_read', 'cache_creation']:
+                    project_model_agg[proj_name][model][k] += m_data.get(k, 0)
+                # Check for unpriced models
+                if get_model_pricing(model, pricing) is None:
+                    unpriced_models.add(model)
 
             # Update daily aggregates
             for date_str, day_data in daily_data.items():
@@ -367,6 +452,10 @@ def compute_all():
                 daily_agg[date_str]['tool_calls'] += day_data.get('tool_calls', 0)
                 for k in ['input', 'output', 'cache_read', 'cache_creation']:
                     daily_agg[date_str]['tokens'][k] += day_data.get(k, 0)
+                # Accumulate per-model-per-day tokens for cost
+                for model, m_tokens in day_data.get('by_model', {}).items():
+                    for k in ['input', 'output', 'cache_read', 'cache_creation']:
+                        daily_model_agg[date_str][model][k] += m_tokens.get(k, 0)
 
             # Update hourly aggregates
             for hour, count in hourly_data.items():
@@ -374,26 +463,37 @@ def compute_all():
 
         print()
 
+    # Warn about unpriced models
+    if unpriced_models:
+        for m in sorted(unpriced_models):
+            total = sum(model_agg[m]['tokens'].get(k, 0) for k in ['input', 'output', 'cache_read', 'cache_creation'])
+            print(f"  WARNING: No pricing config for model '{m}' ({total:,} tokens)", file=sys.stderr)
+
     # Compute derived stats
     overview['days_active'] = len(all_dates)
     overview['first_session'] = min(all_dates) if all_dates else None
     overview['projects_count'] = len(project_agg)
 
-    # Build daily array (sorted by date)
+    # Build daily array (sorted by date) with cost
     daily_list = []
     for date_str in sorted(daily_agg.keys()):
         d = daily_agg[date_str]
+        day_cost = sum(
+            calculate_cost(m_tokens, model, pricing)
+            for model, m_tokens in daily_model_agg.get(date_str, {}).items()
+        )
         daily_list.append({
             'date': date_str,
             'sessions': d['sessions'],
             'messages': d['messages'],
             'tool_calls': d['tool_calls'],
             'tokens': d['tokens'],
+            'cost': round(day_cost, 2),
         })
 
     # Build weekly aggregates
     weekly_agg = defaultdict(lambda: {
-        'sessions': 0, 'messages': 0, 'tool_calls': 0,
+        'sessions': 0, 'messages': 0, 'tool_calls': 0, 'cost': 0,
         'tokens': {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}
     })
     for day in daily_list:
@@ -410,6 +510,7 @@ def compute_all():
         weekly_agg[week_key]['sessions'] += day['sessions']
         weekly_agg[week_key]['messages'] += day['messages']
         weekly_agg[week_key]['tool_calls'] += day['tool_calls']
+        weekly_agg[week_key]['cost'] += day.get('cost', 0)
         for k in day['tokens']:
             weekly_agg[week_key]['tokens'][k] += day['tokens'][k]
 
@@ -423,6 +524,7 @@ def compute_all():
             'messages': w['messages'],
             'tool_calls': w['tool_calls'],
             'tokens': w['tokens'],
+            'cost': round(w['cost'], 2),
         })
 
     # Build comparison (this week vs last week)
@@ -433,8 +535,8 @@ def compute_all():
     iso_cal_last = last_week.isocalendar()
     last_week_key = f"{iso_cal_last[0]}-W{iso_cal_last[1]:02d}"
 
-    this_week = weekly_agg.get(this_week_key, {'sessions': 0, 'messages': 0, 'tool_calls': 0, 'tokens': {'output': 0}})
-    last_week_data = weekly_agg.get(last_week_key, {'sessions': 0, 'messages': 0, 'tool_calls': 0, 'tokens': {'output': 0}})
+    this_week = weekly_agg.get(this_week_key, {'sessions': 0, 'messages': 0, 'tool_calls': 0, 'cost': 0, 'tokens': {'output': 0}})
+    last_week_data = weekly_agg.get(last_week_key, {'sessions': 0, 'messages': 0, 'tool_calls': 0, 'cost': 0, 'tokens': {'output': 0}})
 
     def pct_change(new, old):
         if old == 0:
@@ -447,12 +549,14 @@ def compute_all():
             'messages': this_week['messages'],
             'tool_calls': this_week['tool_calls'],
             'tokens_output': this_week['tokens'].get('output', 0),
+            'cost': round(this_week.get('cost', 0), 2),
         },
         'last_week': {
             'sessions': last_week_data['sessions'],
             'messages': last_week_data['messages'],
             'tool_calls': last_week_data['tool_calls'],
             'tokens_output': last_week_data['tokens'].get('output', 0),
+            'cost': round(last_week_data.get('cost', 0), 2),
         },
         'change_pct': {
             'sessions': pct_change(this_week['sessions'], last_week_data['sessions']),
@@ -462,26 +566,33 @@ def compute_all():
                 this_week['tokens'].get('output', 0),
                 last_week_data['tokens'].get('output', 0)
             ),
+            'cost': pct_change(this_week.get('cost', 0), last_week_data.get('cost', 0)),
         },
     }
 
-    # Build project list (sorted by output tokens desc)
+    # Build project list (sorted by output tokens desc) with cost
     project_list = []
     for name, data in sorted(project_agg.items(), key=lambda x: x[1]['tokens']['output'], reverse=True):
+        proj_cost = sum(
+            calculate_cost(m_tokens, model, pricing)
+            for model, m_tokens in project_model_agg[name].items()
+        )
         project_list.append({
             'name': name,
             'sessions': data['sessions'],
             'messages': data['messages'],
             'tool_calls': data['tool_calls'],
             'tokens': data['tokens'],
+            'cost': round(proj_cost, 2),
         })
 
-    # Build model dict
+    # Build model dict with cost
     model_dict = {}
     for model, data in model_agg.items():
         model_dict[model] = {
             'messages': data['messages'],
             'tokens': data['tokens'],
+            'cost': round(calculate_cost(data['tokens'], model, pricing), 2),
         }
 
     # Build hourly dict
@@ -511,6 +622,13 @@ def compute_all():
             }
         })
 
+    # Compute total cost from model aggregates (most accurate)
+    overview['total_cost'] = round(sum(
+        calculate_cost(data['tokens'], model, pricing)
+        for model, data in model_agg.items()
+    ), 2)
+    overview['subscription_monthly'] = pricing['subscription']
+
     duration = time.time() - start_time
 
     result = {
@@ -524,6 +642,12 @@ def compute_all():
         'by_hour': hourly_dict,
         'comparison': comparison,
         'snapshots': snapshots,
+        'pricing': {
+            'subscription': pricing['subscription'],
+            'models': pricing['models'],
+            'cache': pricing['cache'],
+        },
+        'unpriced_models': sorted(unpriced_models) if unpriced_models else [],
     }
 
     # Merge with archived daily data (survives if Claude purges old sessions)
@@ -538,9 +662,25 @@ def compute_all():
         except Exception:
             pass
 
-    # Merge: archive keeps old data, fresh scan overwrites recent days
+    # Merge: keep the higher count per date (Claude Code prunes old session files,
+    # so fresh scans may find fewer sessions than the archive recorded)
     for d in daily_list:
-        archived_daily[d['date']] = d
+        date = d['date']
+        if date in archived_daily:
+            old = archived_daily[date]
+            archived_daily[date] = {
+                'date': date,
+                'sessions': max(old.get('sessions', 0), d['sessions']),
+                'messages': max(old.get('messages', 0), d['messages']),
+                'tool_calls': max(old.get('tool_calls', 0), d.get('tool_calls', 0)),
+                'tokens': {
+                    k: max(old.get('tokens', {}).get(k, 0), d.get('tokens', {}).get(k, 0))
+                    for k in ['input', 'output', 'cache_read', 'cache_creation']
+                },
+                'cost': max(old.get('cost', 0), d.get('cost', 0)),
+            }
+        else:
+            archived_daily[date] = d
 
     merged_daily = [archived_daily[k] for k in sorted(archived_daily.keys())]
 
@@ -558,7 +698,7 @@ def compute_all():
 
     # Recompute weekly from merged daily
     merged_weekly_agg = defaultdict(lambda: {
-        'sessions': 0, 'messages': 0, 'tool_calls': 0,
+        'sessions': 0, 'messages': 0, 'tool_calls': 0, 'cost': 0,
         'tokens': {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}
     })
     for day in merged_daily:
@@ -573,18 +713,27 @@ def compute_all():
         merged_weekly_agg[wk]['sessions'] += day['sessions']
         merged_weekly_agg[wk]['messages'] += day['messages']
         merged_weekly_agg[wk]['tool_calls'] += day.get('tool_calls', 0)
+        merged_weekly_agg[wk]['cost'] += day.get('cost', 0)
         for tk in day.get('tokens', {}):
             merged_weekly_agg[wk]['tokens'][tk] += day['tokens'][tk]
 
     result['weekly'] = [
         {'week': wk, 'week_start': merged_weekly_agg[wk].get('week_start', ''),
          'sessions': merged_weekly_agg[wk]['sessions'], 'messages': merged_weekly_agg[wk]['messages'],
-         'tool_calls': merged_weekly_agg[wk]['tool_calls'], 'tokens': merged_weekly_agg[wk]['tokens']}
+         'tool_calls': merged_weekly_agg[wk]['tool_calls'], 'tokens': merged_weekly_agg[wk]['tokens'],
+         'cost': round(merged_weekly_agg[wk]['cost'], 2)}
         for wk in sorted(merged_weekly_agg.keys())
     ]
 
-    # Update overview with merged totals
+    # Update overview with merged totals (archive may have higher counts from
+    # sessions that Claude Code has since pruned from disk)
     result['overview']['days_active'] = len(merged_daily)
+    merged_sessions = sum(d.get('sessions', 0) for d in merged_daily)
+    merged_messages = sum(d.get('messages', 0) for d in merged_daily)
+    merged_tool_calls = sum(d.get('tool_calls', 0) for d in merged_daily)
+    result['overview']['total_sessions'] = max(result['overview']['total_sessions'], merged_sessions)
+    result['overview']['total_messages'] = max(result['overview']['total_messages'], merged_messages)
+    result['overview']['total_tool_calls'] = max(result['overview']['total_tool_calls'], merged_tool_calls)
 
     # Write output
     with open(OUTPUT_FILE, 'w') as f:
@@ -595,6 +744,7 @@ def compute_all():
     print(f"  Messages: {overview['total_messages']}")
     print(f"  Tool calls: {overview['total_tool_calls']}")
     print(f"  Output tokens: {overview['total_tokens']['output']:,}")
+    print(f"  Est. API cost: ${overview['total_cost']:,.2f}")
     print(f"  Written to: {OUTPUT_FILE}")
 
     return result

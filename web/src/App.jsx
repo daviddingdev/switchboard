@@ -236,7 +236,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    document.title = workerCount > 0 ? `(${workerCount}) Orchestrator` : 'Orchestrator'
+    document.title = workerCount > 0 ? `(${workerCount}) Helm` : 'Helm'
   }, [workerCount])
 
   // --- Tab management ---

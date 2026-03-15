@@ -1,4 +1,4 @@
-# Orchestrator Configuration
+# Helm Configuration
 # Copy to config.yaml and customize as needed.
 # All settings have sensible defaults — an empty config.yaml (or none at all) works fine.
 
@@ -11,8 +11,8 @@ project_root: "~"
 scan_depth: 3
 
 # tmux session settings
-tmux_socket: "orchestrator"
-tmux_session: "orchestrator"
+tmux_socket: "helm"
+tmux_session: "helm"
 
 # Claude Code model options shown in spawn dialog
 # Set to "auto" (default) to discover models from `claude model list`.
@@ -78,15 +78,35 @@ monitor:
 # This feature is automatically hidden on macOS and Windows.
 #
 # For apt updates to work non-interactively, configure passwordless sudo:
-#   sudo visudo -f /etc/sudoers.d/orchestrator
+#   sudo visudo -f /etc/sudoers.d/helm
 #   <username> ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/snap
 #
-# On macOS: use `brew update && brew outdated` manually. Orchestrator
+# On macOS: use `brew update && brew outdated` manually. Helm
 # doesn't manage macOS packages (yet).
+
+# ─── Estimated API Cost Tracking ──────────────────────────────────
+# The Usage tab shows estimated API costs based on token usage and model pricing.
+# Useful for understanding what your usage would cost on API billing vs Max subscription.
+#
+# Pricing is per million tokens (USD). Update when Anthropic changes pricing
+# or releases new model families. The compute script warns when it encounters
+# a model ID that doesn't match any pricing config below.
+#
+# pricing:
+#   subscription: 100  # Your monthly Max subscription cost (USD)
+#   models:
+#     claude-opus-4-5: { input: 5, output: 25 }
+#     claude-opus-4-6: { input: 5, output: 25 }
+#     claude-sonnet-4-5: { input: 3, output: 15 }
+#     claude-sonnet-4-6: { input: 3, output: 15 }
+#     claude-haiku-4-5: { input: 1, output: 5 }
+#   cache:
+#     read_discount: 0.90    # 90% off input price for cached reads
+#     creation_premium: 0.25  # 25% premium on input price for cache writes
 
 # ─── Platform Dashboard Integration (optional) ───────────────────
 # If your machine has a management dashboard API (e.g., DGX Spark),
-# Orchestrator can check for platform-level updates and trigger
+# Helm can check for platform-level updates and trigger
 # update+reboot from the Monitor tab.
 # Leave commented out if your machine doesn't have a dashboard.
 #

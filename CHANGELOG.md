@@ -1,6 +1,21 @@
-# Orchestrator Changelog
+# Helm Changelog
 
 ## 2026-03-15
+
+### Renamed to Helm
+- Project renamed from Orchestrator to Helm across all files, configs, service files, and documentation
+- tmux socket/session renamed from `orchestrator` to `helm`
+- CLI helper renamed from `orch` to `helm`, env var `ORCHESTRATOR_URL` → `HELM_URL`
+- Service files renamed: `helm.service`, `helm-telegram.service`
+- Deleted stale `docs/UPGRADE-PLAN.md` (completed WebSocket upgrade)
+- Created `QUICKSTART.md` — onboarding guide with setup checklist, first session walkthrough, and usage patterns
+
+### Estimated API Cost Tracking
+- **Cost estimation** — `scripts/compute-usage.py` now computes estimated API costs per model using configurable pricing from `config.yaml`. Costs flow through daily/weekly/by-model/by-project aggregations.
+- **Pricing config** — `config.yaml.example` documents per-model rates (input/output per MTok), cache multipliers, and subscription amount. Stale pricing detection warns on unknown models.
+- **Usage UI** — New "Est. API Cost" overview card (amber), cost trend chart (side-by-side with activity), cost per model inline, cost row in comparison table.
+- **Archive improvements** — MAX-per-field merge strategy prevents data loss when Claude Code prunes old session files. Seeded archive from `stats-cache.json` to recover historical session counts.
+- **Chart layout** — Activity and cost charts now side-by-side. Daily gap filling for accurate timelines. "All" range shows daily data instead of monthly aggregation.
 
 ### Network Efficiency Overhaul
 - **Targeted terminal output** — `worker:output` now emits only to subscribed clients via Socket.IO rooms, not broadcast to all. Eliminates wasted bandwidth (up to ~50KB per push per extra client).
@@ -71,7 +86,7 @@ Replaced all polling with WebSocket push. REST retained for actions and initial 
 - **Error states** — `ErrorState.jsx` with retry button, shown on fetch failure.
 - **Keyboard shortcuts** — `useKeyboardShortcuts` hook. `n` (spawn), `m` (monitor), `u` (usage), `Esc` (close), `?` (help overlay).
 - **Dark/light theme** — CSS variables on `:root.light`. Toggle persisted to localStorage. Available on both desktop and mobile.
-- **Worker count in page title** — Shows `(N) Orchestrator` when workers are active.
+- **Worker count in page title** — Shows `(N) Helm` when workers are active.
 
 ### Post-Upgrade Polish
 

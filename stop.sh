@@ -1,7 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
-echo "Stopping Orchestrator..."
+echo "Stopping Helm..."
 
 if [ -f logs/api.pid ]; then
     PID=$(cat logs/api.pid)
@@ -16,4 +16,4 @@ fi
 echo "Done"
 echo ""
 echo "Note: tmux session may still be running."
-echo "To kill it: tmux -L orchestrator kill-session -t orchestrator"
+echo "To kill it: tmux -L helm kill-session -t helm"

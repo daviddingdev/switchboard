@@ -18,7 +18,7 @@ except: print(5001)
 
 # Check if already running
 if [ -f logs/api.pid ] && kill -0 $(cat logs/api.pid) 2>/dev/null; then
-    echo "Orchestrator already running (PID $(cat logs/api.pid))"
+    echo "Helm already running (PID $(cat logs/api.pid))"
     echo "  URL: http://localhost:${PORT}"
     exit 0
 fi
@@ -29,14 +29,14 @@ if [ ! -d "web/dist" ]; then
     (cd web && npm run build)
 fi
 
-echo "Starting Orchestrator..."
+echo "Starting Helm..."
 nohup python3 api/server.py > logs/api.log 2>&1 &
 echo $! > logs/api.pid
 sleep 2
 
 if kill -0 $(cat logs/api.pid) 2>/dev/null; then
     echo ""
-    echo "Orchestrator running:"
+    echo "Helm running:"
     echo "  URL:  http://localhost:${PORT}"
     echo "  Logs: logs/api.log"
     echo "  Stop: ./stop.sh"

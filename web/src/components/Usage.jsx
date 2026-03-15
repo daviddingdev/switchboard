@@ -203,6 +203,14 @@ function formatNum(n) {
   return String(n)
 }
 
+function formatCost(n) {
+  if (n == null || n === 0) return '$0'
+  if (n < 0.01) return '<$0.01'
+  if (n < 1) return '$' + n.toFixed(2)
+  if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'K'
+  return '$' + n.toFixed(2)
+}
+
 function formatDate(iso) {
   if (!iso) return '--'
   try {
@@ -219,6 +227,20 @@ function shortDate(dateStr) {
   return dateStr
 }
 
+function fillDailyGaps(daily) {
+  if (!daily || daily.length < 2) return daily || []
+  const filled = []
+  const first = new Date(daily[0].date + 'T00:00:00')
+  const last = new Date(daily[daily.length - 1].date + 'T00:00:00')
+  const byDate = {}
+  for (const d of daily) byDate[d.date] = d
+  for (let dt = new Date(first); dt <= last; dt.setDate(dt.getDate() + 1)) {
+    const key = dt.toISOString().slice(0, 10)
+    filled.push(byDate[key] || { date: key, sessions: 0, messages: 0, tool_calls: 0, cost: 0, tokens: { input: 0, output: 0, cache_read: 0, cache_creation: 0 } })
+  }
+  return filled
+}
+
 function filterDailyByRange(daily, rangeKey) {
   if (!daily || rangeKey === 'all') return daily || []
   const range = TIME_RANGES.find(r => r.key === rangeKey)
@@ -230,12 +252,13 @@ function filterDailyByRange(daily, rangeKey) {
 }
 
 function computeOverviewFromDaily(filteredDaily) {
-  let sessions = 0, messages = 0, tool_calls = 0
+  let sessions = 0, messages = 0, tool_calls = 0, cost = 0
   const tokens = { input: 0, output: 0, cache_read: 0, cache_creation: 0 }
   for (const d of filteredDaily) {
     sessions += d.sessions || 0
     messages += d.messages || 0
     tool_calls += d.tool_calls || 0
+    cost += d.cost || 0
     if (d.tokens) {
       tokens.input += d.tokens.input || 0
       tokens.output += d.tokens.output || 0
@@ -243,7 +266,7 @@ function computeOverviewFromDaily(filteredDaily) {
       tokens.cache_creation += d.tokens.cache_creation || 0
     }
   }
-  return { total_sessions: sessions, total_messages: messages, total_tool_calls: tool_calls, total_tokens: tokens, days_active: filteredDaily.length }
+  return { total_sessions: sessions, total_messages: messages, total_tool_calls: tool_calls, total_tokens: tokens, total_cost: cost, days_active: filteredDaily.length }
 }
 
 function aggregateToWeekly(dailyData) {
@@ -254,10 +277,11 @@ function aggregateToWeekly(dailyData) {
     const monday = new Date(dt)
     monday.setDate(dt.getDate() - ((day + 6) % 7))
     const weekKey = monday.toISOString().slice(0, 10)
-    if (!weeks[weekKey]) weeks[weekKey] = { date: weekKey, sessions: 0, messages: 0, tool_calls: 0 }
+    if (!weeks[weekKey]) weeks[weekKey] = { date: weekKey, sessions: 0, messages: 0, tool_calls: 0, cost: 0 }
     weeks[weekKey].sessions += d.sessions || 0
     weeks[weekKey].messages += d.messages || 0
     weeks[weekKey].tool_calls += d.tool_calls || 0
+    weeks[weekKey].cost += d.cost || 0
   }
   return Object.values(weeks).sort((a, b) => a.date.localeCompare(b.date))
 }
@@ -266,10 +290,11 @@ function aggregateToMonthly(dailyData) {
   const months = {}
   for (const d of dailyData) {
     const monthKey = d.date.slice(0, 7)
-    if (!months[monthKey]) months[monthKey] = { date: monthKey, sessions: 0, messages: 0, tool_calls: 0 }
+    if (!months[monthKey]) months[monthKey] = { date: monthKey, sessions: 0, messages: 0, tool_calls: 0, cost: 0 }
     months[monthKey].sessions += d.sessions || 0
     months[monthKey].messages += d.messages || 0
     months[monthKey].tool_calls += d.tool_calls || 0
+    months[monthKey].cost += d.cost || 0
   }
   return Object.values(months).sort((a, b) => a.date.localeCompare(b.date))
 }
@@ -324,7 +349,7 @@ function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems 
   )
 }
 
-function LineChart({ data, labelKey, valueKey, color = 'var(--accent)', height = 160 }) {
+function LineChart({ data, labelKey, valueKey, color = 'var(--accent)', height = 160, formatFn = formatNum }) {
   const [hover, setHover] = useState(null)
   if (!data || data.length === 0) return null
 
@@ -473,7 +498,7 @@ function LineChart({ data, labelKey, valueKey, color = 'var(--accent)', height =
         }}>
           <span style={{ color: 'var(--text-secondary)' }}>{data[hover][labelKey]}</span>
           {' '}
-          <strong>{formatNum(data[hover][valueKey])}</strong>
+          <strong>{formatFn(data[hover][valueKey])}</strong>
         </div>
       )}
     </div>
@@ -520,6 +545,7 @@ function ComparisonCard({ comparison, isMobile }) {
     { label: 'Sessions', thisVal: this_week.sessions, lastVal: last_week.sessions, pct: change_pct.sessions },
     { label: 'Tool Calls', thisVal: this_week.tool_calls, lastVal: last_week.tool_calls, pct: change_pct.tool_calls },
     { label: 'Output Tokens', thisVal: this_week.tokens_output, lastVal: last_week.tokens_output, pct: change_pct.tokens_output },
+    { label: 'Est. Cost', thisVal: this_week.cost, lastVal: last_week.cost, pct: change_pct.cost, isCost: true },
   ]
 
   return (
@@ -532,9 +558,9 @@ function ComparisonCard({ comparison, isMobile }) {
         <span style={{ color: 'var(--text-secondary)', textAlign: 'right', fontWeight: 600 }}>Change</span>
         {rows.map(r => (
           <>
-            <span key={`l-${r.label}`} style={{ color: 'var(--text-secondary)' }}>{r.label}</span>
-            <span key={`t-${r.label}`} style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatNum(r.thisVal)}</span>
-            <span key={`p-${r.label}`} style={{ textAlign: 'right', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{formatNum(r.lastVal)}</span>
+            <span key={`l-${r.label}`} style={{ color: r.isCost ? '#f59e0b' : 'var(--text-secondary)' }}>{r.label}</span>
+            <span key={`t-${r.label}`} style={{ textAlign: 'right', fontWeight: 600, color: r.isCost ? '#f59e0b' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{r.isCost ? formatCost(r.thisVal) : formatNum(r.thisVal)}</span>
+            <span key={`p-${r.label}`} style={{ textAlign: 'right', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{r.isCost ? formatCost(r.lastVal) : formatNum(r.lastVal)}</span>
             <span key={`c-${r.label}`} style={{
               textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums',
               color: r.pct > 0 ? 'var(--success)' : r.pct < 0 ? 'var(--text-secondary)' : 'var(--text-secondary)',
@@ -640,17 +666,17 @@ export default function Usage({ isMobile }) {
   // (backend overview counts files; daily sums count session-days which can differ)
   const rangeOverview = computeOverviewFromDaily(filteredDaily)
 
-  // Adaptive chart granularity
+  // Adaptive chart granularity (fill date gaps for daily views)
   let chartData, chartLabel
   if (timeRange === '7d' || timeRange === '30d') {
-    chartData = filteredDaily
-    chartLabel = 'Daily Activity (Messages)'
+    chartData = fillDailyGaps(filteredDaily)
+    chartLabel = 'Daily Activity'
   } else if (timeRange === '90d') {
     chartData = aggregateToWeekly(filteredDaily)
-    chartLabel = 'Weekly Activity (Messages)'
+    chartLabel = 'Weekly Activity'
   } else {
-    chartData = aggregateToMonthly(filteredDaily)
-    chartLabel = 'Monthly Activity (Messages)'
+    chartData = fillDailyGaps(filteredDaily)
+    chartLabel = 'Daily Activity'
   }
 
   const chartColor = (timeRange === '7d' || timeRange === '30d') ? 'var(--accent)' : '#8b5cf6'
@@ -708,12 +734,17 @@ export default function Usage({ isMobile }) {
             <div style={styles.bigNumber}>{rangeOverview.days_active}</div>
             <div style={styles.bigLabel}>Days Active</div>
           </div>
-          {timeRange === 'all' && (
-            <div style={styles.card}>
-              <div style={styles.bigNumber}>{allTimeOverview.projects_count}</div>
-              <div style={styles.bigLabel}>Projects</div>
+          <div style={styles.card}>
+            <div style={{ ...styles.bigNumber, color: '#f59e0b' }}>{formatCost(rangeOverview.total_cost)}</div>
+            <div style={styles.bigLabel}>
+              {timeRange === 'all' ? 'Est. API Cost' : `Est. API Cost (${rangeConfig.label})`}
             </div>
-          )}
+            {data.pricing?.subscription && timeRange === '30d' && rangeOverview.total_cost > data.pricing.subscription && (
+              <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '4px' }}>
+                Saving {formatCost(rangeOverview.total_cost - data.pricing.subscription)} vs API
+              </div>
+            )}
+          </div>
         </div>
 
         {/* All-time summary when viewing a sub-range */}
@@ -724,17 +755,28 @@ export default function Usage({ isMobile }) {
             <span>{formatNum(allTimeOverview.total_messages)} messages</span>
             <span>{formatNum(allTimeOverview.total_tokens?.output)} output tokens</span>
             <span>{allTimeOverview.days_active} days</span>
+            <span style={{ color: '#f59e0b' }}>{formatCost(allTimeOverview.total_cost)} est. cost</span>
           </div>
         )}
 
         {/* This week vs last week */}
         <ComparisonCard comparison={comparison} isMobile={m} />
 
-        {/* Adaptive activity chart */}
+        {/* Activity + Cost charts side by side */}
         {chartData && chartData.length > 0 && (
-          <div style={styles.cardWide}>
-            <div style={styles.cardTitle}>{chartLabel}</div>
-            <LineChart data={chartData} labelKey="date" valueKey="messages" color={chartColor} />
+          <div style={m ? styles.gridMobile : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>{chartLabel}</div>
+              <LineChart data={chartData} labelKey="date" valueKey="messages" color={chartColor} />
+            </div>
+            {chartData.some(d => d.cost > 0) && (
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>
+                  {chartLabel.replace('Activity', 'Cost')}
+                </div>
+                <LineChart data={chartData} labelKey="date" valueKey="cost" color="#f59e0b" formatFn={formatCost} />
+              </div>
+            )}
           </div>
         )}
 
@@ -759,6 +801,7 @@ export default function Usage({ isMobile }) {
                       <span>In: {formatNum(info.tokens?.input)}</span>
                       <span>Out: {formatNum(info.tokens?.output)}</span>
                       <span>Cache: {formatNum(info.tokens?.cache_read)}</span>
+                      {info.cost > 0 && <span style={{ color: '#f59e0b' }}>{formatCost(info.cost)}</span>}
                     </div>
                   </div>
                 )

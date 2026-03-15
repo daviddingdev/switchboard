@@ -1,7 +1,7 @@
 """
-tmux manager for orchestrator worker sessions.
+tmux manager for Helm worker sessions.
 
-Manages a tmux session called 'orchestrator' with a custom socket,
+Manages a tmux session called 'helm' with a custom socket,
 allowing multiple Claude Code workers to run in parallel.
 """
 
@@ -11,8 +11,8 @@ import re
 import time
 from datetime import datetime
 
-SOCKET_NAME = "orchestrator"
-SESSION_NAME = "orchestrator"
+SOCKET_NAME = "helm"
+SESSION_NAME = "helm"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS_DIR = os.path.join(PROJECT_ROOT, "logs", "workers")
 
@@ -27,7 +27,7 @@ def configure(socket_name=None, session_name=None):
 
 
 def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a tmux command with the orchestrator socket."""
+    """Run a tmux command with the Helm socket."""
     cmd = ["tmux", "-L", SOCKET_NAME] + list(args)
     # Strip CLAUDECODE from env to avoid nested session detection
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
@@ -35,7 +35,7 @@ def _run_tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def _session_exists() -> bool:
-    """Check if the orchestrator tmux session exists."""
+    """Check if the Helm tmux session exists."""
     result = _run_tmux("has-session", "-t", SESSION_NAME, check=False)
     return result.returncode == 0
 
@@ -69,7 +69,7 @@ def _wait_for_prompt(name: str, timeout: int = 30) -> bool:
 
 def list_windows() -> list[dict]:
     """
-    List all windows in the orchestrator session.
+    List all windows in the Helm session.
     Returns list of {index, name, pid} dicts.
     """
     result = _run_tmux(

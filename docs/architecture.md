@@ -2,7 +2,7 @@
 
 ## Overview
 
-Orchestrator runs on the machine where Claude Code
+Helm runs on the machine where Claude Code
 sessions live. It manages workers via **tmux** and
 serves a **Web UI** accessible from any browser.
 
@@ -23,7 +23,7 @@ Browser (any device)
 └────┬───────────┘
      │ subprocess
 ┌────┴──────┐
-│   tmux    │  socket: orchestrator
+│   tmux    │  socket: helm
 │  manager  │
 └────┬──────┘
      │ windows
@@ -46,7 +46,7 @@ start.sh sequence:
 
 To fully kill tmux:
 ```bash
-tmux -L orchestrator kill-session -t orchestrator
+tmux -L helm kill-session -t helm
 ```
 
 ---
@@ -178,8 +178,8 @@ detection — only emit when data actually changes.
 
 `api/tmux_manager.py` — all tmux operations.
 
-Socket: `-L orchestrator` (named, not path-based).
-Session: `orchestrator`.
+Socket: `-L helm` (named, not path-based).
+Session: `helm`.
 
 ### spawn_worker(name, directory, session_label)
 
@@ -353,7 +353,7 @@ Worker submits POST /api/proposals
 - **threading async mode** — no monkey-patching, subprocess-safe
 - **No auth on web** — localhost assumption
 - **File-based state** — YAML/JSON, git-friendly
-- **tmux named socket** — `-L orchestrator`
+- **tmux named socket** — `-L helm`
 - **Lazy session creation** — tmux session created
   on first worker spawn, not at startup
 - **Async spawn** — window creation returns immediately,
