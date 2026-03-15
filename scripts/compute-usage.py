@@ -329,8 +329,6 @@ def compute_all():
             if file_size == 0:
                 continue
 
-            size_label = f" ({file_size / 1024 / 1024:.0f}MB)" if file_size > 10 * 1024 * 1024 else ""
-
             # Extract tokens
             tokens, msg_count, tool_count, models = extract_tokens_chunked(jsonl_path)
 

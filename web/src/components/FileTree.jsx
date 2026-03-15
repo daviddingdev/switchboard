@@ -71,13 +71,13 @@ const styles = {
     fontWeight: 600,
     fontFamily: 'monospace',
   },
-  statusM: { color: '#e2c08d' },  // yellow - modified
-  statusU: { color: '#73c991' },  // green - untracked
-  statusA: { color: '#73c991' },  // green - added
-  statusD: { color: '#f14c4c' },  // red - deleted
+  statusM: { color: 'var(--status-modified-text)' },
+  statusU: { color: 'var(--status-added-text)' },
+  statusA: { color: 'var(--status-added-text)' },
+  statusD: { color: 'var(--status-deleted-text)' },
   folderDot: {
     marginLeft: '4px',
-    color: '#e2c08d',
+    color: 'var(--status-modified-text)',
     fontSize: '14px',
   },
   empty: {
@@ -201,15 +201,17 @@ export default function FileTree({ onFileSelect, isMobile }) {
   useEffect(() => {
     loadFiles()
 
-    // No dedicated socket event for files - keep light polling
-    // since file tree changes are infrequent
-    const interval = setInterval(loadFiles, 10000)
-
+    const onFilesUpdate = (data) => {
+      setFiles(data.files || [])
+      setError(null)
+      setLoading(false)
+    }
     const onConnect = () => loadFiles()
+    socket.on('files:update', onFilesUpdate)
     socket.on('connect', onConnect)
 
     return () => {
-      clearInterval(interval)
+      socket.off('files:update', onFilesUpdate)
       socket.off('connect', onConnect)
     }
   }, [])

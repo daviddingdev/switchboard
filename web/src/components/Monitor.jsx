@@ -172,7 +172,7 @@ const styles = {
   rebootBadge: {
     fontSize: '10px',
     fontWeight: 600,
-    color: '#eab308',
+    color: 'var(--warning)',
     background: 'rgba(234, 179, 8, 0.15)',
     padding: '2px 6px',
     borderRadius: '4px',
@@ -326,7 +326,7 @@ const styles = {
 
 function getBarColor(pct, warn = 70, crit = 90) {
   if (pct >= crit) return 'var(--danger)'
-  if (pct >= warn) return '#eab308'
+  if (pct >= warn) return 'var(--warning)'
   return 'var(--success)'
 }
 
@@ -561,7 +561,7 @@ export default function Monitor({ isMobile }) {
           <div style={styles.cardTitle}>
             System Updates
             {totalUpdates > 0 && !isRunning && (
-              <span style={{ color: '#eab308', marginLeft: '8px', textTransform: 'none' }}>
+              <span style={{ color: 'var(--warning)', marginLeft: '8px', textTransform: 'none' }}>
                 {totalUpdates} available
               </span>
             )}
@@ -569,7 +569,7 @@ export default function Monitor({ isMobile }) {
 
           {isRunning ? (
             <div style={styles.updateStatusBar}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', flexShrink: 0 }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }} />
               Updating {updates.update_status.category || ''}...
             </div>
           ) : updateError ? (
@@ -600,7 +600,7 @@ export default function Monitor({ isMobile }) {
               ))}
 
               {!updates?.sudo_configured && (
-                <div style={{ fontSize: '11px', color: '#eab308', marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '8px' }}>
                   Passwordless sudo not configured. See docs/SETUP.md for instructions.
                 </div>
               )}

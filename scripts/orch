@@ -56,8 +56,8 @@ case "$1" in
       -d '{"status": "rejected"}' | jq .
     ;;
   projects)
-    # orch projects
-    cat "$SCRIPT_DIR/../state/projects.yaml"
+    # orch projects (auto-discovered from API)
+    curl -s "$API/api/projects" | jq -r '.[] | "\(.name)\t\(.directory)"'
     ;;
   *)
     echo "Orchestrator CLI"

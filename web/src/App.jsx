@@ -349,9 +349,6 @@ export default function App() {
     setRefreshKey(k => k + 1)
   }
 
-  // --- Active tab data ---
-  const activeTab = tabs.find(t => t.id === activeTabId)
-
   // --- Cursor style during drag ---
   const layoutDragStyle = dragging === 'top'
     ? desktopStyles.layoutNoSelectRow
@@ -380,12 +377,13 @@ export default function App() {
           {mobileSection === 'activity' && (
             <Activity onFileClick={handleChangeFileClick} isMobile />
           )}
-          {mobileSection === 'monitor' && (
+          {/* Monitor and Usage stay mounted to preserve state */}
+          <div style={{ display: mobileSection === 'monitor' ? 'contents' : 'none' }}>
             <Monitor isMobile />
-          )}
-          {mobileSection === 'usage' && (
+          </div>
+          <div style={{ display: mobileSection === 'usage' ? 'contents' : 'none' }}>
             <Usage isMobile />
-          )}
+          </div>
         </div>
 
         {mobilePreview && (
@@ -528,25 +526,32 @@ export default function App() {
               onTabReorder={reorderTab}
             />
           )}
-          <div style={desktopStyles.previewContent}>
-            {activeTab ? (
-              activeTab.type === 'terminal' ? (
-                <TerminalView workerName={activeTab.path} />
-              ) : activeTab.type === 'usage' ? (
+          {tabs.length === 0 && (
+            <div style={desktopStyles.previewEmpty}>
+              Select a file to preview
+            </div>
+          )}
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              style={{
+                ...desktopStyles.previewContent,
+                display: tab.id === activeTabId ? 'flex' : 'none',
+              }}
+            >
+              {tab.type === 'terminal' ? (
+                <TerminalView workerName={tab.path} />
+              ) : tab.type === 'usage' ? (
                 <Usage />
-              ) : activeTab.type === 'monitor' ? (
+              ) : tab.type === 'monitor' ? (
                 <Monitor />
-              ) : activeTab.type === 'file' ? (
-                <FilePreview filepath={activeTab.path} />
+              ) : tab.type === 'file' ? (
+                <FilePreview filepath={tab.path} />
               ) : (
-                <DiffPreview project={activeTab.project} filepath={activeTab.path} />
-              )
-            ) : (
-              <div style={desktopStyles.previewEmpty}>
-                Select a file to preview
-              </div>
-            )}
-          </div>
+                <DiffPreview project={tab.project} filepath={tab.path} />
+              )}
+            </div>
+          ))}
         </main>
 
         {/* Right divider / expand button */}

@@ -13,7 +13,7 @@ in `contrib/`.
 Browser (any device)
      │
 ┌────┴─────┐
-│  Web UI  │  :3000 (static files served by API)
+│  Web UI  │  :5001 (static files served by API)
 └────┬─────┘
      │ WebSocket (persistent, server push)
      │ HTTP (one-off actions: spawn, kill, send)
@@ -109,18 +109,6 @@ Returns tree with git status per file (M/U/A/D).
 uncommitted changes, unpushed commits across
 all projects. Pushed via WebSocket every 3s.
 
-### Push Workflow
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/doc-context` | Context for doc updates |
-| POST | `/update-docs` | Run claude -p on docs |
-| POST | `/push` | Commit docs + git push |
-| POST | `/commit` | Stage all + commit |
-
-Flow: load context → update CHANGELOG/TODO
-via `claude -p` → commit doc changes → push.
-
 ### Workers & Context
 
 | Method | Path | Purpose |
@@ -160,9 +148,10 @@ Flask-SocketIO with `threading` async mode
 |-------|----------|------|
 | `workers:update` | 2s | Worker list (only on change) |
 | `usage:update` | 5s | Worker usage stats (only on change) |
-| `activity:update` | 3s | Git changes + proposals (only on change) |
+| `activity:update` | 5s | Git changes + proposals (only on change) |
 | `metrics:update` | 2s | System metrics (only on change) |
-| `worker:output` | 500ms | Terminal output for subscribed workers |
+| `worker:output` | 500ms | Terminal output (targeted via rooms) |
+| `files:update` | 5s | File tree (only on change) |
 
 All server-push events use hash-based change
 detection — only emit when data actually changes.
@@ -222,8 +211,8 @@ Background setup (via `setup_worker` in thread):
 
 ## Web UI
 
-React + Vite. Dev server on :3000,
-proxies `/api` and `/socket.io` to :5001.
+React + Vite. Dev server on :3000 (proxies to :5001),
+or served as static build from API on :5001.
 
 ### Layout
 
@@ -287,7 +276,6 @@ splice callback), visual feedback in TabBar.
 | ErrorBoundary | Crash recovery with reload button |
 | ConnectionBanner | WebSocket connection status indicator |
 | Toast | Toast notification system (success/error/info) |
-| ErrorState | Error display with retry button |
 | ShortcutsHelp | Keyboard shortcuts overlay |
 
 ### Data Flow
@@ -301,7 +289,6 @@ splice callback), visual feedback in TabBar.
 - Initial data fetch on mount — GET via REST
 - File content, diffs — GET via REST
 - System updates — polling (adaptive interval)
-- File tree — light polling (10s)
 
 ### Keyboard Shortcuts
 
@@ -328,9 +315,8 @@ Terminal view uses dedicated `--terminal-bg` and
 
 ```
 state/
-├── projects.yaml          # project registry
 ├── proposals/*.yaml       # pending/resolved proposals
-└── usage-stats.json       # worker context stats
+└── usage-archive.json     # persistent daily usage data
 
 logs/
 ├── api.log, api.pid       # API server
@@ -392,3 +378,13 @@ Worker submits POST /api/proposals
 - **Config-driven monitor** — GPU command, services list,
   and updates all configurable. Cards auto-hide when
   hardware isn't present (no GPU = no GPU card)
+- **Rooms-based terminal** — Socket.IO rooms for targeted
+  terminal output (only to subscribed clients)
+- **Incremental JSONL parsing** — cached file offsets to
+  avoid re-reading entire session files
+- **Client-aware monitors** — background threads pause
+  when no WebSocket clients connected
+- **Per-worker session tracking** — spawn-time snapshot +
+  label-based fallback for correct context mapping
+- **Project discovery cache** — 30s TTL to avoid
+  repeated filesystem scans

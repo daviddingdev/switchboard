@@ -1,23 +1,15 @@
 # Orchestrator - Current Tasks
 
 ## Current Focus
-**WebSocket Upgrade Complete — Real-Time Push**
+**Network efficiency overhaul + dead code cleanup complete**
 
-All polling replaced with WebSocket push. Full feature set:
-- Real-time worker/terminal/activity/metrics via WebSocket
-- Connection banner, toast notifications, skeleton loading
-- Keyboard shortcuts (n/m/u/Esc/?)
-- Dark/light theme toggle (desktop + mobile)
-- 3-column UI: Files | Terminal | Workers+Activity
-- Tab-based navigation: multiple terminals + file previews + drag reorder
-- Usage analytics with time range selector (7d/30d/90d/6m/1y/All) + adaptive charts
-- Auto-discover projects with CLAUDE.md files
-- Git status indicators (M/U/A/D) on files
-- Syntax-highlighted file preview + diff preview
-- Spawn/kill workers, send messages
-- Approve/reject worker proposals
-- Unpushed commits tracking in Activity panel
-- Shareable setup with setup.sh/start.sh/stop.sh
+All live data pushed via WebSocket with efficiency optimizations:
+- Targeted terminal output (rooms-based, not broadcast)
+- Incremental JSONL parsing (cached offsets, not full re-reads)
+- Client-aware monitor pausing (no work when 0 clients)
+- Per-worker context tracking (correct session file mapping)
+- 30s project discovery cache, consolidated git status calls
+- FileTree via WebSocket push (no more polling)
 
 ---
 
@@ -28,7 +20,7 @@ cd ~/orchestrator
 ./start.sh
 ```
 
-**UI accessible at:** http://localhost:3000
+**UI accessible at:** http://localhost:5001
 
 ---
 
@@ -42,16 +34,28 @@ cd ~/orchestrator
 - [x] All-time summary row when sub-range selected
 - [x] BarChart maxItems fix — time range filtering replaces hardcoded limit
 
+### Network Efficiency + Cleanup (Mar 15, 2026)
+- [x] Targeted terminal output via Socket.IO rooms (not broadcast)
+- [x] Incremental JSONL parsing with cached file offsets
+- [x] Client-aware monitor pausing (skip work when 0 clients)
+- [x] Per-worker session file tracking (fixed context tracker bug)
+- [x] FileTree via WebSocket push (replaced 10s polling)
+- [x] Activity monitor interval 3s → 5s
+- [x] Consolidated git status functions
+- [x] Project discovery 30s TTL cache
+- [x] SocketIO ping tuning (ping_interval=20, ping_timeout=60)
+- [x] Model cache warmup at startup
+- [x] Dead code cleanup: removed 3 endpoints, 1 function, 4 constants, 7 api.js functions, 2 files, 2 yaml configs, 1 component, dead CSS/tab types
+
 ### WebSocket Upgrade + UX Polish (Mar 12, 2026)
 - [x] Flask-SocketIO with `threading` async mode (not eventlet — subprocess-safe)
-- [x] 5 background monitor threads: workers(2s), usage(5s), activity(3s), metrics(2s), terminal(500ms)
+- [x] 5 background monitor threads: workers(2s), usage(5s), activity(5s), metrics(2s), terminal(500ms)
 - [x] Hash-based change detection — only push when data changes
 - [x] Terminal subscribe/unsubscribe model for on-demand streaming
 - [x] Socket.IO client singleton with auto-reconnect
 - [x] ConnectionBanner — disconnect/reconnect indicator
 - [x] Toast notifications — replaced all alert() calls
 - [x] Skeleton loading states in WorkerDashboard, Activity
-- [x] ErrorState component with retry button
 - [x] Keyboard shortcuts: n (spawn), m (monitor), u (usage), Esc (close), ? (help)
 - [x] Dark/light theme toggle with CSS variables, persisted to localStorage
 - [x] Worker count in page title
@@ -246,7 +250,6 @@ cd ~/orchestrator
 
 ## Backlog (Post-MVP)
 - [ ] **Terminal scrolling** — Output panel doesn't scroll properly; low priority, defer until worth the effort
-- [ ] **Push workflow: orphaned doc changes** — When "Update Docs" runs but user doesn't complete "Push All", modified CHANGELOG/TODO files are left uncommitted. Need to either: (a) auto-stash on cancel, (b) commit immediately after update, or (c) warn user about uncommitted changes
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)

@@ -12,6 +12,7 @@ import re
 import logging
 import threading
 import hashlib
+import time
 import glob as glob_module
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,12 +27,9 @@ import tmux_manager as tmux
 
 # Claude session files location
 CLAUDE_PROJECTS_DIR = os.path.expanduser('~/.claude/projects')
-CLAUDE_CONFIG_FILE = os.path.expanduser('~/.claude.json')
-
 PROJECT_ROOT = Path(__file__).parent.parent
 STATE_DIR = PROJECT_ROOT / 'state'
 PROPOSALS_DIR = STATE_DIR / 'proposals'
-PROJECTS_FILE = STATE_DIR / 'projects.yaml'
 LOGS_DIR = PROJECT_ROOT / 'logs' / 'workers'
 
 # Directories to exclude from file listings
@@ -73,6 +71,64 @@ _SAFE_ID = re.compile(r'^[a-zA-Z0-9_-]+$')
 # Track model per worker (in-memory, lost on API restart)
 _worker_models = {}
 
+# Track worker -> session file mapping (so two workers in same project get distinct files)
+_worker_sessions = {}
+
+# Cached model list (refreshed periodically)
+_models_cache = None
+_models_cache_time = 0
+_MODELS_CACHE_TTL = 300  # 5 minutes
+
+
+def _discover_models():
+    """Discover available Claude models from CLI, with fallback."""
+    models = []
+    try:
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        result = subprocess.run(
+            ["claude", "model", "list"],
+            capture_output=True, text=True, timeout=10, env=env
+        )
+        for line in result.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            # Parse "Claude Opus 4.5 (`claude-opus-4-5`)"
+            match = re.match(r'(.+?)\s+\(`([^`]+)`\)', line)
+            if match:
+                label, model_id = match.groups()
+                models.append({"id": model_id, "label": label})
+    except Exception:
+        pass
+
+    # CLI may only return the default model; merge with known models
+    known = [
+        {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5"},
+        {"id": "claude-opus-4-5", "label": "Opus 4.5"},
+        {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6"},
+        {"id": "claude-opus-4-6", "label": "Opus 4.6"},
+    ]
+    seen = {m["id"] for m in models}
+    for m in known:
+        if m["id"] not in seen:
+            models.append(m)
+    return models
+
+
+def _get_models():
+    """Get models list (from config or auto-discovery, cached)."""
+    global _models_cache, _models_cache_time
+
+    configured = CONFIG.get('models', 'auto')
+    if isinstance(configured, list):
+        return configured
+
+    # Auto mode: discover from CLI with caching
+    now = time.time()
+    if _models_cache is None or (now - _models_cache_time) > _MODELS_CACHE_TTL:
+        _models_cache = _discover_models()
+        _models_cache_time = now
+    return _models_cache
+
 # Serve built frontend if available
 STATIC_DIR = PROJECT_ROOT / 'web' / 'dist'
 if STATIC_DIR.exists():
@@ -80,7 +136,8 @@ if STATIC_DIR.exists():
 else:
     app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
+                    ping_interval=20, ping_timeout=60)
 
 # Terminal subscriptions: {sid: set of worker names}
 _terminal_subs = {}
@@ -124,8 +181,8 @@ def health():
 
 @app.route('/api/models')
 def list_models():
-    """Return available models from config."""
-    models = CONFIG.get('models', [])
+    """Return available models (auto-discovered or from config)."""
+    models = _get_models()
     default = CONFIG.get('default_model', '')
     return jsonify({"models": models, "default": default})
 
@@ -138,6 +195,17 @@ def list_processes():
         if w['name'] in _worker_models:
             w['model'] = _worker_models[w['name']]
     return jsonify(windows)
+
+
+def _setup_and_track_session(name, session_label, enable_rc, session_dir, existing_files):
+    """Setup worker and track its .jsonl session file."""
+    tmux.setup_worker(name, session_label, enable_rc)
+    # After setup, Claude Code should have created its session file
+    if os.path.isdir(session_dir):
+        current_files = set(glob_module.glob(os.path.join(session_dir, '*.jsonl')))
+        new_files = current_files - existing_files
+        if new_files:
+            _worker_sessions[name] = max(new_files, key=lambda f: os.path.getmtime(f))
 
 
 @app.route('/api/processes', methods=['POST'])
@@ -171,10 +239,16 @@ def spawn_process():
         result = tmux.spawn_worker(actual_name, directory, session_label=session_label, model=model)
         if model:
             _worker_models[actual_name] = model
+        # Snapshot existing session files before Claude Code creates its own
+        session_dir = get_project_session_dir(expanded_dir)
+        existing_files = set()
+        if os.path.isdir(session_dir):
+            existing_files = set(glob_module.glob(os.path.join(session_dir, '*.jsonl')))
         # Configure worker in background (wait for prompt, label, RC)
+        # and track its session file
         threading.Thread(
-            target=tmux.setup_worker,
-            args=(actual_name, session_label, True),
+            target=_setup_and_track_session,
+            args=(actual_name, session_label, True, session_dir, existing_files),
             daemon=True
         ).start()
         return jsonify(result), 201
@@ -195,6 +269,7 @@ def kill_process(name):
     success = tmux.kill_worker(name)
     if success:
         _worker_models.pop(name, None)
+        _worker_sessions.pop(name, None)
         return {"status": "killed"}
     return {"error": "failed to kill worker"}, 500
 
@@ -330,11 +405,22 @@ def delete_proposal(proposal_id):
 # Projects, Files, Changes, Activity endpoints
 # =============================================================================
 
+_projects_cache = None
+_projects_cache_time = 0
+_PROJECTS_CACHE_TTL = 30  # seconds
+
+
 def discover_projects(root_dir=None, max_depth=None):
     """
     Auto-discover projects by finding directories with CLAUDE.md files.
-    Returns list of project directories relative to root.
+    Cached for 30s since the project list rarely changes.
     """
+    global _projects_cache, _projects_cache_time
+
+    now = time.time()
+    if _projects_cache is not None and (now - _projects_cache_time) < _PROJECTS_CACHE_TTL:
+        return _projects_cache
+
     if root_dir is None:
         root_dir = os.path.expanduser(CONFIG.get('project_root', '~'))
     if max_depth is None:
@@ -368,7 +454,9 @@ def discover_projects(root_dir=None, max_depth=None):
                 scan_dir(path, depth + 1)
 
     scan_dir(root_dir)
-    return sorted(projects, key=lambda p: p['name'].lower())
+    _projects_cache = sorted(projects, key=lambda p: p['name'].lower())
+    _projects_cache_time = now
+    return _projects_cache
 
 
 def load_projects():
@@ -389,35 +477,11 @@ def get_git_status_map(directory):
     """
     Get git status as a dict mapping filepath to status code.
     Returns empty dict if not a git repo.
-    Status codes: M (modified), A (added), D (deleted), U (untracked)
     """
-    result = {}
-    try:
-        proc = subprocess.run(
-            ['git', '-C', directory, 'status', '--porcelain'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if proc.returncode != 0:
-            return {}
-
-        for line in proc.stdout.splitlines():
-            if line and len(line) >= 3:
-                status_code = line[:2]
-                filepath = line[3:]
-                # Normalize status
-                if status_code == '??':
-                    result[filepath] = 'U'  # Untracked
-                elif 'D' in status_code:
-                    result[filepath] = 'D'  # Deleted
-                elif 'A' in status_code:
-                    result[filepath] = 'A'  # Added
-                elif 'M' in status_code or status_code.strip():
-                    result[filepath] = 'M'  # Modified
-        return result
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    files = get_git_status(directory)
+    if not files:
         return {}
+    return {f['path']: f['status'] for f in files}
 
 
 def build_file_tree(directory, depth=0, git_status=None, base_dir=None):
@@ -550,23 +614,17 @@ def list_projects():
     return jsonify(load_projects())
 
 
-@app.route('/api/home')
-def get_home_tree():
-    """
-    Get home directory tree showing:
-    - Root-level .md files (CLAUDE.md, README.md, etc.)
-    - Only directories that are projects (have CLAUDE.md)
-    """
+def _get_home_tree_data():
+    """Get home directory tree data (used by REST endpoint and socket monitor)."""
     home_dir = os.path.expanduser('~')
     projects = discover_projects()
-    project_dirs = {p['directory'] for p in projects}
 
     result = []
 
     try:
         entries = sorted(os.listdir(home_dir))
     except (PermissionError, FileNotFoundError):
-        return jsonify([])
+        return {'directory': home_dir, 'files': []}
 
     # Add root-level .md files
     for name in entries:
@@ -607,7 +665,6 @@ def get_home_tree():
             })
         else:
             # Nested (e.g., ~/projects/my-app)
-            # Find or create parent directories
             parent_name = parts[0]
             existing_parent = next((r for r in result if r['name'] == parent_name and r['type'] == 'dir'), None)
 
@@ -623,7 +680,6 @@ def get_home_tree():
                 }
                 result.append(existing_parent)
 
-            # Add the project as child
             existing_parent['children'].append({
                 'name': proj_name,
                 'path': proj_dir,
@@ -633,17 +689,18 @@ def get_home_tree():
                 'children': children
             })
 
-            # Update parent's has_changes
             if has_changes:
                 existing_parent['has_changes'] = True
 
-    # Sort: files first (.md files etc.), then directories
     result.sort(key=lambda x: (0 if x['type'] == 'file' else 1, x['name'].lower()))
 
-    return jsonify({
-        'directory': home_dir,
-        'files': result
-    })
+    return {'directory': home_dir, 'files': result}
+
+
+@app.route('/api/home')
+def get_home_tree():
+    """Get home directory tree."""
+    return jsonify(_get_home_tree_data())
 
 
 
@@ -852,202 +909,6 @@ def get_activity():
     return jsonify(_get_activity_data())
 
 
-@app.route('/api/doc-context')
-def get_doc_context():
-    """
-    Get context needed to update docs for projects with unpushed commits.
-    Returns commit messages, diff stats, and worker logs (if available).
-    """
-    result = []
-    logs_dir = str(LOGS_DIR)
-
-    try:
-        projects = load_projects()
-        for p in projects:
-            name = p.get('name', '')
-            directory = os.path.expanduser(p.get('directory', ''))
-            if not os.path.isdir(directory):
-                continue
-
-            commits = get_unpushed_commits(directory)
-            if not commits:
-                continue
-
-            # Get diff stat for unpushed commits
-            diff_stat = None
-            try:
-                stat_result = subprocess.run(
-                    ['git', '-C', directory, 'diff', '--stat', '@{u}..HEAD'],
-                    capture_output=True, text=True, timeout=10
-                )
-                if stat_result.returncode == 0:
-                    diff_stat = stat_result.stdout.strip()
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
-
-            # Look for worker log (current session)
-            worker_log = None
-            log_path = os.path.join(logs_dir, f"{name}.log")
-            if os.path.exists(log_path):
-                try:
-                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        # Read last 500 lines max to keep context manageable
-                        lines = f.readlines()
-                        worker_log = ''.join(lines[-500:]) if len(lines) > 500 else ''.join(lines)
-                except (IOError, OSError):
-                    pass
-
-            # Check for CHANGELOG.md and TODO.md
-            has_changelog = os.path.exists(os.path.join(directory, 'CHANGELOG.md'))
-            has_todo = os.path.exists(os.path.join(directory, 'TODO.md'))
-
-            result.append({
-                'project': name,
-                'directory': directory,
-                'commits': commits,
-                'diff_stat': diff_stat,
-                'worker_log': worker_log,
-                'worker_log_lines': len(worker_log.split('\n')) if worker_log else 0,
-                'has_changelog': has_changelog,
-                'has_todo': has_todo
-            })
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-    return jsonify(result)
-
-
-@app.route('/api/update-docs', methods=['POST'])
-def update_docs():
-    """
-    Run claude -p to update docs for a project.
-    Uses context from unpushed commits + worker logs.
-    """
-    data = request.json or {}
-    project_name = data.get('project')
-
-    if not project_name:
-        return {"error": "project required"}, 400
-
-    directory = get_project_directory(project_name)
-    if not directory:
-        return {"error": f"project '{project_name}' not found"}, 404
-
-    # Get context for this project
-    logs_dir = str(LOGS_DIR)
-    commits = get_unpushed_commits(directory)
-
-    if not commits:
-        return {"error": "no unpushed commits"}, 400
-
-    # Build context string
-    context_parts = [f"Project: {project_name}", f"Directory: {directory}", ""]
-
-    # Commits
-    context_parts.append("## Unpushed Commits")
-    for c in commits:
-        context_parts.append(f"- {c['hash']} {c['message']}")
-    context_parts.append("")
-
-    # Diff stat
-    try:
-        stat_result = subprocess.run(
-            ['git', '-C', directory, 'diff', '--stat', '@{u}..HEAD'],
-            capture_output=True, text=True, timeout=10
-        )
-        if stat_result.returncode == 0 and stat_result.stdout.strip():
-            context_parts.append("## Files Changed")
-            context_parts.append("```")
-            context_parts.append(stat_result.stdout.strip())
-            context_parts.append("```")
-            context_parts.append("")
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
-
-    # Full diff (limited)
-    try:
-        diff_result = subprocess.run(
-            ['git', '-C', directory, 'diff', '@{u}..HEAD'],
-            capture_output=True, text=True, timeout=30
-        )
-        if diff_result.returncode == 0 and diff_result.stdout.strip():
-            diff_text = diff_result.stdout.strip()
-            # Limit diff to ~50k chars to avoid overwhelming context
-            if len(diff_text) > 50000:
-                diff_text = diff_text[:50000] + "\n... (diff truncated)"
-            context_parts.append("## Full Diff")
-            context_parts.append("```diff")
-            context_parts.append(diff_text)
-            context_parts.append("```")
-            context_parts.append("")
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
-
-    # Worker log if available
-    log_path = os.path.join(logs_dir, f"{project_name}.log")
-    if os.path.exists(log_path):
-        try:
-            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                log_text = ''.join(lines[-300:]) if len(lines) > 300 else ''.join(lines)
-                if log_text.strip():
-                    context_parts.append("## Worker Session Log (recent)")
-                    context_parts.append("```")
-                    context_parts.append(log_text.strip())
-                    context_parts.append("```")
-        except (IOError, OSError):
-            pass
-
-    context = '\n'.join(context_parts)
-
-    # Build the prompt
-    prompt = f"""Update the documentation files in this project based on the changes described below.
-
-UPDATE THESE FILES (if they exist):
-- CHANGELOG.md: Add entry for today's changes under current date heading
-- TODO.md: Mark completed items as [x], add new discovered tasks
-- USAGE.md: Update if usage/API changed
-
-RULES:
-- Only update files that exist in the project
-- Use today's date: {datetime.now().strftime('%Y-%m-%d')}
-- Be concise but complete
-- Match existing file style/format
-- Don't add entries for doc updates themselves
-
-CONTEXT:
-{context}"""
-
-    # Run claude -p (strip CLAUDECODE to avoid nested session error)
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-    try:
-        result = subprocess.run(
-            ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write,Glob'],
-            cwd=directory,
-            capture_output=True,
-            text=True,
-            timeout=120,  # 2 min timeout
-            env=env
-        )
-
-        # Get the updated files status
-        status_result = subprocess.run(
-            ['git', '-C', directory, 'status', '--short'],
-            capture_output=True, text=True, timeout=5
-        )
-
-        return jsonify({
-            'success': result.returncode == 0,
-            'output': result.stdout[-5000:] if result.stdout else '',  # Last 5k chars
-            'error': result.stderr[-1000:] if result.stderr else '',
-            'git_status': status_result.stdout.strip() if status_result.returncode == 0 else ''
-        })
-    except subprocess.TimeoutExpired:
-        return {"error": "claude timed out after 2 minutes"}, 500
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-
 @app.route('/api/push', methods=['POST'])
 def push_project():
     """
@@ -1132,65 +993,6 @@ def push_project():
     return jsonify(results)
 
 
-@app.route('/api/commit', methods=['POST'])
-def commit_project():
-    """
-    Stage all changes and commit with the provided message.
-    """
-    data = request.json or {}
-    project_name = data.get('project')
-    message = data.get('message')
-
-    if not project_name:
-        return {"error": "project required"}, 400
-    if not message:
-        return {"error": "message required"}, 400
-
-    directory = get_project_directory(project_name)
-    if not directory:
-        return {"error": f"project '{project_name}' not found"}, 404
-
-    try:
-        # Stage all changes
-        add_result = subprocess.run(
-            ['git', '-C', directory, 'add', '-A'],
-            capture_output=True, text=True, timeout=10
-        )
-        if add_result.returncode != 0:
-            return {"error": f"git add failed: {add_result.stderr.strip()}", "success": False}, 500
-
-        # Check if there are staged changes
-        diff_result = subprocess.run(
-            ['git', '-C', directory, 'diff', '--cached', '--quiet'],
-            capture_output=True, timeout=5
-        )
-
-        if diff_result.returncode == 0:
-            return {"error": "No changes to commit", "success": False}, 400
-
-        # Commit with message
-        commit_result = subprocess.run(
-            ['git', '-C', directory, 'commit', '-m', message],
-            capture_output=True, text=True, timeout=30
-        )
-
-        if commit_result.returncode == 0:
-            return jsonify({
-                "success": True,
-                "output": commit_result.stdout.strip()
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "error": commit_result.stderr.strip() or commit_result.stdout.strip()
-            })
-
-    except subprocess.TimeoutExpired:
-        return {"error": "commit timed out", "success": False}, 500
-    except Exception as e:
-        return {"error": str(e), "success": False}, 500
-
-
 # =============================================================================
 # Partner Context Management endpoints
 # =============================================================================
@@ -1217,20 +1019,68 @@ def find_latest_session_file(session_dir):
     return max(jsonl_files, key=lambda f: os.path.getmtime(f))
 
 
+def find_session_file_by_label(session_dir, label):
+    """
+    Find a session file whose first user message matches the given label.
+    Used to match workers to their session files after server restart.
+    """
+    if not os.path.isdir(session_dir):
+        return None
+    jsonl_files = glob_module.glob(os.path.join(session_dir, '*.jsonl'))
+    for filepath in sorted(jsonl_files, key=lambda f: os.path.getmtime(f), reverse=True):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                for line in f:
+                    entry = json.loads(line.strip())
+                    if entry.get('type') != 'user':
+                        continue
+                    content = entry.get('message', {}).get('content', '')
+                    if isinstance(content, list):
+                        for c in content:
+                            if isinstance(c, dict) and c.get('type') == 'text':
+                                content = c['text']
+                                break
+                        else:
+                            content = ''
+                    if content.strip() == label:
+                        return filepath
+                    break  # only check first user message
+        except Exception:
+            continue
+    return None
+
+
+# Cache for incremental JSONL parsing: {filepath: {offset, input, output, context}}
+_usage_parse_cache = {}
+
+
 def parse_session_usage(session_file):
     """
     Parse a session JSONL file to extract token usage.
-    Returns both cumulative totals and latest context size.
+    Uses incremental reading — only parses new lines since last call.
     """
     if not session_file or not os.path.exists(session_file):
         return None
 
-    total_input = 0
-    total_output = 0
-    latest_context = 0  # Most recent turn's full context
+    try:
+        file_size = os.path.getsize(session_file)
+    except OSError:
+        return None
+
+    cached = _usage_parse_cache.get(session_file)
+    if cached and cached['size'] == file_size:
+        return cached['result']
+
+    # Resume from cached position or start fresh
+    total_input = cached['input'] if cached else 0
+    total_output = cached['output'] if cached else 0
+    latest_context = cached['context'] if cached else 0
+    offset = cached['offset'] if cached and cached['size'] <= file_size else 0
 
     try:
         with open(session_file, 'r', encoding='utf-8') as f:
+            if offset:
+                f.seek(offset)
             for line in f:
                 line = line.strip()
                 if not line:
@@ -1241,75 +1091,27 @@ def parse_session_usage(session_file):
                         usage = entry.get('message', {}).get('usage', {})
                         total_input += usage.get('input_tokens', 0)
                         total_output += usage.get('output_tokens', 0)
-                        # Latest context = input + cached tokens (what was sent to model)
                         turn_input = usage.get('input_tokens', 0)
                         cache_read = usage.get('cache_read_input_tokens', 0)
                         latest_context = turn_input + cache_read
                 except json.JSONDecodeError:
                     continue
+            new_offset = f.tell()
     except Exception:
         return None
 
-    return {
+    result = {
         'input_tokens': total_input,
         'output_tokens': total_output,
         'total': total_input + total_output,
         'latest_context': latest_context
     }
-
-
-def filter_conversation(session_file, limit=100):
-    """
-    Parse session JSONL and return filtered conversation messages.
-    Includes user messages and assistant text (excludes tool_use, thinking).
-    """
-    if not session_file or not os.path.exists(session_file):
-        return []
-
-    messages = []
-    try:
-        with open(session_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    msg_type = entry.get('type')
-                    timestamp = entry.get('timestamp', '')
-
-                    if msg_type == 'user':
-                        content = entry.get('message', {}).get('content', '')
-                        # Content can be string or list
-                        if isinstance(content, list):
-                            text_parts = [c.get('text', '') for c in content if c.get('type') == 'text']
-                            content = '\n'.join(text_parts)
-                        if content:
-                            messages.append({
-                                'role': 'user',
-                                'content': content,
-                                'timestamp': timestamp
-                            })
-
-                    elif msg_type == 'assistant':
-                        content = entry.get('message', {}).get('content', [])
-                        if isinstance(content, list):
-                            # Filter to just text blocks, skip tool_use and thinking
-                            text_parts = [c.get('text', '') for c in content
-                                         if c.get('type') == 'text' and c.get('text')]
-                            if text_parts:
-                                messages.append({
-                                    'role': 'assistant',
-                                    'content': '\n'.join(text_parts),
-                                    'timestamp': timestamp
-                                })
-                except json.JSONDecodeError:
-                    continue
-    except Exception:
-        return []
-
-    # Return last N messages
-    return messages[-limit:] if limit else messages
+    _usage_parse_cache[session_file] = {
+        'offset': new_offset, 'size': file_size,
+        'input': total_input, 'output': total_output,
+        'context': latest_context, 'result': result
+    }
+    return result
 
 
 def _get_workers_usage_data():
@@ -1327,9 +1129,19 @@ def _get_workers_usage_data():
         if not proj_dir:
             continue
 
-        # Find session directory and latest session file
-        session_dir = get_project_session_dir(proj_dir)
-        session_file = find_latest_session_file(session_dir)
+        # Find session file: use tracked mapping, then label match, then latest
+        session_file = _worker_sessions.get(name)
+        if not session_file or not os.path.exists(session_file):
+            session_dir = get_project_session_dir(proj_dir)
+            # Derive session label from worker name (e.g. "orchestrator-2" -> "orchestrator 2")
+            folder = os.path.basename(proj_dir.rstrip('/'))
+            match = re.match(r'^(.+?)-(\d+)$', name)
+            label = f"{folder} {match.group(2)}" if match else f"{folder} 1"
+            session_file = find_session_file_by_label(session_dir, label)
+            if session_file:
+                _worker_sessions[name] = session_file  # cache for next poll
+            else:
+                session_file = find_latest_session_file(session_dir)
         usage = parse_session_usage(session_file)
 
         if usage:
@@ -1589,7 +1401,6 @@ def _parse_snap_updates():
 
 def _categorize_apt_packages(packages):
     """Sort apt packages into categories."""
-    import re
     # Match GPU-related packages (NVIDIA ecosystem)
     gpu_pattern = re.compile(
         r'(nvidia|cuda-|cudnn|jetpack|tegra|tensorrt|nccl|'
@@ -1861,15 +1672,26 @@ tmux.ensure_session()
 # WebSocket event handlers
 # =============================================================================
 
+# Track connected client count so monitors can pause when idle
+_connected_clients = 0
+_clients_lock = threading.Lock()
+
+
 @socketio.on('connect')
 def handle_connect():
-    logger.info('Client connected: %s', getattr(request, 'sid', '?'))
+    global _connected_clients
+    with _clients_lock:
+        _connected_clients += 1
+    logger.info('Client connected: %s (total: %d)', getattr(request, 'sid', '?'), _connected_clients)
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
+    global _connected_clients
     sid = getattr(request, 'sid', None)
-    logger.info('Client disconnected: %s', sid)
+    with _clients_lock:
+        _connected_clients = max(0, _connected_clients - 1)
+    logger.info('Client disconnected: %s (total: %d)', sid, _connected_clients)
     with _terminal_subs_lock:
         _terminal_subs.pop(sid, None)
 
@@ -1879,6 +1701,8 @@ def handle_terminal_subscribe(data):
     name = data.get('name') if isinstance(data, dict) else None
     if name:
         sid = getattr(request, 'sid', None)
+        from flask_socketio import join_room
+        join_room(f'terminal:{name}')
         with _terminal_subs_lock:
             if sid not in _terminal_subs:
                 _terminal_subs[sid] = set()
@@ -1891,6 +1715,8 @@ def handle_terminal_unsubscribe(data):
     name = data.get('name') if isinstance(data, dict) else None
     if name:
         sid = getattr(request, 'sid', None)
+        from flask_socketio import leave_room
+        leave_room(f'terminal:{name}')
         with _terminal_subs_lock:
             if sid in _terminal_subs:
                 _terminal_subs[sid].discard(name)
@@ -1901,21 +1727,27 @@ def handle_terminal_unsubscribe(data):
 # Background monitoring threads (server-push via WebSocket)
 # =============================================================================
 
+def _has_clients():
+    """Check if any clients are connected."""
+    return _connected_clients > 0
+
+
 def _bg_workers_monitor():
     """Push worker list changes every 2s."""
     prev = None
     while True:
-        try:
-            windows = tmux.list_windows()
-            for w in windows:
-                if w['name'] in _worker_models:
-                    w['model'] = _worker_models[w['name']]
-            h = _data_hash(windows)
-            if h != prev:
-                prev = h
-                socketio.emit('workers:update', windows)
-        except Exception:
-            pass
+        if _has_clients():
+            try:
+                windows = tmux.list_windows()
+                for w in windows:
+                    if w['name'] in _worker_models:
+                        w['model'] = _worker_models[w['name']]
+                h = _data_hash(windows)
+                if h != prev:
+                    prev = h
+                    socketio.emit('workers:update', windows)
+            except Exception:
+                pass
         socketio.sleep(2)
 
 
@@ -1923,74 +1755,90 @@ def _bg_usage_monitor():
     """Push worker usage changes every 5s."""
     prev = None
     while True:
-        try:
-            data = _get_workers_usage_data()
-            h = _data_hash(data)
-            if h != prev:
-                prev = h
-                socketio.emit('usage:update', data)
-        except Exception:
-            pass
+        if _has_clients():
+            try:
+                data = _get_workers_usage_data()
+                h = _data_hash(data)
+                if h != prev:
+                    prev = h
+                    socketio.emit('usage:update', data)
+            except Exception:
+                pass
         socketio.sleep(5)
 
 
 def _bg_activity_monitor():
-    """Push activity changes every 3s."""
-    prev = None
+    """Push activity and file tree changes every 5s."""
+    prev_activity = None
+    prev_files = None
     while True:
-        try:
-            data = _get_activity_data()
-            h = _data_hash(data)
-            if h != prev:
-                prev = h
-                socketio.emit('activity:update', data)
-        except Exception:
-            pass
-        socketio.sleep(3)
+        if _has_clients():
+            try:
+                data = _get_activity_data()
+                h = _data_hash(data)
+                if h != prev_activity:
+                    prev_activity = h
+                    socketio.emit('activity:update', data)
+            except Exception:
+                pass
+            try:
+                data = _get_home_tree_data()
+                h = _data_hash(data)
+                if h != prev_files:
+                    prev_files = h
+                    socketio.emit('files:update', data)
+            except Exception:
+                pass
+        socketio.sleep(5)
 
 
 def _bg_metrics_monitor():
     """Push system metrics every 2s."""
     prev = None
     while True:
-        try:
-            data = _get_metrics_data()
-            h = _data_hash(data)
-            if h != prev:
-                prev = h
-                socketio.emit('metrics:update', data)
-        except Exception:
-            pass
+        if _has_clients():
+            try:
+                data = _get_metrics_data()
+                h = _data_hash(data)
+                if h != prev:
+                    prev = h
+                    socketio.emit('metrics:update', data)
+            except Exception:
+                pass
         socketio.sleep(2)
 
 
 def _bg_terminal_monitor():
-    """Push terminal output for subscribed workers every 500ms."""
+    """Push terminal output to subscribed clients only, every 500ms."""
     prev_outputs = {}
     while True:
-        try:
-            # Collect all subscribed workers across all clients
-            with _terminal_subs_lock:
-                subscribed = set()
-                for names in _terminal_subs.values():
-                    subscribed.update(names)
+        if _has_clients():
+            try:
+                # Collect all subscribed workers across all clients
+                with _terminal_subs_lock:
+                    subscribed = set()
+                    for names in _terminal_subs.values():
+                        subscribed.update(names)
 
-            for name in subscribed:
-                try:
-                    output = tmux.capture_output(name, 200)
-                    h = _data_hash(output)
-                    if h != prev_outputs.get(name):
-                        prev_outputs[name] = h
-                        socketio.emit('worker:output', {'name': name, 'output': output})
-                except Exception:
-                    pass
+                for name in subscribed:
+                    try:
+                        output = tmux.capture_output(name, 200)
+                        h = _data_hash(output)
+                        if h != prev_outputs.get(name):
+                            prev_outputs[name] = h
+                            # Emit only to clients in this worker's room
+                            socketio.emit('worker:output',
+                                          {'name': name, 'output': output},
+                                          to=f'terminal:{name}')
+                    except Exception:
+                        pass
 
-            # Clean up cache for unsubscribed workers
-            for name in list(prev_outputs):
-                if name not in subscribed:
-                    del prev_outputs[name]
-        except Exception:
-            pass
+                # Clean up cache for unsubscribed workers
+                for name in list(prev_outputs):
+                    if name not in subscribed:
+                        del prev_outputs[name]
+            except Exception:
+                pass
         socketio.sleep(0.5)
 
 
@@ -2004,6 +1852,7 @@ def _start_background_monitors():
 
 
 if __name__ == '__main__':
+    _get_models()  # warm cache so first request is instant
     _start_background_monitors()
     socketio.run(app, host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001),
                  allow_unsafe_werkzeug=True)

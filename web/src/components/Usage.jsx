@@ -160,16 +160,6 @@ const styles = {
     color: 'var(--text-secondary)',
     marginTop: '2px',
   },
-  deltaPositive: {
-    fontSize: '11px',
-    color: 'var(--success)',
-    fontWeight: 600,
-  },
-  deltaNegative: {
-    fontSize: '11px',
-    color: 'var(--text-secondary)',
-    fontWeight: 600,
-  },
   empty: {
     display: 'flex',
     flexDirection: 'column',

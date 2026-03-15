@@ -8,8 +8,17 @@
   --danger: #ef4444;
   --success: #22c55e;
   --border: #3f3f46;
+  --warning: #eab308;
   --terminal-bg: #0d0d0d;
   --terminal-text: #d4d4d4;
+  --status-modified-bg: #854d0e;
+  --status-modified-text: #fef08a;
+  --status-added-bg: #166534;
+  --status-added-text: #86efac;
+  --status-deleted-bg: #991b1b;
+  --status-deleted-text: #fca5a5;
+  --status-untracked-bg: #1e3a5f;
+  --status-untracked-text: #93c5fd;
 }
 
 :root.light {
@@ -22,8 +31,17 @@
   --danger: #dc2626;
   --success: #16a34a;
   --border: #d1d5db;
+  --warning: #ca8a04;
   --terminal-bg: #f5f5f5;
   --terminal-text: #1a1a2e;
+  --status-modified-bg: #fef3c7;
+  --status-modified-text: #92400e;
+  --status-added-bg: #dcfce7;
+  --status-added-text: #166534;
+  --status-deleted-bg: #fee2e2;
+  --status-deleted-text: #991b1b;
+  --status-untracked-bg: #dbeafe;
+  --status-untracked-text: #1e3a5f;
 }
 
 * {

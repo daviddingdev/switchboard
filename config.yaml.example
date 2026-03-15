@@ -15,17 +15,15 @@ tmux_socket: "orchestrator"
 tmux_session: "orchestrator"
 
 # Claude Code model options shown in spawn dialog
-# Update this list when new models are released
-models:
-  - id: "claude-sonnet-4-5-20250514"
-    label: "Sonnet 4.5"
-  - id: "claude-opus-4-5-20250514"
-    label: "Opus 4.5"
-  - id: "claude-sonnet-4-6"
-    label: "Sonnet 4.6"
-  - id: "claude-opus-4-6"
-    label: "Opus 4.6"
-default_model: "claude-opus-4-5-20250514"
+# Set to "auto" (default) to discover models from `claude model list`.
+# Or provide an explicit list:
+#   models:
+#     - id: "claude-sonnet-4-5"
+#       label: "Sonnet 4.5"
+#     - id: "claude-opus-4-6"
+#       label: "Opus 4.6"
+models: "auto"
+default_model: "claude-opus-4-5"
 
 # ─── System Monitor ───────────────────────────────────────────────
 # Controls what appears in the Monitor tab (keyboard shortcut: m).

@@ -22,6 +22,10 @@ const styles = {
     flexShrink: 0,
     maxWidth: '180px',
     userSelect: 'none',
+    transition: 'background 0.1s',
+  },
+  tabHover: {
+    background: 'var(--bg-tertiary)',
   },
   tabActive: {
     background: 'var(--bg-primary)',
@@ -63,6 +67,8 @@ const styles = {
 export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTabReorder }) {
   const [dragIndex, setDragIndex] = useState(null)
   const [dragOverIndex, setDragOverIndex] = useState(null)
+  const [hoverIndex, setHoverIndex] = useState(null)
+  const [hoverClose, setHoverClose] = useState(null)
 
   const handleDragStart = (e, index) => {
     setDragIndex(index)
@@ -100,9 +106,12 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTab
           onDragOver={(e) => handleDragOver(e, index)}
           onDrop={(e) => handleDrop(e, index)}
           onDragEnd={handleDragEnd}
+          onMouseEnter={() => setHoverIndex(index)}
+          onMouseLeave={() => setHoverIndex(null)}
           style={{
             ...styles.tab,
             ...(activeTab === tab.id ? styles.tabActive : {}),
+            ...(hoverIndex === index && activeTab !== tab.id ? styles.tabHover : {}),
             ...(dragIndex === index ? { opacity: 0.4 } : {}),
             ...(dragOverIndex === index && dragIndex !== null && dragIndex !== index
               ? { borderLeft: '2px solid var(--accent)' }
@@ -113,17 +122,19 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTab
           <span style={{
             ...styles.tabIcon,
             ...(tab.type === 'terminal' ? styles.tabIconTerminal : {}),
-            ...(tab.type === 'diff' ? { color: '#eab308' } : {}),
-            ...(tab.type === 'push' ? { color: 'var(--accent)' } : {}),
-            ...(tab.type === 'commit' ? { color: 'var(--success)' } : {}),
-            ...(tab.type === 'preview' ? { color: 'var(--accent)' } : {})
+            ...(tab.type === 'diff' ? { color: 'var(--warning)' } : {}),
           }}>
-            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'push' ? '⬆' : tab.type === 'commit' ? '✓' : tab.type === 'history' ? '💬' : tab.type === 'preview' ? '👁' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
+            {tab.type === 'terminal' ? '●' : tab.type === 'diff' ? '±' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'push' || tab.type === 'commit' || tab.type === 'history' || tab.type === 'preview' || tab.type === 'monitor' || tab.type === 'usage' || tab.type === 'terminal') && (
+          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'monitor' || tab.type === 'usage' || tab.type === 'terminal') && (
             <button
-              style={styles.closeButton}
+              style={{
+                ...styles.closeButton,
+                ...(hoverClose === tab.id ? { background: 'var(--bg-tertiary)', color: 'var(--text-primary)' } : {}),
+              }}
+              onMouseEnter={() => setHoverClose(tab.id)}
+              onMouseLeave={() => setHoverClose(null)}
               onClick={(e) => {
                 e.stopPropagation()
                 onTabClose(tab.id)

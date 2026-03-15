@@ -49,8 +49,8 @@ chmod +x setup.sh start.sh stop.sh
 ```
 
 Access the UI:
-- Same machine: http://localhost:3000
-- Other devices: http://\<machine-ip\>:3000
+- Same machine: http://localhost:5001
+- Other devices: http://\<machine-ip\>:5001
 
 ## Configuration
 
@@ -67,14 +67,7 @@ See `config.yaml.example` for all options with inline docs.
 
 ### Changing Ports
 
-API port: edit `port` in `config.yaml`
-
-Web UI port: edit `web/vite.config.js`:
-```js
-server: {
-  port: 3001,  // Change to available port
-}
-```
+API + Web UI port: edit `port` in `config.yaml` (default: 5001)
 
 ## Stopping
 
@@ -147,7 +140,7 @@ Common: port 5001 in use, missing Python deps (`pip3 install -r api/requirements
 cat logs/web.log
 ```
 
-Common: port 3000 in use, missing Node deps (`cd web && npm install`).
+Common: port 5001 in use, missing Node deps (`cd web && npm install`).
 
 ### tmux session issues
 

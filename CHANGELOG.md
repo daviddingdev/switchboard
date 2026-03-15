@@ -1,5 +1,31 @@
 # Orchestrator Changelog
 
+## 2026-03-15
+
+### Network Efficiency Overhaul
+- **Targeted terminal output** — `worker:output` now emits only to subscribed clients via Socket.IO rooms, not broadcast to all. Eliminates wasted bandwidth (up to ~50KB per push per extra client).
+- **Incremental JSONL parsing** — `parse_session_usage()` caches file offset and accumulated totals, only reading new lines on each cycle instead of re-parsing entire multi-megabyte session files every 5s.
+- **FileTree WebSocket push** — Replaced 10s REST polling with `files:update` socket event. File tree now updates in sync with the activity monitor.
+- **Client-aware monitor pausing** — All 5 background monitors skip work when no browser clients are connected. Eliminates idle CPU/subprocess waste.
+- **Activity monitor optimized** — Interval increased from 3s to 5s, reducing git subprocess calls by 40%.
+- **Consolidated git status** — `get_git_status_map()` now delegates to `get_git_status()` instead of running a duplicate subprocess.
+- **Project discovery caching** — `discover_projects()` cached with 30s TTL instead of walking the filesystem on every monitor cycle.
+- **SocketIO tuning** — `ping_interval=20, ping_timeout=60` for better idle connection survival. Client reconnection tightened (500ms delay, 3s max, infinite retries).
+- **Model cache warmup** — Models list pre-fetched at server startup so spawn dialog opens instantly.
+
+### Bug Fixes
+- **Context tracker per-worker** — Fixed `find_latest_session_file()` returning the same file for all workers in the same project. Each worker now tracked to its own `.jsonl` session file via spawn-time snapshot + label-based fallback matching for pre-existing workers.
+
+### Dead Code Cleanup (-521 lines)
+- Removed 3 dead endpoints (`/api/doc-context`, `/api/update-docs`, `/api/commit`)
+- Removed `filter_conversation()`, `CLAUDE_CONFIG_FILE`, `PROJECTS_FILE`, `_git_index_mtimes`
+- Removed 7 dead `api.js` client functions
+- Removed `ErrorState.jsx` (unused component), `tools/usage_report.py` (superseded)
+- Removed `state/projects.yaml` and `state/projects.example.yaml` (auto-discovery replaced manual config)
+- Removed empty `hooks/` directory
+- Cleaned dead CSS styles and unreachable tab type handling
+- Fixed `orch projects` CLI to call API instead of reading deleted YAML file
+
 ## 2026-03-13
 
 ### Configurable System Monitor

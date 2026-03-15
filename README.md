@@ -49,7 +49,7 @@ chmod +x setup.sh start.sh stop.sh
 ./start.sh
 ```
 
-Open http://localhost:3000 (or `http://<machine-ip>:3000` from another device)
+Open http://localhost:5001 (or `http://<machine-ip>:5001` from another device)
 
 ## How Projects Are Discovered
 
@@ -91,8 +91,7 @@ tmux -L orchestrator kill-session -t orchestrator
 
 | Service | Default Port |
 |---------|--------------|
-| Web UI  | 3000         |
-| API     | 5001         |
+| API + Web UI | 5001    |
 
 ## Architecture
 
@@ -108,7 +107,8 @@ orchestrator/
 ├── web/              # React frontend
 │   └── src/
 ├── state/            # Runtime state
-│   └── proposals/    # Worker proposals
+│   ├── proposals/    # Worker proposals
+│   └── usage-archive.json
 ├── docs/             # Documentation
 ├── logs/             # Runtime logs
 ├── setup.sh          # Install dependencies
