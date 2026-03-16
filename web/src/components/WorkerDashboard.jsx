@@ -530,7 +530,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                     const key = `${worker.name}:${action}`
                     const isActing = acting === key
                     const isDanger = action === 'kill'
-                    const label = { rc: 'RC', compact: 'Compact', reset: 'Reset', kill: 'Kill' }[action]
+                    const label = { rc: 'Remote', compact: 'Compact', reset: 'Reset', kill: 'Kill' }[action]
 
                     return (
                       <button

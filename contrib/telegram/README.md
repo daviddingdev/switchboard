@@ -1,6 +1,8 @@
-# Telegram Bot for Helm
+# Telegram Bot for Switchboard
 
-Optional mobile control interface for Helm via Telegram.
+> **Experimental** — This integration is a work-in-progress and not required for core Switchboard functionality. Some features (partner history, conversation mode) reference endpoints that don't exist yet.
+
+Optional mobile control interface for Switchboard via Telegram.
 
 ## Setup
 
@@ -12,11 +14,11 @@ Optional mobile control interface for Helm via Telegram.
 ## Systemd Service (Linux)
 
 ```bash
-cp helm-telegram.service ~/.config/systemd/user/
+cp switchboard-telegram.service ~/.config/systemd/user/
 # Edit paths in the service file to match your setup
 systemctl --user daemon-reload
-systemctl --user enable helm-telegram
-systemctl --user start helm-telegram
+systemctl --user enable switchboard-telegram
+systemctl --user start switchboard-telegram
 ```
 
 ## Notification Hook
@@ -36,5 +38,5 @@ To use it, add it as a hook in your project's `.claude/settings.local.json`:
 
 ## Architecture
 
-The bot talks to the Helm API (default: `http://localhost:5001`).
-Helm has zero Telegram dependencies — this is fully optional.
+The bot talks to the Switchboard API (default: `http://localhost:5001`).
+Switchboard has zero Telegram dependencies — this is fully optional.

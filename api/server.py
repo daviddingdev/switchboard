@@ -1,5 +1,5 @@
 """
-Flask API server for Helm.
+Flask API server for Switchboard.
 
 Provides HTTP endpoints for managing Claude Code worker sessions.
 """
@@ -45,8 +45,8 @@ def load_config():
         'host': '0.0.0.0',
         'project_root': '~',
         'scan_depth': 3,
-        'tmux_socket': 'helm',
-        'tmux_session': 'helm',
+        'tmux_socket': 'switchboard',
+        'tmux_session': 'switchboard',
     }
     config_path = PROJECT_ROOT / 'config.yaml'
     if config_path.exists():
@@ -157,7 +157,7 @@ def index():
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
     return {
-        "name": "Helm API",
+        "name": "Switchboard API",
         "version": "0.5.0",
         "note": "Run 'cd web && npm run build' to enable the web UI",
     }
@@ -654,7 +654,7 @@ def _get_home_tree_data():
         parts = rel_path.split(os.sep)
 
         if len(parts) == 1:
-            # Direct child of home (e.g., ~/helm)
+            # Direct child of home (e.g., ~/switchboard)
             result.append({
                 'name': proj_name,
                 'path': proj_dir,

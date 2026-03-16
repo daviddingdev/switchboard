@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-echo "=== Helm Setup ==="
+echo "=== Switchboard Setup ==="
 echo ""
 
 # Check dependencies
@@ -62,7 +62,7 @@ if [ ! -f config.yaml ]; then
 fi
 
 echo ""
-echo "=== Setup complete ==="
+echo "=== Switchboard setup complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Ensure your projects have CLAUDE.md files (auto-discovered)"

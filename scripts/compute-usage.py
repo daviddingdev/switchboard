@@ -6,7 +6,7 @@ Scans ~/.claude/projects/ for session JSONLs, aggregates token usage,
 and writes stats to state/usage-stats.json.
 
 Run: python3 scripts/compute-usage.py
-Cron: 0 2 * * 0 cd ~/helm && python3 scripts/compute-usage.py
+Cron: 0 2 * * 0 cd ~/switchboard && python3 scripts/compute-usage.py
 """
 
 import json

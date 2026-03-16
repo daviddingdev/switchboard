@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Telegram bot for Helm — mobile control interface with button-based UI."""
+"""Telegram bot for Switchboard — mobile control interface with button-based UI."""
 
 __version__ = "0.6.0"
 
@@ -504,7 +504,8 @@ async def build_git_detail(project: str) -> tuple[str, InlineKeyboardMarkup]:
 # Known services to check — customize for your setup
 # Format: "name": ("health_check_url", port)
 SERVICES = {
-    "helm": ("http://localhost:5001/api/health", 5001),
+    # Customize this dict for your services
+    "switchboard": ("http://localhost:5001/api/health", 5001),
 }
 
 
@@ -771,7 +772,7 @@ async def _do_ask(message, question: str):
 @auth
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/start — Send persistent keyboard."""
-    await update.message.reply_text("Helm ready.", reply_markup=REPLY_KEYBOARD)
+    await update.message.reply_text("Switchboard ready.", reply_markup=REPLY_KEYBOARD)
 
 
 @auth

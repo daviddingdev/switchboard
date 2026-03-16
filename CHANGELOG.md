@@ -1,4 +1,16 @@
-# Helm Changelog
+# Switchboard Changelog
+
+## 2026-03-16
+
+### Renamed to Switchboard
+- Project renamed from Helm to Switchboard across all files, configs, service files, and documentation
+- tmux socket/session renamed from `helm` to `switchboard`
+- CLI helper renamed from `helm` to `switchboard`, env var `HELM_URL` → `SWITCHBOARD_URL`
+- Service files renamed: `switchboard.service`, `switchboard-telegram.service`
+- Added security warning to README, experimental disclaimer to Telegram bot docs
+- Moved Proposals UI from Next to Backlog in TODO.md
+- Renamed RC button label to Remote in worker cards
+- Uncommented pricing defaults in config.yaml.example
 
 ## 2026-03-15
 
@@ -676,4 +688,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: March 12, 2026*
+*Last updated: March 16, 2026*

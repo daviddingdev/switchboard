@@ -1,6 +1,6 @@
-# Helm Setup Guide
+# Switchboard Setup Guide
 
-Helm runs on the machine where your Claude Code sessions live (Linux box, Mac, always-on PC). The web UI is accessed from any browser on any device.
+Switchboard runs on the machine where your Claude Code sessions live (Linux box, Mac, always-on PC). The web UI is accessed from any browser on any device.
 
 ## Prerequisites
 
@@ -35,8 +35,8 @@ claude --version
 ## Installation
 
 ```bash
-git clone <your-repo-url>/helm.git
-cd helm
+git clone <your-repo-url>/switchboard.git
+cd switchboard
 
 chmod +x setup.sh start.sh stop.sh
 ./setup.sh
@@ -75,12 +75,12 @@ API + Web UI port: edit `port` in `config.yaml` (default: 5001)
 ./stop.sh
 
 # To fully kill the tmux session:
-tmux -L helm kill-session -t helm
+tmux -L switchboard kill-session -t switchboard
 ```
 
 ## Project Discovery
 
-Helm auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
+Switchboard auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
 
 To add a project: create a `CLAUDE.md` in its root.
 
@@ -100,7 +100,7 @@ sudo bash scripts/setup-sudo.sh
 
 Or manually:
 ```bash
-sudo visudo -f /etc/sudoers.d/helm-updates
+sudo visudo -f /etc/sudoers.d/switchboard-updates
 # Add: <username> ALL=(ALL) NOPASSWD: /usr/bin/apt-get update *, /usr/bin/apt-get upgrade *, /usr/bin/snap refresh *
 ```
 
@@ -145,7 +145,7 @@ Common: port 5001 in use, missing Node deps (`cd web && npm install`).
 ### tmux session issues
 
 ```bash
-tmux -L helm list-sessions              # List sessions
-tmux -L helm attach -t helm             # Attach
-tmux -L helm kill-session -t helm       # Kill all
+tmux -L switchboard list-sessions              # List sessions
+tmux -L switchboard attach -t switchboard      # Attach
+tmux -L switchboard kill-session -t switchboard # Kill all
 ```

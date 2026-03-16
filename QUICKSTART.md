@@ -1,4 +1,4 @@
-# Helm Quick Start
+# Switchboard Quick Start
 
 ## Setup Checklist
 
@@ -20,7 +20,7 @@
 
 3. **Watch it work** — Click the **Term** button on the worker card to open a terminal tab streaming the worker's output in real-time.
 
-4. **Interact via remote control** — Workers start with remote control (`/rc`) enabled. Use Claude Code's remote-control feature to send tasks, or use the worker card buttons (RC, Compact, Reset, Kill).
+4. **Interact via remote control** — Workers start with remote control (`/rc`) enabled. Use Claude Code's remote-control feature to send tasks, or use the worker card buttons — Remote, Compact, Reset, Kill.
 
 5. **Check Activity** — The right panel shows git changes and unpushed commits across all projects.
 
@@ -33,7 +33,7 @@ Spawn workers in different projects to work in parallel. Each gets its own termi
 - **Spawn**: Click +Spawn or press `n`
 - **Switch**: Click terminal tabs to switch between workers
 - **Kill**: Use the Kill button on the worker card
-- **Actions**: Use worker card buttons — RC, Compact, Reset, Kill
+- **Actions**: Use worker card buttons — Remote (enable remote control), Compact, Reset, Kill
 
 ### Keyboard Shortcuts
 
@@ -70,7 +70,7 @@ Press `u` to see token usage across all sessions. Features:
 
 - **Multiple workers per project** — You can spawn multiple workers in the same project. They get auto-incremented names (e.g., `myproject`, `myproject-2`).
 
-- **Project discovery** — Helm finds projects by scanning `~` for `CLAUDE.md` files (configurable depth). Create a `CLAUDE.md` in any directory to make it appear in the spawn dialog.
+- **Project discovery** — Switchboard finds projects by scanning `~` for `CLAUDE.md` files (configurable depth). Create a `CLAUDE.md` in any directory to make it appear in the spawn dialog.
 
 - **Mobile access** — Open `http://<machine-ip>:5001` on your phone. The UI adapts with a bottom navigation bar.
 
@@ -82,22 +82,22 @@ Press `u` to see token usage across all sessions. Features:
 
 - **API costs** — The Usage tab estimates what your usage would cost on API billing. Useful for evaluating Max subscription vs pay-per-use. Configure rates in `config.yaml`.
 
+- **Model labels** — Model labels are stored in memory. After restarting Switchboard, running workers will show without their model tag.
+
 ## CLI Helper
 
-The `scripts/helm` CLI lets you manage workers from the command line:
+The `scripts/switchboard` CLI lets you manage workers from the command line:
 
 ```bash
 # Add to PATH
 export PATH="$PATH:$(pwd)/scripts"
 
 # Usage
-helm list                    # List workers
-helm spawn myworker ~/proj   # Spawn worker
-helm send myworker "fix bug" # Send message
-helm output myworker         # View output
-helm kill myworker           # Kill worker
-helm proposals               # List proposals (API only, no UI yet)
-helm approve <id>            # Approve proposal (API only, no UI yet)
+switchboard list                    # List workers
+switchboard spawn myworker ~/proj   # Spawn worker
+switchboard send myworker "fix bug" # Send message
+switchboard output myworker         # View output
+switchboard kill myworker           # Kill worker
 ```
 
-Override the API URL: `export HELM_URL=http://other-machine:5001`
+Override the API URL: `export SWITCHBOARD_URL=http://other-machine:5001`

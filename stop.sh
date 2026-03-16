@@ -1,7 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 
-echo "Stopping Helm..."
+echo "Stopping Switchboard..."
 
 if [ -f logs/api.pid ]; then
     PID=$(cat logs/api.pid)
@@ -16,4 +16,4 @@ fi
 echo "Done"
 echo ""
 echo "Note: tmux session may still be running."
-echo "To kill it: tmux -L helm kill-session -t helm"
+echo "To kill it: tmux -L switchboard kill-session -t switchboard"

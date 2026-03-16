@@ -1,6 +1,10 @@
-# Helm
+# Switchboard
 
-Personal AI operating system for managing Claude Code sessions across projects.
+Manage AI coding agents across all your projects from one dashboard.
+
+> **Warning:** Switchboard has no authentication. Do not expose port 5001 to the public internet. See [SECURITY.md](SECURITY.md).
+
+![screenshot](docs/screenshot.png)
 
 Spawn and manage multiple Claude Code workers from one web UI. Monitor system metrics, track usage analytics with estimated API costs, and browse files — all in real-time via WebSocket.
 
@@ -17,13 +21,13 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 
 ## How It Works
 
-Helm runs on the machine where your Claude Code sessions live. It manages them via tmux and serves a web UI accessible from any browser.
+Switchboard runs on the machine where your Claude Code sessions live. It manages them via tmux and serves a web UI accessible from any browser.
 
 ```
   Browser (any device)
       │ WebSocket + REST
       ▼
-  Helm server (:5001)
+  Switchboard server (:5001)
       │ subprocess
       ▼
   tmux → Claude Code workers
@@ -40,8 +44,8 @@ Helm runs on the machine where your Claude Code sessions live. It manages them v
 ## Quick Start
 
 ```bash
-git clone <your-repo-url>/helm.git
-cd helm
+git clone <your-repo-url>/switchboard.git
+cd switchboard
 
 # Install dependencies + build frontend
 ./setup.sh
@@ -56,7 +60,7 @@ See [QUICKSTART.md](QUICKSTART.md) for a full walkthrough including first sessio
 
 ## How Projects Are Discovered
 
-Helm auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file. No manual configuration needed.
+Switchboard auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file. No manual configuration needed.
 
 To add a project: create a `CLAUDE.md` file in its root directory.
 
@@ -80,13 +84,13 @@ See `config.yaml.example` for all options with inline documentation.
 
 To fully kill the tmux session:
 ```bash
-tmux -L helm kill-session -t helm
+tmux -L switchboard kill-session -t switchboard
 ```
 
 ## Project Structure
 
 ```
-helm/
+switchboard/
 ├── api/              # Flask-SocketIO backend
 │   ├── server.py     # API + WebSocket endpoints
 │   └── tmux_manager.py
@@ -97,8 +101,8 @@ helm/
 ├── docs/             # Architecture docs
 ├── contrib/          # Optional integrations (Telegram bot)
 ├── setup.sh          # Install dependencies
-├── start.sh          # Launch Helm
-└── stop.sh           # Stop Helm
+├── start.sh          # Launch Switchboard
+└── stop.sh           # Stop Switchboard
 ```
 
 ## Documentation

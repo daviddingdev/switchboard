@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for your interest in Helm! This guide covers how to set up, develop, and submit changes.
+Thanks for your interest in Switchboard! This guide covers how to set up, develop, and submit changes.
 
 ## Setup
 
 ```bash
-git clone <your-repo-url>/helm.git
-cd helm
+git clone <your-repo-url>/switchboard.git
+cd switchboard
 ./setup.sh        # installs Python + Node dependencies
 ./start.sh        # starts API + web server
 ```
@@ -33,7 +33,7 @@ npm run build     # production build (served by Flask)
 ```
 api/              # Flask backend + tmux manager
 web/src/          # React frontend (inline styles, no CSS modules)
-state/            # Runtime state (proposals, usage stats)
+state/            # Runtime state (usage stats)
 logs/             # Runtime logs (not committed)
 docs/             # Architecture docs
 contrib/          # Optional integrations (Telegram bot, hooks)

@@ -1,12 +1,12 @@
 [Unit]
-Description=Helm Telegram Bot
+Description=Switchboard Telegram Bot
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/helm/contrib/telegram/bot
-ExecStart=/usr/bin/python3 %h/helm/contrib/telegram/bot/telegram_bot.py
+WorkingDirectory=%h/switchboard/contrib/telegram/bot
+ExecStart=/usr/bin/python3 %h/switchboard/contrib/telegram/bot/telegram_bot.py
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1

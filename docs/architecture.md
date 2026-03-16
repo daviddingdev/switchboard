@@ -2,7 +2,7 @@
 
 ## Overview
 
-Helm runs on the machine where Claude Code
+Switchboard runs on the machine where Claude Code
 sessions live. It manages workers via **tmux** and
 serves a **Web UI** accessible from any browser.
 
@@ -23,7 +23,7 @@ Browser (any device)
 └────┬───────────┘
      │ subprocess
 ┌────┴──────┐
-│   tmux    │  socket: helm
+│   tmux    │  socket: switchboard
 │  manager  │
 └────┬──────┘
      │ windows
@@ -46,7 +46,7 @@ start.sh sequence:
 
 To fully kill tmux:
 ```bash
-tmux -L helm kill-session -t helm
+tmux -L switchboard kill-session -t switchboard
 ```
 
 ---
@@ -70,14 +70,16 @@ All routes prefixed with `/api`.
 Returns `{name, directory, status, pid, log_file}`.
 
 **Send** accepts `{text, raw}`. Used by worker card
-actions (RC, Compact, Reset) and CLI helper.
+actions (Remote, Compact, Reset) and CLI helper.
 `raw: true` for special keys (Escape, Enter, C-c).
 `raw: false` for text (auto-appends Enter).
 
 **Output** default 50 lines. Captures 5x, filters
 blanks, returns last N non-empty lines.
 
-### Proposals (API only, no UI yet)
+### Proposals
+
+Proposals are an optional API/CLI feature. No web UI exists for proposals.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -88,7 +90,6 @@ blanks, returns last N non-empty lines.
 
 Proposals stored as YAML in `state/proposals/`.
 Workers submit via curl to POST endpoint.
-**Note:** No web UI for proposals yet — API and CLI only.
 
 ### Files & Git
 
@@ -180,8 +181,8 @@ detection — only emit when data actually changes.
 
 `api/tmux_manager.py` — all tmux operations.
 
-Socket: `-L helm` (named, not path-based).
-Session: `helm`.
+Socket: `-L switchboard` (named, not path-based).
+Session: `switchboard`.
 
 ### spawn_worker(name, directory, session_label)
 
@@ -317,7 +318,7 @@ Terminal view uses dedicated `--terminal-bg` and
 
 ```
 state/
-├── proposals/*.yaml       # proposals (API only, no UI yet)
+├── proposals/*.yaml       # proposals (API/CLI only)
 └── usage-archive.json     # persistent daily usage data
 
 logs/
@@ -334,7 +335,7 @@ containing `CLAUDE.md` (max depth 3).
 
 `/api/home` also shows root-level `~/*.md` files.
 
-### Proposal Lifecycle (API only, no UI yet)
+### Proposal Lifecycle (API/CLI only)
 
 ```
 Worker submits POST /api/proposals
@@ -353,7 +354,7 @@ Worker submits POST /api/proposals
 - **threading async mode** — no monkey-patching, subprocess-safe
 - **No auth on web** — localhost assumption
 - **File-based state** — YAML/JSON, git-friendly
-- **tmux named socket** — `-L helm`
+- **tmux named socket** — `-L switchboard`
 - **Lazy session creation** — tmux session created
   on first worker spawn, not at startup
 - **Async spawn** — window creation returns immediately,

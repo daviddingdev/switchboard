@@ -1,16 +1,16 @@
-# Helm - Current Tasks
+# Switchboard - Current Tasks
 
 ## Current Focus
 **Project rename + documentation cleanup complete**
 
-Renamed from Orchestrator to Helm. All docs, configs, service files, and internal references updated.
+Renamed from Helm to Switchboard. All docs, configs, service files, and internal references updated.
 
 ---
 
 ## Quick Start
 
 ```bash
-cd ~/helm
+cd ~/switchboard
 ./start.sh
 ```
 
@@ -19,6 +19,14 @@ cd ~/helm
 ---
 
 ## Completed
+
+### Rename to Switchboard + Doc Cleanup (Mar 16, 2026)
+- [x] Renamed project from Helm to Switchboard across all files
+- [x] Renamed tmux socket/session from `helm` to `switchboard`
+- [x] Renamed service files, CLI helper, environment variables
+- [x] Refreshed README.md, CONTRIBUTING.md, SECURITY.md, docs/SETUP.md
+- [x] Updated QUICKSTART.md with RC rename to Remote, model label tip
+- [x] Updated docs/architecture.md references
 
 ### Rename to Helm + Doc Cleanup (Mar 15, 2026)
 - [x] Renamed project from Orchestrator to Helm across all files
@@ -86,12 +94,12 @@ cd ~/helm
 ## Next
 
 ### Features
-- [ ] **Proposals UI** — Web UI for viewing, approving, and rejecting worker proposals (backend API exists, no frontend yet)
 - [ ] **File download/copy on mobile** — FilePreview needs mobile-safe download (share API, clipboard, or backend raw file endpoint)
 - [ ] **Plan mode awareness** — Detect Claude Code plan approval prompt, show approve/reject buttons in worker card
 - [ ] **Terminal scrolling** — Output panel scroll behavior improvements
 
 ## Backlog
+- [ ] **Proposals UI** — Web UI for viewing, approving, and rejecting worker proposals (backend API exists, no frontend yet)
 - [ ] Non-interactive worker tasks (`claude -p`)
 - [ ] Overnight queue + executor
 - [ ] Digest generator (cron)
@@ -116,7 +124,8 @@ cd ~/helm
 | Mar 15 | Cost in compute script | Cost flows through daily entries, frontend filtering works automatically |
 | Mar 15 | MAX-merge archive | Historical counts never decrease despite session file pruning |
 | Mar 15 | Rename to Helm | Cleaner name for open-source release |
+| Mar 16 | Rename to Switchboard | Final name for open-source release |
 
 ---
 
-*Last updated: March 15, 2026*
+*Last updated: March 16, 2026*

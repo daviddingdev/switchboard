@@ -1,4 +1,4 @@
-# Helm
+# Switchboard
 
 Personal AI operating system for managing Claude Code sessions across projects.
 
@@ -9,11 +9,11 @@ Personal AI operating system for managing Claude Code sessions across projects.
 ./stop.sh       # Stop everything
 ```
 
-**UI:** http://localhost:5001 — spawn workers, monitor sessions, manage proposals.
+**UI:** http://localhost:5001 — spawn workers, monitor sessions.
 
 ## Key Details
 
 - **API port:** 5001 (workers use this to submit proposals)
-- **tmux session:** `helm` (socket: `-L helm`, created on first worker spawn)
+- **tmux session:** `switchboard` (socket: `-L switchboard`, created on first worker spawn)
 - **Projects:** Auto-discovered via CLAUDE.md presence
 - **Workers:** All sessions are equal — spawn/kill any worker from the web UI

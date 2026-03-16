@@ -1,14 +1,14 @@
 [Unit]
-Description=Helm API + Web Server
+Description=Switchboard API + Web Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=forking
-WorkingDirectory=%h/helm
+WorkingDirectory=%h/switchboard
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/helm/start.sh
-ExecStop=%h/helm/stop.sh
+ExecStart=%h/switchboard/start.sh
+ExecStop=%h/switchboard/stop.sh
 Restart=on-failure
 RestartSec=10
 
