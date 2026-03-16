@@ -98,7 +98,7 @@ Replaced all polling with WebSocket push. REST retained for actions and initial 
 - **Error states** — `ErrorState.jsx` with retry button, shown on fetch failure.
 - **Keyboard shortcuts** — `useKeyboardShortcuts` hook. `n` (spawn), `m` (monitor), `u` (usage), `Esc` (close), `?` (help overlay).
 - **Dark/light theme** — CSS variables on `:root.light`. Toggle persisted to localStorage. Available on both desktop and mobile.
-- **Worker count in page title** — Shows `(N) Helm` when workers are active.
+- **Worker count in page title** — Shows `(N) Switchboard` when workers are active.
 
 ### Post-Upgrade Polish
 
