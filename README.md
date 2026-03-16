@@ -4,14 +4,12 @@ Manage AI coding agents across all your projects from one dashboard.
 
 > **Warning:** Switchboard has no authentication. Do not expose port 5001 to the public internet. See [SECURITY.md](SECURITY.md).
 
-![screenshot](docs/screenshot.png)
-
 Spawn and manage multiple Claude Code workers from one web UI. Monitor system metrics, track usage analytics with estimated API costs, and browse files — all in real-time via WebSocket.
 
 ## What It Does
 
 - **Multi-worker management** — Spawn, monitor, and control Claude Code sessions from one interface
-- **Real-time terminals** — Stream worker output via WebSocket, no polling
+- **Real-time terminals** — Stream worker output via WebSocket with quick command buttons
 - **File browser** — Browse project files with syntax highlighting and git status badges
 - **System monitor** — CPU, memory, GPU, disk, network, and configurable services
 - **Usage analytics** — Token usage tracking with estimated API cost comparison

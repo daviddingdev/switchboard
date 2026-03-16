@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { getOutput } from '../api'
+import { getOutput, sendToProcess } from '../api'
 import socket from '../socket'
+
+const QUICK_BUTTONS = [
+  { label: 'y', text: 'y', raw: false },
+  { label: 'n', text: 'n', raw: false },
+  { label: '1', text: '1', raw: false },
+  { label: '2', text: '2', raw: false },
+  { label: '3', text: '3', raw: false },
+  { label: '↵', text: 'Enter', raw: true },
+  { label: 'Esc', text: 'Escape', raw: true },
+  { label: 'Ctrl+C', text: 'C-c', raw: true, danger: true },
+]
 
 const styles = {
   container: {
@@ -25,6 +36,44 @@ const styles = {
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
   },
+  commandBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    borderTop: '1px solid var(--border)',
+    background: 'var(--bg-secondary)',
+    flexShrink: 0,
+  },
+  quickBtn: {
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '3px 8px',
+    fontSize: '11px',
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'opacity 0.15s',
+    lineHeight: 1.4,
+  },
+  quickBtnDanger: {
+    color: 'var(--danger)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  textInput: {
+    flex: 1,
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '3px 8px',
+    fontSize: '11px',
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    outline: 'none',
+    minWidth: 0,
+  },
   status: {
     padding: '6px 16px',
     fontSize: '11px',
@@ -38,8 +87,26 @@ const styles = {
 export default function TerminalView({ workerName }) {
   const [output, setOutput] = useState('')
   const [connected, setConnected] = useState(true)
+  const [inputText, setInputText] = useState('')
+  const [flashIdx, setFlashIdx] = useState(null)
   const scrollRef = useRef(null)
   const wasAtBottom = useRef(true)
+  const inputRef = useRef(null)
+
+  const send = (text, raw, idx) => {
+    sendToProcess(workerName, text, raw).catch(() => {})
+    if (idx != null) {
+      setFlashIdx(idx)
+      setTimeout(() => setFlashIdx(null), 200)
+    }
+  }
+
+  const handleInputKey = (e) => {
+    if (e.key === 'Enter' && inputText.trim()) {
+      sendToProcess(workerName, inputText, false).catch(() => {})
+      setInputText('')
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -100,6 +167,30 @@ export default function TerminalView({ workerName }) {
     <div style={styles.container}>
       <div style={styles.output} ref={scrollRef} onScroll={handleScroll}>
         <pre style={styles.pre}>{output || 'Waiting for output...'}</pre>
+      </div>
+      <div style={styles.commandBar}>
+        {QUICK_BUTTONS.map((btn, i) => (
+          <button
+            key={btn.label}
+            style={{
+              ...styles.quickBtn,
+              ...(btn.danger ? styles.quickBtnDanger : {}),
+              opacity: flashIdx === i ? 0.5 : 1,
+            }}
+            onClick={() => send(btn.text, btn.raw, i)}
+            title={`Send ${btn.raw ? btn.text : `"${btn.text}" + Enter`}`}
+          >
+            {btn.label}
+          </button>
+        ))}
+        <input
+          ref={inputRef}
+          style={styles.textInput}
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleInputKey}
+          placeholder="Send text..."
+        />
       </div>
       <div style={styles.status}>
         {connected ? `● ${workerName}` : `○ ${workerName} — disconnected`}

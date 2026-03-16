@@ -265,12 +265,12 @@ splice callback), visual feedback in TabBar.
 
 | Component | What it does |
 |-----------|-------------|
-| WorkerDashboard | Worker cards, spawn button, quick actions, theme toggle |
+| WorkerDashboard | Worker cards, spawn button, theme toggle |
 | FileTree | Project browser with git status badges |
 | Activity | Changed files + unpushed commits |
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
-| TerminalView | Real-time terminal streaming via WebSocket |
+| TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input |
 | Monitor | System metrics (GPU, CPU, memory, services, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts |
 | TabBar | Tab switching, close buttons, drag-and-drop reorder |
