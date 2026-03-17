@@ -34,7 +34,7 @@ export default function ConnectionBanner() {
     left: 0,
     width: '100%',
     zIndex: 1000,
-    padding: '6px 0',
+    padding: 'calc(6px + env(safe-area-inset-top, 0px)) 0 6px',
     textAlign: 'center',
     fontSize: '13px',
     fontWeight: 500,

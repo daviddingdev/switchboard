@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { fetchAuthStatus, logout } from './api'
 import { useIsMobile } from './hooks/useMediaQuery'
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
+import useNotifications from './hooks/useNotifications'
 import socket from './socket'
+import LoginPage from './components/LoginPage'
 import FileTree from './components/FileTree'
 import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
@@ -13,6 +16,7 @@ import MobileNav from './components/MobileNav'
 import Monitor from './components/Monitor'
 import Usage from './components/Usage'
 import TerminalView from './components/TerminalView'
+import LogViewer from './components/LogViewer'
 import ConnectionBanner from './components/ConnectionBanner'
 import ShortcutsHelp from './components/ShortcutsHelp'
 
@@ -143,7 +147,6 @@ const mobileStyles = {
     flexDirection: 'column',
     background: 'var(--bg-primary)',
     paddingTop: 'env(safe-area-inset-top, 0px)',
-    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
   },
   content: {
     flex: 1,
@@ -151,6 +154,7 @@ const mobileStyles = {
     WebkitOverflowScrolling: 'touch',
     overscrollBehavior: 'contain',
     minHeight: 0,
+    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
   },
   previewOverlay: {
     position: 'fixed',
@@ -158,9 +162,9 @@ const mobileStyles = {
     background: 'var(--bg-primary)',
     display: 'flex',
     flexDirection: 'column',
-    zIndex: 40,
+    zIndex: 60,
     paddingTop: 'env(safe-area-inset-top, 0px)',
-    paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))',
+    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   },
   previewBody: {
     flex: 1,
@@ -196,6 +200,12 @@ const mobileStyles = {
 
 export default function App() {
   const isMobile = useIsMobile()
+  useNotifications()
+
+  // Auth state
+  const [authChecked, setAuthChecked] = useState(false)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authEnabled, setAuthEnabled] = useState(false)
 
   const [showSpawnDialog, setShowSpawnDialog] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -226,6 +236,7 @@ export default function App() {
   // Mobile state
   const [mobileSection, setMobileSection] = useState('workers')
   const [mobilePreview, setMobilePreview] = useState(null)
+  const [mobileTerminal, setMobileTerminal] = useState(null) // worker name or null
 
   // Worker count for page title
   const [workerCount, setWorkerCount] = useState(0)
@@ -242,8 +253,8 @@ export default function App() {
   // --- Tab management ---
 
   const openTab = useCallback((type, path, project) => {
-    const id = type === 'monitor' ? 'monitor' : type === 'usage' ? 'usage' : type === 'terminal' ? `terminal:${path}` : type === 'diff' ? `diff:${project}:${path}` : `file:${path}`
-    const label = type === 'monitor' ? 'Monitor' : type === 'usage' ? 'Usage' : type === 'terminal' ? path : path.split('/').pop()
+    const id = type === 'monitor' ? 'monitor' : type === 'usage' ? 'usage' : type === 'terminal' ? `terminal:${path}` : type === 'log' ? `log:${path}` : type === 'diff' ? `diff:${project}:${path}` : `file:${path}`
+    const label = type === 'monitor' ? 'Monitor' : type === 'usage' ? 'Usage' : type === 'terminal' ? path : type === 'log' ? `${path} logs` : path.split('/').pop()
 
     setTabs(prev => {
       if (prev.find(t => t.id === id)) return prev
@@ -295,7 +306,7 @@ export default function App() {
 
   // --- Keyboard shortcuts (desktop only) ---
 
-  useKeyboardShortcuts({
+  useKeyboardShortcuts(isMobile ? {} : {
     'n': () => setShowSpawnDialog(true),
     'Escape': () => {
       if (showShortcuts) { setShowShortcuts(false); return }
@@ -344,10 +355,33 @@ export default function App() {
 
   const handleMouseUp = useCallback(() => setDragging(null), [])
 
+  const handleLogout = async () => {
+    try {
+      await logout()
+      setAuthenticated(false)
+    } catch (err) {
+      console.error('Logout failed:', err)
+    }
+  }
+
   const handleSpawned = () => {
     setShowSpawnDialog(false)
     setRefreshKey(k => k + 1)
   }
+
+  // --- Auth check ---
+  useEffect(() => {
+    fetchAuthStatus()
+      .then(data => {
+        setAuthEnabled(data.auth_enabled)
+        setAuthenticated(!data.auth_enabled || data.authenticated)
+        setAuthChecked(true)
+      })
+      .catch(() => {
+        setAuthenticated(true)
+        setAuthChecked(true)
+      })
+  }, [])
 
   // --- Cursor style during drag ---
   const layoutDragStyle = dragging === 'top'
@@ -355,6 +389,9 @@ export default function App() {
     : dragging ? desktopStyles.layoutNoSelect : {}
 
   // --- Render ---
+
+  if (!authChecked) return null
+  if (!authenticated) return <LoginPage onLogin={() => setAuthenticated(true)} />
 
   if (isMobile) {
     return (
@@ -367,8 +404,10 @@ export default function App() {
               isMobile
               onSpawn={() => setShowSpawnDialog(true)}
               onRefresh={() => setRefreshKey(k => k + 1)}
+              onTerminal={(name) => { setMobilePreview(null); setMobileTerminal(name) }}
               onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
               theme={theme}
+              onLogout={authEnabled ? handleLogout : undefined}
             />
           )}
           {mobileSection === 'files' && (
@@ -413,10 +452,30 @@ export default function App() {
           </div>
         )}
 
+        {mobileTerminal && (
+          <div style={mobileStyles.previewOverlay}>
+            <div style={mobileStyles.previewHeader}>
+              <button
+                style={mobileStyles.backBtn}
+                onClick={() => setMobileTerminal(null)}
+              >
+                ← Back
+              </button>
+              <span style={mobileStyles.previewTitle}>
+                {mobileTerminal}
+              </span>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <TerminalView workerName={mobileTerminal} isMobile />
+            </div>
+          </div>
+        )}
+
         <MobileNav
           activeSection={mobileSection}
           onSectionChange={(s) => {
             setMobilePreview(null)
+            setMobileTerminal(null)
             setMobileSection(s)
           }}
         />
@@ -455,10 +514,12 @@ export default function App() {
           onSpawn={() => setShowSpawnDialog(true)}
           onRefresh={() => setRefreshKey(k => k + 1)}
           onTerminal={(name) => openTab('terminal', name)}
+          onLogs={(name) => openTab('log', name)}
           onMonitor={() => openTab('monitor')}
           onUsage={() => openTab('usage')}
           onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           theme={theme}
+          onLogout={authEnabled ? handleLogout : undefined}
         />
       </div>
 
@@ -541,6 +602,8 @@ export default function App() {
             >
               {tab.type === 'terminal' ? (
                 <TerminalView workerName={tab.path} />
+              ) : tab.type === 'log' ? (
+                <LogViewer workerName={tab.path} />
               ) : tab.type === 'usage' ? (
                 <Usage />
               ) : tab.type === 'monitor' ? (

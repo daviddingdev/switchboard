@@ -1,13 +1,42 @@
 const API_BASE = '/api';
 
+function apiFetch(url, options = {}) {
+  return fetch(url, { credentials: 'include', ...options });
+}
+
+export async function fetchAuthStatus() {
+  const res = await apiFetch(`${API_BASE}/auth/status`);
+  if (!res.ok) throw new Error(`Failed to check auth: ${res.status}`);
+  return res.json();
+}
+
+export async function login(password) {
+  const res = await apiFetch(`${API_BASE}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Login failed');
+  }
+  return res.json();
+}
+
+export async function logout() {
+  const res = await apiFetch(`${API_BASE}/logout`, { method: 'POST' });
+  if (!res.ok) throw new Error('Logout failed');
+  return res.json();
+}
+
 export async function fetchProcesses() {
-  const res = await fetch(`${API_BASE}/processes`);
+  const res = await apiFetch(`${API_BASE}/processes`);
   if (!res.ok) throw new Error(`Failed to fetch processes: ${res.status}`);
   return res.json();
 }
 
 export async function fetchModels() {
-  const res = await fetch(`${API_BASE}/models`);
+  const res = await apiFetch(`${API_BASE}/models`);
   if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
   return res.json();
 }
@@ -15,7 +44,7 @@ export async function fetchModels() {
 export async function spawnProcess(name, directory, model) {
   const body = { name, directory };
   if (model) body.model = model;
-  const res = await fetch(`${API_BASE}/processes`, {
+  const res = await apiFetch(`${API_BASE}/processes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -28,7 +57,7 @@ export async function spawnProcess(name, directory, model) {
 }
 
 export async function killProcess(name) {
-  const res = await fetch(`${API_BASE}/processes/${encodeURIComponent(name)}`, {
+  const res = await apiFetch(`${API_BASE}/processes/${encodeURIComponent(name)}`, {
     method: 'DELETE'
   });
   if (!res.ok) {
@@ -39,7 +68,7 @@ export async function killProcess(name) {
 }
 
 export async function sendToProcess(name, text, raw = false) {
-  const res = await fetch(`${API_BASE}/processes/${encodeURIComponent(name)}/send`, {
+  const res = await apiFetch(`${API_BASE}/processes/${encodeURIComponent(name)}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, raw })
@@ -52,7 +81,7 @@ export async function sendToProcess(name, text, raw = false) {
 }
 
 export async function getOutput(name, lines = 50) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/processes/${encodeURIComponent(name)}/output?lines=${lines}`
   );
   if (!res.ok) {
@@ -63,7 +92,7 @@ export async function getOutput(name, lines = 50) {
 }
 
 export async function fetchProjects() {
-  const res = await fetch(`${API_BASE}/projects`);
+  const res = await apiFetch(`${API_BASE}/projects`);
   if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`);
   return res.json();
 }
@@ -71,13 +100,13 @@ export async function fetchProjects() {
 // Projects, Files, Changes, Activity
 
 export async function fetchHome() {
-  const res = await fetch(`${API_BASE}/home`);
+  const res = await apiFetch(`${API_BASE}/home`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
   return res.json();
 }
 
 export async function fetchFileContent(filepath) {
-  const res = await fetch(`${API_BASE}/file?path=${encodeURIComponent(filepath)}`);
+  const res = await apiFetch(`${API_BASE}/file?path=${encodeURIComponent(filepath)}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to fetch file: ${res.status}`);
@@ -86,13 +115,13 @@ export async function fetchFileContent(filepath) {
 }
 
 export async function fetchActivity() {
-  const res = await fetch(`${API_BASE}/activity`);
+  const res = await apiFetch(`${API_BASE}/activity`);
   if (!res.ok) throw new Error(`Failed to fetch activity: ${res.status}`);
   return res.json();
 }
 
 export async function fetchDiff(project, path) {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/diff?project=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`
   );
   if (!res.ok) {
@@ -102,10 +131,69 @@ export async function fetchDiff(project, path) {
   return res.json();
 }
 
+export async function pushProject(project) {
+  const res = await apiFetch(`${API_BASE}/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to push: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateProposal(id, status) {
+  const res = await apiFetch(`${API_BASE}/proposals/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to update proposal: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function saveFile(filepath, content) {
+  const res = await apiFetch(`${API_BASE}/file`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filepath, content }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to save file: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchWorkerLogs(name) {
+  const res = await apiFetch(`${API_BASE}/logs/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to fetch logs: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchLogFile(name, filename, tail = 500) {
+  const res = await apiFetch(
+    `${API_BASE}/logs/${encodeURIComponent(name)}/${encodeURIComponent(filename)}?tail=${tail}`
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to fetch log file: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Workers usage
 
 export async function fetchWorkersUsage() {
-  const res = await fetch(`${API_BASE}/workers/usage`);
+  const res = await apiFetch(`${API_BASE}/workers/usage`);
   if (!res.ok) throw new Error(`Failed to fetch workers usage: ${res.status}`);
   return res.json();
 }
@@ -113,7 +201,7 @@ export async function fetchWorkersUsage() {
 // System metrics
 
 export async function fetchMetrics() {
-  const res = await fetch(`${API_BASE}/metrics`);
+  const res = await apiFetch(`${API_BASE}/metrics`);
   if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.status}`);
   return res.json();
 }
@@ -121,13 +209,13 @@ export async function fetchMetrics() {
 // System updates
 
 export async function fetchSystemUpdates() {
-  const res = await fetch(`${API_BASE}/system/updates`);
+  const res = await apiFetch(`${API_BASE}/system/updates`);
   if (!res.ok) throw new Error(`Failed to fetch system updates: ${res.status}`);
   return res.json();
 }
 
 export async function triggerSystemUpdate(categories) {
-  const res = await fetch(`${API_BASE}/system/update`, {
+  const res = await apiFetch(`${API_BASE}/system/update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ categories }),
@@ -142,7 +230,7 @@ export async function triggerSystemUpdate(categories) {
 // Usage analytics
 
 export async function fetchUsage() {
-  const res = await fetch(`${API_BASE}/usage`);
+  const res = await apiFetch(`${API_BASE}/usage`);
   if (!res.ok) {
     if (res.status === 404) return null;
     throw new Error(`Failed to fetch usage: ${res.status}`);
@@ -151,7 +239,7 @@ export async function fetchUsage() {
 }
 
 export async function refreshUsage() {
-  const res = await fetch(`${API_BASE}/usage/refresh`, { method: 'POST' });
+  const res = await apiFetch(`${API_BASE}/usage/refresh`, { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Failed to refresh usage: ${res.status}`);

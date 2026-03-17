@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useReducer } from 'react'
 import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage, fetchModels } from '../api'
 import socket from '../socket'
 import { useToast } from './Toast'
+import ConfirmDialog from './ConfirmDialog'
 
 const styles = {
   container: {
@@ -105,6 +106,9 @@ const styles = {
     fontSize: '17px',
     fontWeight: 600,
     color: 'var(--text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   directory: {
     fontSize: '11px',
@@ -172,6 +176,7 @@ const styles = {
   actionsMobile: {
     display: 'flex',
     gap: '8px',
+    flexWrap: 'wrap',
   },
   actionBtn: {
     flex: '1 1 auto',
@@ -201,64 +206,6 @@ const styles = {
   actionBtnDanger: {
     color: '#ef4444',
     borderColor: 'rgba(239, 68, 68, 0.3)',
-  },
-  // Confirmation overlay
-  confirmOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.6)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-  },
-  confirmDialog: {
-    background: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: '12px',
-    padding: '24px',
-    width: '300px',
-    maxWidth: '85vw',
-    textAlign: 'center',
-  },
-  confirmTitle: {
-    fontSize: '16px',
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-    marginBottom: '8px',
-  },
-  confirmDesc: {
-    fontSize: '14px',
-    color: 'var(--text-secondary)',
-    marginBottom: '24px',
-  },
-  confirmButtons: {
-    display: 'flex',
-    gap: '12px',
-  },
-  confirmCancel: {
-    flex: 1,
-    background: 'var(--bg-tertiary)',
-    color: 'var(--text-primary)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    minHeight: '48px',
-  },
-  confirmYes: {
-    flex: 1,
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    minHeight: '48px',
   },
   // Empty state
   emptyContainer: {
@@ -303,14 +250,33 @@ function getUsageColor(pct) {
   return '#22c55e'
 }
 
-export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal, onThemeToggle, theme }) {
+function formatUptime(spawnTime) {
+  if (!spawnTime) return null
+  const secs = Math.floor(Date.now() / 1000 - spawnTime)
+  if (secs < 60) return '<1m'
+  const mins = Math.floor(secs / 60)
+  const hours = Math.floor(mins / 60)
+  const days = Math.floor(hours / 24)
+  if (days > 0) return `${days}d ${hours % 24}h`
+  if (hours > 0) return `${hours}h ${mins % 60}m`
+  return `${mins}m`
+}
+
+export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal, onLogs, onThemeToggle, theme, onLogout }) {
   const [workers, setWorkers] = useState([])
   const [usage, setUsage] = useState({})
   const [modelLabels, setModelLabels] = useState({})
   const [acting, setActing] = useState(null)
   const [confirming, setConfirming] = useState(null) // { name, action } awaiting confirmation
   const [loading, setLoading] = useState(true)
+  const [, forceUpdate] = useReducer(x => x + 1, 0)
   const { addToast } = useToast()
+
+  // Re-render every 60s for uptime display
+  useEffect(() => {
+    const interval = setInterval(forceUpdate, 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   const loadWorkers = async () => {
     try {
@@ -431,6 +397,14 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
               📊 Monitor
             </button>
           )}
+          {onLogout && (
+            <button
+              style={{ ...(m ? styles.spawnBtnMobile : styles.spawnBtn), background: 'var(--bg-tertiary)' }}
+              onClick={onLogout}
+            >
+              Logout
+            </button>
+          )}
           <button
             style={{ ...(m ? styles.spawnBtnMobile : styles.spawnBtn), background: 'var(--bg-tertiary)' }}
             onClick={onThemeToggle}
@@ -448,7 +422,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       {loading && workers.length === 0 ? (
         <div style={m ? styles.gridMobile : styles.grid}>
           {[0, 1].map(i => (
-            <div key={i} style={styles.card}>
+            <div key={i} style={m ? styles.cardMobile : styles.card}>
               <div style={{ width: '60%', height: 14, background: 'var(--bg-tertiary)', borderRadius: 6, marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
               <div style={{ width: '80%', height: 10, background: 'var(--bg-tertiary)', borderRadius: 4, marginBottom: 10, animation: 'pulse 1.5s ease-in-out infinite' }} />
               <div style={{ width: '100%', height: 8, background: 'var(--bg-tertiary)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
@@ -502,6 +476,12 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                   </div>
                 )}
 
+                {worker.spawn_time && (
+                  <div style={{ fontSize: m ? '11px' : '10px', color: 'var(--text-secondary)', marginBottom: m ? '8px' : '6px' }}>
+                    up {formatUptime(worker.spawn_time)}
+                  </div>
+                )}
+
                 <div style={m ? styles.contextRowMobile : styles.contextRow}>
                   <div style={m ? styles.contextBarMobile : styles.contextBar}>
                     <div
@@ -518,12 +498,20 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                 </div>
 
                 <div style={m ? styles.actionsMobile : styles.actions}>
-                  {!m && onTerminal && (
+                  {onTerminal && (
                     <button
-                      style={styles.actionBtn}
+                      style={m ? styles.actionBtnMobile : styles.actionBtn}
                       onClick={() => onTerminal(worker.name)}
                     >
                       Term
+                    </button>
+                  )}
+                  {onLogs && (
+                    <button
+                      style={m ? styles.actionBtnMobile : styles.actionBtn}
+                      onClick={() => onLogs(worker.name)}
+                    >
+                      Logs
                     </button>
                   )}
                   {['rc', 'compact', 'reset', 'kill'].map(action => {
@@ -554,30 +542,14 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       )}
 
       {confirming && (
-        <div style={styles.confirmOverlay} onClick={() => setConfirming(null)}>
-          <div style={styles.confirmDialog} onClick={e => e.stopPropagation()}>
-            <div style={styles.confirmTitle}>
-              {{ rc: 'Enable Remote Control', compact: 'Compact Context', reset: 'Reset Worker', kill: 'Kill Worker' }[confirming.action]}
-            </div>
-            <div style={styles.confirmDesc}>
-              {{ rc: `Send /rc to ${confirming.name}?`, compact: `Compact ${confirming.name}'s context?`, reset: `Send Ctrl+C to ${confirming.name}?`, kill: `Kill ${confirming.name}? This cannot be undone.` }[confirming.action]}
-            </div>
-            <div style={styles.confirmButtons}>
-              <button style={styles.confirmCancel} onClick={() => setConfirming(null)}>
-                Cancel
-              </button>
-              <button
-                style={{
-                  ...styles.confirmYes,
-                  ...(confirming.action !== 'kill' ? { background: 'var(--accent)' } : {}),
-                }}
-                onClick={executeAction}
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={{ rc: 'Enable Remote Control', compact: 'Compact Context', reset: 'Reset Worker', kill: 'Kill Worker' }[confirming.action]}
+          description={{ rc: `Send /rc to ${confirming.name}?`, compact: `Compact ${confirming.name}'s context?`, reset: `Send Ctrl+C to ${confirming.name}?`, kill: `Kill ${confirming.name}? This cannot be undone.` }[confirming.action]}
+          confirmLabel="Yes"
+          danger={confirming.action === 'kill'}
+          onConfirm={executeAction}
+          onCancel={() => setConfirming(null)}
+        />
       )}
     </div>
   )

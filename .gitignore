@@ -23,6 +23,8 @@ state/proposals/*.yaml
 !state/proposals/.gitkeep
 state/usage-stats.json
 state/usage-archive.json
+state/workers.json
+state/secret.key
 
 # IDE
 .vscode/

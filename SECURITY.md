@@ -2,13 +2,13 @@
 
 ## Design Assumptions
 
-Switchboard is designed for **localhost use only**. It assumes:
+Switchboard is designed for **localhost and trusted network use**. It assumes:
 
-- The API and web UI (port 5001) are not exposed to the internet
+- The API and web UI (port 5001) are on a trusted network
 - Only trusted users have access to the host machine
-- No authentication is implemented — all API endpoints are open
+- Optional single-password auth is available via `SWITCHBOARD_PASSWORD` env var
 
-**Do not expose Switchboard ports to the public internet.**
+**Optional auth is a convenience layer, not a hardened security boundary.** It uses Flask session cookies and is suitable for keeping casual access out on a home network. It is not a substitute for proper network isolation if Switchboard is exposed to untrusted networks.
 
 ## Worker Access Model
 
@@ -36,14 +36,19 @@ If you find a security issue, please open a GitHub issue. Since this tool is des
 ## What We Do
 
 - Directory paths are expanded and validated before use
+- File read/write confined to home directory via realpath validation
+- File editing uses last-write-wins (acceptable for personal tool, no concurrent edit protection)
 - Proposal IDs are validated with regex before filesystem operations
+- Log viewer validates worker names and filenames against strict patterns
 - Subprocess calls use list form (not shell strings) to prevent injection
 - System update package names are validated against allowed characters
 - The `CLAUDECODE` environment variable is stripped to prevent nested session issues
+- Optional auth: session cookies, WebSocket auth on connect, HTTP Basic Auth fallback
+- Auth secret key persisted to `state/secret.key` (gitignored) to survive restarts
 
 ## What We Don't Do (by design)
 
-- Authentication or authorization — localhost assumption
-- HTTPS — intended for local network only
+- HTTPS — intended for local network only (use a reverse proxy for TLS)
 - Rate limiting — single-user tool
 - Input sanitization for tmux send-keys — trusted local user
+- Multi-user access control — single password shared by all users

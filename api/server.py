@@ -13,6 +13,7 @@ import logging
 import threading
 import hashlib
 import time
+import secrets
 import glob as glob_module
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +21,8 @@ from pathlib import Path
 import requests as http_requests
 import yaml
 import psutil
-from flask import Flask, request, jsonify, make_response
+import flask
+from flask import Flask, request, jsonify, make_response, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import tmux_manager as tmux
@@ -68,11 +70,57 @@ _update_lock = threading.Lock()
 # Valid ID pattern for proposals and other user-supplied identifiers
 _SAFE_ID = re.compile(r'^[a-zA-Z0-9_-]+$')
 
-# Track model per worker (in-memory, lost on API restart)
+# Track model per worker
 _worker_models = {}
 
 # Track worker -> session file mapping (so two workers in same project get distinct files)
 _worker_sessions = {}
+
+# Track worker spawn times for uptime display
+_worker_spawn_times = {}
+
+WORKERS_STATE_FILE = STATE_DIR / 'workers.json'
+
+
+def _save_workers_state():
+    """Persist worker models and spawn times to state/workers.json."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    data = {
+        'models': dict(_worker_models),
+        'spawn_times': {k: v for k, v in _worker_spawn_times.items()},
+    }
+    try:
+        with open(WORKERS_STATE_FILE, 'w') as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _load_workers_state():
+    """Load worker state from disk. Cross-reference with actual tmux windows."""
+    global _worker_models, _worker_spawn_times
+    if not WORKERS_STATE_FILE.exists():
+        return
+    try:
+        with open(WORKERS_STATE_FILE) as f:
+            data = json.load(f)
+    except Exception:
+        # Corrupt JSON — start fresh
+        return
+    # Get actual tmux windows to cross-reference
+    try:
+        windows = tmux.list_windows()
+        live_names = {w['name'] for w in windows}
+    except Exception:
+        live_names = set()
+    # Only restore entries for workers that still exist in tmux
+    saved_models = data.get('models', {})
+    saved_times = data.get('spawn_times', {})
+    for name in live_names:
+        if name in saved_models:
+            _worker_models[name] = saved_models[name]
+        if name in saved_times:
+            _worker_spawn_times[name] = saved_times[name]
 
 # Cached model list (refreshed periodically)
 _models_cache = None
@@ -129,15 +177,86 @@ def _get_models():
         _models_cache_time = now
     return _models_cache
 
+# --- Auth configuration ---
+_AUTH_PASSWORD = os.environ.get('SWITCHBOARD_PASSWORD', '')
+
+
+def _get_secret_key():
+    """Get or generate a persistent secret key for Flask sessions."""
+    override = os.environ.get('SWITCHBOARD_SECRET_KEY')
+    if override:
+        return override
+    key_file = STATE_DIR / 'secret.key'
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if key_file.exists():
+        return key_file.read_text().strip()
+    key = secrets.token_hex(32)
+    key_file.write_text(key)
+    return key
+
+
 # Serve built frontend if available
 STATIC_DIR = PROJECT_ROOT / 'web' / 'dist'
 if STATIC_DIR.exists():
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path='')
 else:
     app = Flask(__name__)
-CORS(app)
+app.secret_key = _get_secret_key()
+CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_interval=20, ping_timeout=60)
+
+
+# --- Auth middleware (only active when SWITCHBOARD_PASSWORD is set) ---
+
+_AUTH_EXEMPT = {'/api/login', '/api/logout', '/api/auth/status'}
+
+
+@app.before_request
+def _check_auth():
+    """Enforce auth if SWITCHBOARD_PASSWORD is set. No-op otherwise."""
+    if not _AUTH_PASSWORD:
+        return  # Auth disabled
+    # Static files and non-API routes are exempt
+    if not request.path.startswith('/api'):
+        return
+    if request.path in _AUTH_EXEMPT:
+        return
+    # Check session cookie
+    if session.get('authenticated'):
+        return
+    # Check HTTP Basic Auth
+    auth = request.authorization
+    if auth and auth.password == _AUTH_PASSWORD:
+        return
+    return jsonify({"error": "authentication required"}), 401
+
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    if not _AUTH_PASSWORD:
+        return jsonify({"status": "ok", "auth_enabled": False})
+    data = request.json or {}
+    if data.get('password') == _AUTH_PASSWORD:
+        session['authenticated'] = True
+        return jsonify({"status": "ok"})
+    return jsonify({"error": "invalid password"}), 401
+
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.pop('authenticated', None)
+    return jsonify({"status": "ok"})
+
+
+@app.route('/api/auth/status')
+def auth_status():
+    if not _AUTH_PASSWORD:
+        return jsonify({"auth_enabled": False, "authenticated": True})
+    return jsonify({
+        "auth_enabled": True,
+        "authenticated": bool(session.get('authenticated')),
+    })
 
 # Terminal subscriptions: {sid: set of worker names}
 _terminal_subs = {}
@@ -194,6 +313,8 @@ def list_processes():
     for w in windows:
         if w['name'] in _worker_models:
             w['model'] = _worker_models[w['name']]
+        if w['name'] in _worker_spawn_times:
+            w['spawn_time'] = _worker_spawn_times[w['name']]
     return jsonify(windows)
 
 
@@ -239,6 +360,8 @@ def spawn_process():
         result = tmux.spawn_worker(actual_name, directory, session_label=session_label, model=model)
         if model:
             _worker_models[actual_name] = model
+        _worker_spawn_times[actual_name] = time.time()
+        _save_workers_state()
         # Snapshot existing session files before Claude Code creates its own
         session_dir = get_project_session_dir(expanded_dir)
         existing_files = set()
@@ -270,6 +393,8 @@ def kill_process(name):
     if success:
         _worker_models.pop(name, None)
         _worker_sessions.pop(name, None)
+        _worker_spawn_times.pop(name, None)
+        _save_workers_state()
         return {"status": "killed"}
     return {"error": "failed to kill worker"}, 500
 
@@ -380,6 +505,7 @@ def update_proposal(proposal_id):
         with open(proposal_file, 'w') as f:
             yaml.dump(proposal, f, default_flow_style=False)
 
+        socketio.emit('activity:update', _get_activity_data())
         return {"status": "updated", "proposal": proposal}
     except Exception as e:
         return {"error": str(e)}, 500
@@ -396,6 +522,7 @@ def delete_proposal(proposal_id):
 
     try:
         proposal_file.unlink()
+        socketio.emit('activity:update', _get_activity_data())
         return {"status": "deleted"}
     except Exception as e:
         return {"error": str(e)}, 500
@@ -777,6 +904,49 @@ def get_file_content():
 
 
 
+@app.route('/api/file', methods=['PUT'])
+def save_file_content():
+    """
+    Save file contents. Same security as GET (home-dir confinement, 500KB limit).
+    Last-write-wins — acceptable for personal tool.
+    """
+    data = request.json or {}
+    filepath = data.get('path', '')
+    content = data.get('content', '')
+
+    if not filepath:
+        return {"error": "path parameter required"}, 400
+
+    filepath = os.path.expanduser(filepath)
+
+    # Security: only allow files under home directory
+    home_dir = os.path.expanduser('~')
+    real_path = os.path.realpath(filepath)
+    if not real_path.startswith(os.path.realpath(home_dir)):
+        return {"error": "Access denied"}, 403
+
+    if os.path.isdir(filepath):
+        return {"error": "Is a directory"}, 400
+
+    # Validate content size (500KB limit)
+    if len(content.encode('utf-8', errors='replace')) > 500_000:
+        return {"error": "Content too large"}, 413
+
+    # Validate content is valid UTF-8 (reject binary)
+    try:
+        content.encode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return {"error": "Content must be valid UTF-8 text"}, 415
+
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+    return jsonify({"status": "saved", "path": filepath})
+
+
 @app.route('/api/diff')
 def get_diff():
     """
@@ -907,6 +1077,62 @@ def _get_activity_data():
 def get_activity():
     """Get combined activity feed: pending proposals + changes + unpushed + recent."""
     return jsonify(_get_activity_data())
+
+
+# ANSI escape sequence stripping — handles CSI, OSC, and single-char escapes
+_ANSI_RE = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*\x07)')
+_SAFE_WORKER_NAME = re.compile(r'^[a-zA-Z0-9_-]+$')
+_SAFE_LOG_FILENAME = re.compile(r'^[a-zA-Z0-9_-]+(-\d{8}-\d{6})?\.log$')
+
+
+@app.route('/api/logs/<name>')
+def list_worker_logs(name):
+    """List log files for a worker."""
+    if not _SAFE_WORKER_NAME.match(name):
+        return {"error": "invalid worker name"}, 400
+    log_dir = LOGS_DIR
+    if not log_dir.exists():
+        return jsonify({"files": []})
+    files = []
+    for f in sorted(log_dir.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True):
+        if f.name.startswith(name) and f.suffix == '.log':
+            files.append({
+                "filename": f.name,
+                "size": f.stat().st_size,
+                "modified": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
+            })
+    return jsonify({"files": files})
+
+
+@app.route('/api/logs/<name>/<filename>')
+def get_worker_log(name, filename):
+    """Read a log file with ANSI stripping."""
+    if not _SAFE_WORKER_NAME.match(name):
+        return {"error": "invalid worker name"}, 400
+    if not _SAFE_LOG_FILENAME.match(filename):
+        return {"error": "invalid filename"}, 400
+    if not filename.startswith(name):
+        return {"error": "filename doesn't match worker"}, 400
+
+    log_path = LOGS_DIR / filename
+    if not log_path.exists():
+        return {"error": "log file not found"}, 404
+
+    tail = min(request.args.get('tail', 500, type=int), 5000)
+    try:
+        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+        # Take last N lines
+        content = ''.join(lines[-tail:])
+        # Strip ANSI escape sequences
+        content = _ANSI_RE.sub('', content)
+        return jsonify({
+            "content": content,
+            "total_lines": len(lines),
+            "showing": min(tail, len(lines)),
+        })
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 @app.route('/api/push', methods=['POST'])
@@ -1091,9 +1317,13 @@ def parse_session_usage(session_file):
                         usage = entry.get('message', {}).get('usage', {})
                         total_input += usage.get('input_tokens', 0)
                         total_output += usage.get('output_tokens', 0)
-                        turn_input = usage.get('input_tokens', 0)
-                        cache_read = usage.get('cache_read_input_tokens', 0)
-                        latest_context = turn_input + cache_read
+                        # Context = all input buckets + output (output becomes history next turn)
+                        latest_context = (
+                            usage.get('input_tokens', 0)
+                            + usage.get('cache_read_input_tokens', 0)
+                            + usage.get('cache_creation_input_tokens', 0)
+                            + usage.get('output_tokens', 0)
+                        )
                 except json.JSONDecodeError:
                     continue
             new_offset = f.tell()
@@ -1742,6 +1972,7 @@ tmux.configure(
     session_name=CONFIG.get('tmux_session'),
 )
 tmux.ensure_session()
+_load_workers_state()
 
 # =============================================================================
 # WebSocket event handlers
@@ -1755,6 +1986,9 @@ _clients_lock = threading.Lock()
 @socketio.on('connect')
 def handle_connect():
     global _connected_clients
+    # Reject unauthenticated WebSocket connections when auth is enabled
+    if _AUTH_PASSWORD and not flask.session.get('authenticated'):
+        return False  # Cleanly reject connection without exception
     with _clients_lock:
         _connected_clients += 1
     logger.info('Client connected: %s (total: %d)', getattr(request, 'sid', '?'), _connected_clients)
@@ -1817,6 +2051,8 @@ def _bg_workers_monitor():
                 for w in windows:
                     if w['name'] in _worker_models:
                         w['model'] = _worker_models[w['name']]
+                    if w['name'] in _worker_spawn_times:
+                        w['spawn_time'] = _worker_spawn_times[w['name']]
                 h = _data_hash(windows)
                 if h != prev:
                     prev = h
@@ -1884,10 +2120,15 @@ def _bg_metrics_monitor():
 
 
 def _bg_terminal_monitor():
-    """Push terminal output to subscribed clients only, every 500ms."""
+    """Push terminal output to subscribed clients only, every 500ms.
+    Also tracks idle state: worker is idle when output unchanged for 10s
+    and last line is exactly '>' or '❯' (prompt indicator)."""
     prev_outputs = {}
+    last_change = {}    # name -> timestamp of last output change
+    idle_state = {}     # name -> bool (True = idle notification sent)
     while True:
         if _has_clients():
+            now = time.time()
             try:
                 # Collect all subscribed workers across all clients
                 with _terminal_subs_lock:
@@ -1901,10 +2142,22 @@ def _bg_terminal_monitor():
                         h = _data_hash(output)
                         if h != prev_outputs.get(name):
                             prev_outputs[name] = h
+                            last_change[name] = now
                             # Emit only to clients in this worker's room
                             socketio.emit('worker:output',
                                           {'name': name, 'output': output},
                                           to=f'terminal:{name}')
+                            # Reset idle state when output changes
+                            if idle_state.get(name):
+                                idle_state[name] = False
+                        else:
+                            # Check for idle: unchanged for 10s and at prompt
+                            elapsed = now - last_change.get(name, now)
+                            if elapsed >= 10 and not idle_state.get(name):
+                                last_line = (output or '').rstrip().split('\n')[-1].strip() if output else ''
+                                if last_line in ('>', '❯'):
+                                    idle_state[name] = True
+                                    socketio.emit('worker:idle', {'name': name})
                     except Exception:
                         pass
 
@@ -1912,6 +2165,8 @@ def _bg_terminal_monitor():
                 for name in list(prev_outputs):
                     if name not in subscribed:
                         del prev_outputs[name]
+                        last_change.pop(name, None)
+                        idle_state.pop(name, None)
             except Exception:
                 pass
         socketio.sleep(0.5)

@@ -134,6 +134,7 @@ select:focus {
 @media (max-width: 639px) {
   .toast-container {
     right: 50% !important;
+    bottom: calc(16px + 52px + env(safe-area-inset-bottom, 0px)) !important;
     transform: translateX(50%);
     max-width: calc(100vw - 32px) !important;
   }

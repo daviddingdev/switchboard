@@ -32,7 +32,7 @@ export default function ShortcutsHelp({ onClose }) {
 
   const cardStyle = {
     backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 12,
     padding: '24px 28px',
     minWidth: 280,
@@ -61,7 +61,7 @@ export default function ShortcutsHelp({ onClose }) {
     fontFamily: 'monospace',
     fontWeight: 600,
     borderRadius: 4,
-    border: '1px solid var(--border-primary)',
+    border: '1px solid var(--border)',
     backgroundColor: 'var(--bg-primary)',
     color: 'var(--text-secondary)',
     minWidth: 24,

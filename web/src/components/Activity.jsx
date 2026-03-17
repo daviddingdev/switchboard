@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { fetchActivity } from '../api'
+import { fetchActivity, pushProject, updateProposal } from '../api'
 import socket from '../socket'
+import ConfirmDialog from './ConfirmDialog'
 
 const styles = {
   container: {
@@ -75,10 +76,21 @@ const styles = {
     fontSize: '10px',
     fontWeight: 600,
   },
+  countPending: {
+    background: 'rgba(234, 179, 8, 0.15)',
+    color: '#eab308',
+    padding: '2px 6px',
+    borderRadius: '8px',
+    fontSize: '10px',
+    fontWeight: 600,
+  },
   projectGroup: {
     marginBottom: '10px',
   },
   projectName: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     fontSize: '12px',
     fontWeight: 600,
     color: 'var(--text-primary)',
@@ -86,6 +98,17 @@ const styles = {
     background: 'var(--bg-tertiary)',
     borderRadius: '4px',
     marginBottom: '4px',
+  },
+  pushBtn: {
+    background: 'var(--accent)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '2px 8px',
+    fontSize: '10px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   fileItem: {
     display: 'flex',
@@ -153,6 +176,81 @@ const styles = {
     fontStyle: 'italic',
     padding: '4px 8px',
   },
+  // Proposals
+  proposalCard: {
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '6px',
+    padding: '8px 10px',
+    marginBottom: '6px',
+  },
+  proposalTitle: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    marginBottom: '4px',
+  },
+  proposalWorker: {
+    fontSize: '10px',
+    color: 'var(--text-secondary)',
+    marginBottom: '6px',
+  },
+  proposalSteps: {
+    fontSize: '11px',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    padding: '2px 0',
+  },
+  proposalStepList: {
+    padding: '4px 0 4px 12px',
+    fontSize: '11px',
+    color: 'var(--text-secondary)',
+    lineHeight: 1.6,
+  },
+  proposalActions: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '6px',
+  },
+  approveBtn: {
+    flex: 1,
+    background: 'var(--accent)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  rejectBtn: {
+    flex: 1,
+    background: 'transparent',
+    color: '#ef4444',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    borderRadius: '4px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  proposalStatusBadge: {
+    fontSize: '10px',
+    fontWeight: 600,
+    padding: '1px 6px',
+    borderRadius: '3px',
+    marginLeft: '6px',
+  },
+  // Banner
+  banner: {
+    padding: '6px 10px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 500,
+    marginBottom: '8px',
+    textAlign: 'center',
+  },
 }
 
 function getStatusStyle(status) {
@@ -164,9 +262,14 @@ function getStatusStyle(status) {
 }
 
 export default function Activity({ onFileClick, onCollapse, isMobile }) {
-  const [activity, setActivity] = useState({ changes: [], unpushed: [] })
+  const [activity, setActivity] = useState({ changes: [], unpushed: [], pending: [], recent: [] })
   const [loading, setLoading] = useState(true)
   const [hoveredFile, setHoveredFile] = useState(null)
+  const [pushConfirm, setPushConfirm] = useState(null) // project name
+  const [pushing, setPushing] = useState(null)
+  const [banner, setBanner] = useState(null) // { type, message }
+  const [expandedSteps, setExpandedSteps] = useState({})
+  const [actingProposal, setActingProposal] = useState(null)
 
   useEffect(() => {
     const loadActivity = async () => {
@@ -196,8 +299,46 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
     }
   }, [])
 
+  const showBanner = (type, message) => {
+    setBanner({ type, message })
+    setTimeout(() => setBanner(null), 4000)
+  }
+
+  const handlePush = async (project) => {
+    setPushConfirm(null)
+    setPushing(project)
+    try {
+      const result = await pushProject(project)
+      if (result.success) {
+        showBanner('success', `Pushed ${project}`)
+      } else {
+        showBanner('error', result.error || `Push failed for ${project}`)
+      }
+    } catch (err) {
+      showBanner('error', err.message)
+    } finally {
+      setPushing(null)
+    }
+  }
+
+  const handleProposalAction = async (id, status) => {
+    setActingProposal(id)
+    try {
+      await updateProposal(id, status)
+    } catch (err) {
+      showBanner('error', err.message)
+    } finally {
+      setActingProposal(null)
+    }
+  }
+
+  const toggleSteps = (id) => {
+    setExpandedSteps(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
   const changesCount = activity.changes?.reduce((sum, p) => sum + p.files.length, 0) || 0
   const unpushedCount = activity.unpushed?.reduce((sum, p) => sum + p.commits.length, 0) || 0
+  const pendingCount = activity.pending?.length || 0
 
   return (
     <div style={isMobile ? styles.containerMobile : styles.container}>
@@ -211,7 +352,17 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
       </div>
 
       <div style={isMobile ? styles.scrollAreaMobile : styles.scrollArea}>
-        {loading && changesCount === 0 && unpushedCount === 0 ? (
+        {banner && (
+          <div style={{
+            ...styles.banner,
+            background: banner.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            color: banner.type === 'success' ? '#22c55e' : '#ef4444',
+          }}>
+            {banner.message}
+          </div>
+        )}
+
+        {loading && changesCount === 0 && unpushedCount === 0 && pendingCount === 0 ? (
           <div style={{ padding: '8px' }}>
             {[0, 1, 2].map(i => (
               <div key={i} style={{ padding: '6px 8px', marginBottom: 8 }}>
@@ -222,6 +373,53 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
           </div>
         ) : (
           <>
+            {/* Pending Proposals */}
+            {pendingCount > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
+                  <span>Proposals</span>
+                  <span style={styles.countPending}>{pendingCount}</span>
+                </div>
+                {activity.pending.map(p => (
+                  <div key={p.id} style={styles.proposalCard}>
+                    <div style={styles.proposalTitle}>{p.title}</div>
+                    <div style={styles.proposalWorker}>from {p.worker}</div>
+                    {p.steps?.length > 0 && (
+                      <>
+                        <div
+                          style={styles.proposalSteps}
+                          onClick={() => toggleSteps(p.id)}
+                        >
+                          {expandedSteps[p.id] ? '▾' : '▸'} {p.steps.length} step{p.steps.length !== 1 ? 's' : ''}
+                        </div>
+                        {expandedSteps[p.id] && (
+                          <div style={styles.proposalStepList}>
+                            {p.steps.map((s, i) => <div key={i}>{typeof s === 'string' ? s : s.description || JSON.stringify(s)}</div>)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div style={styles.proposalActions}>
+                      <button
+                        style={styles.approveBtn}
+                        onClick={() => handleProposalAction(p.id, 'approved')}
+                        disabled={actingProposal === p.id}
+                      >
+                        {actingProposal === p.id ? '...' : 'Approve'}
+                      </button>
+                      <button
+                        style={styles.rejectBtn}
+                        onClick={() => handleProposalAction(p.id, 'rejected')}
+                        disabled={actingProposal === p.id}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Git Changes */}
             <div style={styles.section}>
               <div style={styles.sectionHeader}>
@@ -271,7 +469,16 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
                 </div>
                 {activity.unpushed.map(project => (
                   <div key={project.project} style={styles.projectGroup}>
-                    <div style={styles.projectName}>{project.project}</div>
+                    <div style={styles.projectName}>
+                      <span>{project.project}</span>
+                      <button
+                        style={{ ...styles.pushBtn, opacity: pushing === project.project ? 0.5 : 1 }}
+                        onClick={() => setPushConfirm(project.project)}
+                        disabled={!!pushing}
+                      >
+                        {pushing === project.project ? '...' : 'Push'}
+                      </button>
+                    </div>
                     {project.commits.map((commit, i) => (
                       <div key={i} style={styles.commitItem}>
                         <span style={styles.commitHash}>{commit.hash}</span>
@@ -282,9 +489,58 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
                 ))}
               </div>
             )}
+
+            {/* Recent Proposals */}
+            {activity.recent?.length > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionHeader}>
+                  <span>Recent Proposals</span>
+                </div>
+                {activity.recent.map(p => (
+                  <div key={p.id} style={{ ...styles.proposalCard, opacity: 0.6 }}>
+                    <div style={styles.proposalTitle}>
+                      {p.title}
+                      <span style={{
+                        ...styles.proposalStatusBadge,
+                        background: p.status === 'approved' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        color: p.status === 'approved' ? '#22c55e' : '#ef4444',
+                      }}>
+                        {p.status}
+                      </span>
+                    </div>
+                    <div style={styles.proposalWorker}>from {p.worker}</div>
+                    {p.steps?.length > 0 && (
+                      <>
+                        <div
+                          style={styles.proposalSteps}
+                          onClick={() => toggleSteps(p.id)}
+                        >
+                          {expandedSteps[p.id] ? '▾' : '▸'} {p.steps.length} step{p.steps.length !== 1 ? 's' : ''}
+                        </div>
+                        {expandedSteps[p.id] && (
+                          <div style={styles.proposalStepList}>
+                            {p.steps.map((s, i) => <div key={i}>{typeof s === 'string' ? s : s.description || JSON.stringify(s)}</div>)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {pushConfirm && (
+        <ConfirmDialog
+          title="Push to Remote"
+          description={`Push all unpushed commits in ${pushConfirm}?`}
+          confirmLabel="Push"
+          onConfirm={() => handlePush(pushConfirm)}
+          onCancel={() => setPushConfirm(null)}
+        />
+      )}
     </div>
   )
 }

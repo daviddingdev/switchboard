@@ -9,7 +9,7 @@ import css from 'highlight.js/lib/languages/css'
 import bash from 'highlight.js/lib/languages/bash'
 import xml from 'highlight.js/lib/languages/xml'
 import 'highlight.js/styles/github-dark.css'
-import { fetchFileContent } from '../api'
+import { fetchFileContent, saveFile } from '../api'
 
 // Register languages
 hljs.registerLanguage('javascript', javascript)
@@ -69,6 +69,60 @@ const styles = {
     fontSize: '13px',
     lineHeight: 1.6,
   },
+  toolbar: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px 0',
+  },
+  toolbarBtn: {
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '4px 10px',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  saveBtn: {
+    background: 'var(--accent)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '4px 10px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  cancelBtn: {
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '4px 10px',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  unsaved: {
+    fontSize: '11px',
+    color: '#f59e0b',
+    fontWeight: 500,
+  },
+  textarea: {
+    width: '100%',
+    height: '100%',
+    border: 'none',
+    outline: 'none',
+    resize: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    padding: '16px',
+    boxSizing: 'border-box',
+  },
 }
 
 export default function FilePreview({ filepath, isMobile }) {
@@ -76,13 +130,19 @@ export default function FilePreview({ filepath, isMobile }) {
   const [language, setLanguage] = useState('plaintext')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [saving, setSaving] = useState(false)
   const codeRef = useRef(null)
+
+  const dirty = editing && editContent !== content
 
   useEffect(() => {
     if (!filepath) return
 
     setLoading(true)
     setError(null)
+    setEditing(false)
 
     fetchFileContent(filepath)
       .then(data => {
@@ -97,14 +157,37 @@ export default function FilePreview({ filepath, isMobile }) {
   }, [filepath])
 
   useEffect(() => {
-    if (codeRef.current && content && language !== 'plaintext') {
+    if (codeRef.current && content && language !== 'plaintext' && !editing) {
       try {
         hljs.highlightElement(codeRef.current)
       } catch (e) {
         // Language not supported, leave as plain text
       }
     }
-  }, [content, language])
+  }, [content, language, editing])
+
+  const handleEdit = () => {
+    setEditContent(content)
+    setEditing(true)
+  }
+
+  const handleCancel = () => {
+    setEditing(false)
+    setEditContent('')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await saveFile(filepath, editContent)
+      setContent(editContent)
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) {
     return <div style={styles.loading}>Loading...</div>
@@ -130,43 +213,65 @@ export default function FilePreview({ filepath, isMobile }) {
 
   return (
     <div style={styles.container}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 12px 0' }}>
-        <button
-          onClick={handleDownload}
-          style={{
-            background: 'var(--bg-tertiary)',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            padding: '4px 10px',
-            fontSize: '12px',
-            cursor: 'pointer',
-          }}
-        >
-          Download
-        </button>
+      <div style={styles.toolbar}>
+        {editing ? (
+          <>
+            {dirty && <span style={styles.unsaved}>Unsaved</span>}
+            <button
+              style={{ ...styles.saveBtn, opacity: saving ? 0.5 : 1 }}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button style={styles.cancelBtn} onClick={handleCancel}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button style={styles.toolbarBtn} onClick={handleEdit}>
+              Edit
+            </button>
+            <button style={styles.toolbarBtn} onClick={handleDownload}>
+              Download
+            </button>
+          </>
+        )}
       </div>
-      <pre style={styles.pre}>
-        <div style={styles.lineNumbers}>
-          {!isMobile && (
-            <div style={styles.numbers}>
-              {Array.from({ length: lineCount }, (_, i) => (
-                <div key={i}>{i + 1}</div>
-              ))}
-            </div>
-          )}
-          <code
-            ref={codeRef}
-            style={{
-              ...styles.code,
-              ...(isMobile ? { fontSize: '12px' } : {}),
-            }}
-            className={`language-${language}`}
-          >
-            {content}
-          </code>
-        </div>
-      </pre>
+      {editing ? (
+        <textarea
+          style={{
+            ...styles.textarea,
+            ...(isMobile ? { fontSize: '12px' } : {}),
+          }}
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          spellCheck={false}
+        />
+      ) : (
+        <pre style={styles.pre}>
+          <div style={styles.lineNumbers}>
+            {!isMobile && (
+              <div style={styles.numbers}>
+                {Array.from({ length: lineCount }, (_, i) => (
+                  <div key={i}>{i + 1}</div>
+                ))}
+              </div>
+            )}
+            <code
+              ref={codeRef}
+              style={{
+                ...styles.code,
+                ...(isMobile ? { fontSize: '12px' } : {}),
+              }}
+              className={`language-${language}`}
+            >
+              {content}
+            </code>
+          </div>
+        </pre>
+      )}
     </div>
   )
 }

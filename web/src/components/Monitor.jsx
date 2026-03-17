@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { fetchMetrics, fetchSystemUpdates, triggerSystemUpdate } from '../api'
 import socket from '../socket'
 import { useToast } from './Toast'
+import ConfirmDialog from './ConfirmDialog'
 
 const styles = {
   container: {
@@ -243,77 +244,6 @@ const styles = {
     borderRadius: '50%',
     background: 'var(--success)',
     flexShrink: 0,
-  },
-  // Confirmation dialog — matches WorkerDashboard pattern
-  confirmOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.6)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-  },
-  confirmDialog: {
-    background: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: '12px',
-    padding: '24px',
-    width: '340px',
-    maxWidth: '85vw',
-    textAlign: 'center',
-  },
-  confirmTitle: {
-    fontSize: '16px',
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-    marginBottom: '8px',
-  },
-  confirmDesc: {
-    fontSize: '14px',
-    color: 'var(--text-secondary)',
-    marginBottom: '24px',
-    lineHeight: 1.5,
-  },
-  confirmButtons: {
-    display: 'flex',
-    gap: '12px',
-  },
-  confirmCancel: {
-    flex: 1,
-    background: 'var(--bg-tertiary)',
-    color: 'var(--text-primary)',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    minHeight: '48px',
-  },
-  confirmYes: {
-    flex: 1,
-    background: 'var(--accent)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    minHeight: '48px',
-  },
-  confirmYesDanger: {
-    flex: 1,
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    minHeight: '48px',
   },
   confirmList: {
     textAlign: 'left',
@@ -654,36 +584,23 @@ export default function Monitor({ isMobile }) {
       </div>
       </div>
 
-      {/* Confirmation dialog — matches WorkerDashboard pattern */}
       {confirming && (
-        <div style={styles.confirmOverlay} onClick={() => setConfirming(null)}>
-          <div style={styles.confirmDialog} onClick={e => e.stopPropagation()}>
-            <div style={styles.confirmTitle}>
-              {confirming.needsReboot ? 'Update & Restart' : 'Update Packages'}
-            </div>
-            <div style={styles.confirmList}>
-              {confirming.names.map(n => (
-                <div key={n}>{n}</div>
-              ))}
-            </div>
-            <div style={styles.confirmDesc}>
-              {confirming.needsReboot
-                ? 'This will restart the system. Save all work before proceeding.'
-                : 'Update selected packages?'}
-            </div>
-            <div style={styles.confirmButtons}>
-              <button style={styles.confirmCancel} onClick={() => setConfirming(null)}>
-                Cancel
-              </button>
-              <button
-                style={confirming.needsReboot ? styles.confirmYesDanger : styles.confirmYes}
-                onClick={executeUpdate}
-              >
-                {confirming.needsReboot ? 'Update & Restart' : 'Update'}
-              </button>
-            </div>
+        <ConfirmDialog
+          title={confirming.needsReboot ? 'Update & Restart' : 'Update Packages'}
+          description={confirming.needsReboot
+            ? 'This will restart the system. Save all work before proceeding.'
+            : 'Update selected packages?'}
+          confirmLabel={confirming.needsReboot ? 'Update & Restart' : 'Update'}
+          danger={confirming.needsReboot}
+          onConfirm={executeUpdate}
+          onCancel={() => setConfirming(null)}
+        >
+          <div style={styles.confirmList}>
+            {confirming.names.map(n => (
+              <div key={n}>{n}</div>
+            ))}
           </div>
-        </div>
+        </ConfirmDialog>
       )}
     </div>
   )

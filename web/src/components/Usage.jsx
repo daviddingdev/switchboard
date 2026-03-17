@@ -46,6 +46,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+    flexWrap: 'wrap',
   },
   rangePills: {
     display: 'flex',
@@ -551,7 +552,7 @@ function ComparisonCard({ comparison, isMobile }) {
   return (
     <div style={styles.cardWide}>
       <div style={styles.cardTitle}>This Week vs Last Week</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px', fontSize: m ? '13px' : '11px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: m ? '2fr 1fr 1fr 1fr' : '1fr 1fr 1fr 1fr', gap: m ? '6px 4px' : '4px', fontSize: m ? '13px' : '11px' }}>
         <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}></span>
         <span style={{ color: 'var(--text-secondary)', textAlign: 'right', fontWeight: 600 }}>This</span>
         <span style={{ color: 'var(--text-secondary)', textAlign: 'right', fontWeight: 600 }}>Last</span>
@@ -662,6 +663,30 @@ export default function Usage({ isMobile }) {
 
   // Filter and aggregate based on selected time range
   const filteredDaily = filterDailyByRange(daily, timeRange)
+
+  const handleExportCSV = () => {
+    const rows = filteredDaily.map(d => [
+      d.date,
+      d.sessions || 0,
+      d.messages || 0,
+      d.tool_calls || 0,
+      (d.cost || 0).toFixed(4),
+      d.tokens?.input || 0,
+      d.tokens?.output || 0,
+      d.tokens?.cache_read || 0,
+      d.tokens?.cache_creation || 0,
+    ])
+    const header = 'date,sessions,messages,tool_calls,cost,tokens_input,tokens_output,tokens_cache_read,tokens_cache_creation'
+    const csv = header + '\n' + rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const today = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `switchboard-usage-${timeRange}-${today}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
   // Always compute from daily data for consistency across ranges
   // (backend overview counts files; daily sums count session-days which can differ)
   const rangeOverview = computeOverviewFromDaily(filteredDaily)
@@ -701,6 +726,9 @@ export default function Usage({ isMobile }) {
             ))}
           </div>
           <span style={styles.timestamp}>{formatDate(data.computed_at)}</span>
+          <button style={styles.refreshBtn} onClick={handleExportCSV}>
+            Export CSV
+          </button>
           <button
             style={{ ...styles.refreshBtn, opacity: refreshing ? 0.5 : 1 }}
             onClick={handleRefresh}
