@@ -1,5 +1,14 @@
 # Switchboard Changelog
 
+## 2026-03-17
+
+### Hardware Health Monitoring
+- **CPU/SoC temperature** — Shown in CPU card with colored bar. Reads from `psutil.sensors_temperatures()` with sensor priority: `acpitz` (ARM/SoC) → `coretemp` (Intel) → `k10temp` (AMD). Auto-hides when no sensors available.
+- **GPU power draw** — Shown in GPU card (watts). Added `power.draw` to existing nvidia-smi query.
+- **NVMe SMART health** — New Disk Health card showing SMART status (PASSED/FAILED with red highlight on failure), NVMe temperature with bar, life used %, available spare %, and power-on hours. Runs `sudo -n smartctl -a --json <device>` with 5-minute cache. Card auto-hides when not configured or smartctl lacks permissions.
+- **Configurable SMART device** — `monitor.smart.device` in config.yaml (e.g., `/dev/nvme0n1`). Requires one-time passwordless sudo setup for smartctl.
+- **MetricRow status prop** — Frontend `MetricRow` component now accepts `status` (`danger`/`warn`) for color-highlighted values.
+
 ## 2026-03-16
 
 ### Renamed to Switchboard

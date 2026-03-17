@@ -11,7 +11,7 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 - **Multi-worker management** — Spawn, monitor, and control Claude Code sessions from one interface
 - **Real-time terminals** — Stream worker output via WebSocket with quick command buttons
 - **File browser** — Browse project files with syntax highlighting and git status badges
-- **System monitor** — CPU, memory, GPU, disk, network, and configurable services
+- **System monitor** — CPU, memory, GPU, disk, network, configurable services, and hardware health (thermal, SMART, power draw)
 - **Usage analytics** — Token usage tracking with estimated API cost comparison
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
 - **Dark/light theme** — Toggle with persistence, including terminal colors
@@ -68,7 +68,7 @@ Copy `config.yaml.example` to `config.yaml` to customize:
 
 - **Server** — port, host
 - **Models** — Claude models available in spawn dialog
-- **Monitor** — GPU command, tracked services, disk path
+- **Monitor** — GPU command, tracked services, disk path, SMART device
 - **Pricing** — API cost estimation rates per model
 - **Platform dashboard** — optional integration for system updates
 

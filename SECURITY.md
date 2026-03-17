@@ -10,6 +10,21 @@ Switchboard is designed for **localhost use only**. It assumes:
 
 **Do not expose Switchboard ports to the public internet.**
 
+## Worker Access Model
+
+All workers run as the same OS user with identical filesystem access. The project directory chosen at spawn determines the **starting context** — which folder tools default to, which `CLAUDE.md` is loaded — but it is not a sandbox.
+
+A worker spawned in `~/project-a`:
+- Starts in `~/project-a` and loads `~/project-a/CLAUDE.md`
+- Its tools (Read, Glob, Grep, Bash) default to that directory
+- Has no inherent reason to access other projects
+
+But nothing prevents it. The same worker **can** read, write, or execute anything the OS user can. If prompted to read `~/project-b/secrets.json`, it will — same user, same permissions.
+
+Via the Switchboard API, the boundary is even more explicit: any worker can call `GET /api/file?path=~/anything` to read files from any project, regardless of where it was spawned. Workers can also list all projects, read other workers' terminal output, and send commands to other workers.
+
+**In short:** same access, different defaults. Project directories scope attention, not permissions. There is no per-worker isolation, sandboxing, or access control.
+
 ## Reporting Vulnerabilities
 
 If you find a security issue, please open a GitHub issue. Since this tool is designed for local use, most security concerns relate to:

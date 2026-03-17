@@ -47,7 +47,7 @@ Spawn workers in different projects to work in parallel. Each gets its own termi
 
 ### System Monitor
 
-Press `m` to see CPU, memory, GPU, disk, network stats. Configure which services to track in `config.yaml`:
+Press `m` to see CPU, memory, GPU, disk, network stats, and hardware health. Configure in `config.yaml`:
 
 ```yaml
 monitor:
@@ -56,7 +56,11 @@ monitor:
       process: "ollama"
     - name: "Postgres"
       process: "postgres"
+  smart:
+    device: "/dev/nvme0n1"    # NVMe SMART health (requires smartctl + sudo)
 ```
+
+CPU temperature, GPU power draw, and NVMe temperature appear automatically when sensors are available. SMART disk health (life used, spare capacity, power-on hours) requires `smartctl` with passwordless sudo — see [docs/SETUP.md](docs/SETUP.md#smart-disk-health-monitoring-linux-only) for setup.
 
 ### Usage Analytics
 

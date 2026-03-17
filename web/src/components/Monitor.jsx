@@ -330,12 +330,15 @@ function getBarColor(pct, warn = 70, crit = 90) {
   return 'var(--success)'
 }
 
-function MetricRow({ name, value, unit, isMobile }) {
+function MetricRow({ name, value, unit, isMobile, status }) {
   const display = value !== null && value !== undefined ? value : '--'
+  const valueStyle = isMobile ? styles.metricValueMobile : styles.metricValue
+  const colorOverride = status === 'danger' ? { color: 'var(--danger)' }
+    : status === 'warn' ? { color: 'var(--warning)' } : undefined
   return (
     <div style={styles.metric}>
       <span style={isMobile ? styles.metricNameMobile : styles.metricName}>{name}</span>
-      <span style={isMobile ? styles.metricValueMobile : styles.metricValue}>
+      <span style={colorOverride ? { ...valueStyle, ...colorOverride } : valueStyle}>
         {display}
         {unit && value !== null && <span style={styles.unit}>{unit}</span>}
       </span>
@@ -467,6 +470,8 @@ export default function Monitor({ isMobile }) {
   const m = isMobile
   const gpu = metrics?.gpu
   const services = metrics?.services || {}
+  const thermal = metrics?.thermal || {}
+  const smart = metrics?.smart
   const cpu = metrics?.cpu || {}
   const memory = metrics?.memory || {}
   const network = metrics?.network || {}
@@ -505,6 +510,7 @@ export default function Monitor({ isMobile }) {
             <Bar percent={gpu.temp} warn={70} crit={85} />
             <MetricRow name="Memory" value={gpu.mem} unit="%" isMobile={m} />
             <Bar percent={gpu.mem} warn={80} crit={95} />
+            {gpu.power_w != null && <MetricRow name="Power" value={gpu.power_w} unit="W" isMobile={m} />}
           </div>
         )}
 
@@ -523,6 +529,10 @@ export default function Monitor({ isMobile }) {
           <MetricRow name="Usage" value={cpu.usage} unit="%" isMobile={m} />
           <Bar percent={cpu.usage} warn={70} crit={90} />
           <MetricRow name="Load Average" value={cpu.load} isMobile={m} />
+          {thermal.cpu_temp != null && <>
+            <MetricRow name="Temperature" value={thermal.cpu_temp} unit="°C" isMobile={m} />
+            <Bar percent={thermal.cpu_temp} warn={70} crit={85} />
+          </>}
         </div>
 
         {/* Memory */}
@@ -548,6 +558,27 @@ export default function Monitor({ isMobile }) {
           <MetricRow name="Space Used" value={disk.space_pct} unit="%" isMobile={m} />
           {disk.space_pct != null && <Bar percent={disk.space_pct} warn={70} crit={90} />}
         </div>
+
+        {/* Disk Health — hidden if SMART data unavailable */}
+        {smart && (
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Disk Health</div>
+            <MetricRow name="SMART" value={smart.health} isMobile={m}
+              status={smart.health === 'FAILED' ? 'danger' : undefined} />
+            {thermal.nvme_temp != null && <>
+              <MetricRow name="NVMe Temp" value={thermal.nvme_temp} unit="°C" isMobile={m} />
+              <Bar percent={thermal.nvme_temp} warn={60} crit={75} />
+            </>}
+            <MetricRow name="Life Used" value={smart.pct_used} unit="%" isMobile={m} />
+            {smart.pct_used != null && <Bar percent={smart.pct_used} warn={80} crit={95} />}
+            <MetricRow name="Spare" value={smart.available_spare} unit="%" isMobile={m} />
+            <MetricRow name="Power On" value={
+              smart.power_hours != null
+                ? `${Math.floor(smart.power_hours / 24)}d ${smart.power_hours % 24}h`
+                : null
+            } isMobile={m} />
+          </div>
+        )}
 
         {/* System */}
         <div style={styles.card}>

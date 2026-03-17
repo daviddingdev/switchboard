@@ -132,9 +132,15 @@ Context % = (input + cache_read) / 200k.
 
 **`/metrics`** returns:
 - `gpu` — configurable via `monitor.gpu` in config.yaml
-  (null if disabled, auto-detects NVIDIA by default)
+  (null if disabled, auto-detects NVIDIA by default).
+  Includes `power_w` (watts) from nvidia-smi.
 - `services` — dict of monitored processes, configurable
   via `monitor.services` (default: Ollama)
+- `thermal` — `{cpu_temp, nvme_temp}` from psutil sensors
+  (null values when sensors unavailable)
+- `smart` — NVMe SMART health via smartctl (null when
+  not configured or smartctl fails). Cached 5 min.
+  Fields: `health`, `pct_used`, `available_spare`, `power_hours`
 - `cpu`, `memory`, `disk`, `network`, `system` — always
   present, cross-platform via psutil
 
@@ -271,7 +277,7 @@ splice callback), visual feedback in TabBar.
 | FilePreview | Syntax-highlighted file viewer |
 | DiffPreview | Color-coded git diff viewer |
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input |
-| Monitor | System metrics (GPU, CPU, memory, services, updates) |
+| Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts |
 | TabBar | Tab switching, close buttons, drag-and-drop reorder |
 | SpawnDialog | Name + directory form for new workers |
@@ -377,8 +383,9 @@ Worker submits POST /api/proposals
 - **CSS-based toast positioning** — media query for mobile
   centering instead of static JS check
 - **Config-driven monitor** — GPU command, services list,
-  and updates all configurable. Cards auto-hide when
-  hardware isn't present (no GPU = no GPU card)
+  SMART device, and updates all configurable. Cards
+  auto-hide when hardware isn't present or accessible
+  (no GPU = no GPU card, no smartctl = no Disk Health card)
 - **Rooms-based terminal** — Socket.IO rooms for targeted
   terminal output (only to subscribed clients)
 - **Incremental JSONL parsing** — cached file offsets to

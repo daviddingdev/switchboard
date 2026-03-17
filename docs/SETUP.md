@@ -61,6 +61,7 @@ Key settings:
 - `monitor.gpu` — GPU monitoring command, or `enabled: false` to hide
 - `monitor.services` — processes to track (default: Ollama)
 - `monitor.disk_path` — mount point to monitor (default: `/`)
+- `monitor.smart.device` — NVMe device for SMART health monitoring (e.g., `/dev/nvme0n1`)
 - `pricing` — API cost estimation rates (see config.yaml.example for all model rates)
 
 See `config.yaml.example` for all options with inline docs.
@@ -89,6 +90,50 @@ To add a project: create a `CLAUDE.md` in its root.
 
 Brief description for Claude context.
 ```
+
+## SMART Disk Health Monitoring (Linux only)
+
+The Monitor tab can show NVMe disk health (SMART status, life used, spare capacity, temperature, power-on hours) via `smartctl`. The Disk Health card auto-hides when not configured or when smartctl lacks access.
+
+### Setup
+
+1. Install smartmontools if not present:
+```bash
+sudo apt install smartmontools
+```
+
+2. Add your device to `config.yaml`:
+```yaml
+monitor:
+  smart:
+    device: "/dev/nvme0n1"
+```
+
+3. Grant smartctl passwordless sudo access (one-time):
+```bash
+sudo visudo -f /etc/sudoers.d/smartctl
+# Add: <username> ALL=(ALL) NOPASSWD: /usr/sbin/smartctl
+```
+
+### How it works
+
+Switchboard runs `sudo -n smartctl -a --json <device>` and parses the NVMe health log. Results are cached for 5 minutes (configurable via `monitor.smart.cache_seconds`) since SMART data changes very slowly. If smartctl fails (missing, no permissions, non-NVMe device), the Disk Health card silently hides — no errors shown.
+
+### What's monitored
+
+| Metric | Source | Notes |
+|--------|--------|-------|
+| SMART health | `smart_status.passed` | PASSED/FAILED — FAILED turns red |
+| NVMe temperature | `psutil.sensors_temperatures()` → `nvme` zone | Colored bar (warn: 60°C, crit: 75°C) |
+| Life used | `percentage_used` from NVMe health log | 0-100%, bar (warn: 80%, crit: 95%) |
+| Available spare | `available_spare` from NVMe health log | 100% = full spare capacity |
+| Power-on hours | `power_on_hours` from NVMe health log | Displayed as days + hours |
+
+### Thermal monitoring (no setup required)
+
+CPU/SoC temperature is read via `psutil.sensors_temperatures()` and shown in the CPU card automatically. Sensor priority: `acpitz` (ARM/SoC) → `coretemp` (Intel) → `k10temp` (AMD). No configuration needed — the temperature row auto-hides if no sensors are available.
+
+GPU power draw is read from `nvidia-smi` alongside existing GPU metrics and shown in the GPU card when available.
 
 ## System Updates (Linux only)
 

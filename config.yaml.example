@@ -45,7 +45,7 @@ monitor:
   gpu:
     enabled: true
     command: "nvidia-smi"
-    args: "--query-gpu=utilization.gpu,temperature.gpu,utilization.memory --format=csv,noheader,nounits"
+    args: "--query-gpu=utilization.gpu,temperature.gpu,utilization.memory,power.draw --format=csv,noheader,nounits"
 
   # Service monitoring — track any process by name
   # Each entry creates a card in Monitor showing the process's CPU% and RAM.
@@ -64,6 +64,17 @@ monitor:
   services:
     - name: "Ollama"
       process: "ollama"
+
+  # SMART disk health monitoring (Linux only)
+  # Monitors NVMe drive health via smartctl. The card auto-hides if smartctl
+  # is not installed or lacks permissions on the device.
+  #
+  # One-time permission setup:
+  #   sudo setfacl -m u:<username>:r /dev/nvme0n1
+  #
+  # smart:
+  #   device: "/dev/nvme0n1"     # Disk device for SMART monitoring
+  #   cache_seconds: 300         # Re-check interval (default: 5 min)
 
   # Disk space monitoring — which mount point to track
   # Default: "/" (root filesystem). Change if your data lives elsewhere.
