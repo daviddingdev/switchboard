@@ -273,6 +273,10 @@ def auth_status():
 _terminal_subs = {}
 _terminal_subs_lock = threading.Lock()
 
+# Global idle state for all workers (written by _bg_idle_monitor, read by _bg_workers_monitor)
+_idle_state = {}        # name -> bool (True = idle)
+_idle_state_lock = threading.Lock()
+
 
 def _data_hash(data):
     """Hash data for change detection."""
@@ -321,11 +325,14 @@ def list_models():
 def list_processes():
     """List all worker windows."""
     windows = tmux.list_windows()
+    with _idle_state_lock:
+        idle_snapshot = dict(_idle_state)
     for w in windows:
         if w['name'] in _worker_models:
             w['model'] = _worker_models[w['name']]
         if w['name'] in _worker_spawn_times:
             w['spawn_time'] = _worker_spawn_times[w['name']]
+        w['idle'] = idle_snapshot.get(w['name'], False)
     return jsonify(windows)
 
 
@@ -405,6 +412,8 @@ def kill_process(name):
         _worker_models.pop(name, None)
         _worker_sessions.pop(name, None)
         _worker_spawn_times.pop(name, None)
+        with _idle_state_lock:
+            _idle_state.pop(name, None)
         _save_workers_state()
         return {"status": "killed"}
     return {"error": "failed to kill worker"}, 500
@@ -2095,11 +2104,14 @@ def _bg_workers_monitor():
         if _has_clients():
             try:
                 windows = tmux.list_windows()
+                with _idle_state_lock:
+                    idle_snapshot = dict(_idle_state)
                 for w in windows:
                     if w['name'] in _worker_models:
                         w['model'] = _worker_models[w['name']]
                     if w['name'] in _worker_spawn_times:
                         w['spawn_time'] = _worker_spawn_times[w['name']]
+                    w['idle'] = idle_snapshot.get(w['name'], False)
                 h = _data_hash(windows)
                 if h != prev:
                     prev = h
@@ -2167,15 +2179,10 @@ def _bg_metrics_monitor():
 
 
 def _bg_terminal_monitor():
-    """Push terminal output to subscribed clients only, every 500ms.
-    Also tracks idle state: worker is idle when output unchanged for 10s
-    and last line is exactly '>' or '❯' (prompt indicator)."""
+    """Push terminal output to subscribed clients only, every 500ms."""
     prev_outputs = {}
-    last_change = {}    # name -> timestamp of last output change
-    idle_state = {}     # name -> bool (True = idle notification sent)
     while True:
         if _has_clients():
-            now = time.time()
             try:
                 # Collect all subscribed workers across all clients
                 with _terminal_subs_lock:
@@ -2189,22 +2196,9 @@ def _bg_terminal_monitor():
                         h = _data_hash(output)
                         if h != prev_outputs.get(name):
                             prev_outputs[name] = h
-                            last_change[name] = now
-                            # Emit only to clients in this worker's room
                             socketio.emit('worker:output',
                                           {'name': name, 'output': output},
                                           to=f'terminal:{name}')
-                            # Reset idle state when output changes
-                            if idle_state.get(name):
-                                idle_state[name] = False
-                        else:
-                            # Check for idle: unchanged for 10s and at prompt
-                            elapsed = now - last_change.get(name, now)
-                            if elapsed >= 10 and not idle_state.get(name):
-                                last_line = (output or '').rstrip().split('\n')[-1].strip() if output else ''
-                                if last_line in ('>', '❯'):
-                                    idle_state[name] = True
-                                    socketio.emit('worker:idle', {'name': name})
                     except Exception:
                         pass
 
@@ -2212,11 +2206,63 @@ def _bg_terminal_monitor():
                 for name in list(prev_outputs):
                     if name not in subscribed:
                         del prev_outputs[name]
-                        last_change.pop(name, None)
-                        idle_state.pop(name, None)
             except Exception:
                 pass
         socketio.sleep(0.5)
+
+
+def _bg_idle_monitor():
+    """Lightweight idle detection for ALL workers, every 5s.
+    Captures only last few lines per worker for prompt detection.
+    Updates _idle_state which is read by _bg_workers_monitor."""
+    prev_outputs = {}   # name -> hash
+    last_change = {}    # name -> timestamp
+    while True:
+        if _has_clients():
+            try:
+                windows = tmux.list_windows()
+                active_names = {w['name'] for w in windows}
+                now = time.time()
+
+                for name in active_names:
+                    try:
+                        output = tmux.capture_last_line(name)
+                        h = _data_hash(output)
+
+                        if h != prev_outputs.get(name):
+                            prev_outputs[name] = h
+                            last_change[name] = now
+                            with _idle_state_lock:
+                                _idle_state[name] = False
+                        else:
+                            elapsed = now - last_change.get(name, now)
+                            if elapsed >= 30:
+                                # Check any line for prompt — Claude Code shows
+                                # status bar below the prompt, so it's not always last
+                                lines = (output or '').rstrip().split('\n')
+                                is_idle = any(
+                                    l.strip().strip('\xa0') in ('>', '❯')
+                                    for l in lines
+                                )
+                                with _idle_state_lock:
+                                    was_idle = _idle_state.get(name, False)
+                                    _idle_state[name] = is_idle
+                                # Emit transition event for browser notifications
+                                if is_idle and not was_idle:
+                                    socketio.emit('worker:idle', {'name': name})
+                    except Exception:
+                        pass
+
+                # Clean up stale entries for killed workers
+                for name in list(prev_outputs):
+                    if name not in active_names:
+                        del prev_outputs[name]
+                        last_change.pop(name, None)
+                        with _idle_state_lock:
+                            _idle_state.pop(name, None)
+            except Exception:
+                pass
+        socketio.sleep(5)
 
 
 def _start_background_monitors():
@@ -2226,6 +2272,7 @@ def _start_background_monitors():
     socketio.start_background_task(_bg_activity_monitor)
     socketio.start_background_task(_bg_metrics_monitor)
     socketio.start_background_task(_bg_terminal_monitor)
+    socketio.start_background_task(_bg_idle_monitor)
 
 
 if __name__ == '__main__':

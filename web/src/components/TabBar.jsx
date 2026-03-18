@@ -85,7 +85,7 @@ const styles = {
   },
 }
 
-export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTabReorder, onShowShortcuts }) {
+export default function TabBar({ tabs, activeTab, idleWorkers, onTabSelect, onTabClose, onTabReorder, onShowShortcuts }) {
   const [dragIndex, setDragIndex] = useState(null)
   const [dragOverIndex, setDragOverIndex] = useState(null)
   const [hoverIndex, setHoverIndex] = useState(null)
@@ -145,7 +145,7 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTab
             ...(tab.type === 'terminal' ? styles.tabIconTerminal : {}),
             ...(tab.type === 'diff' ? { color: 'var(--warning)' } : {}),
           }}>
-            {tab.type === 'terminal' ? '●' : tab.type === 'log' ? '📋' : tab.type === 'diff' ? '±' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
+            {tab.type === 'terminal' ? (idleWorkers?.has(tab.path) ? '○' : '●') : tab.type === 'log' ? '📋' : tab.type === 'diff' ? '±' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
           <button

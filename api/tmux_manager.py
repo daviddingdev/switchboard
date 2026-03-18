@@ -273,6 +273,23 @@ def capture_output(name: str, lines: int = 100) -> str:
     return '\n'.join(non_empty[-lines:])
 
 
+def capture_last_line(name: str) -> str:
+    """
+    Capture just the last few lines from a worker's pane.
+    Lightweight alternative to capture_output for idle detection.
+    """
+    result = _run_tmux(
+        "capture-pane", "-t", f"{SESSION_NAME}:{name}",
+        "-p", "-S", "-5",
+        check=False
+    )
+    if result.returncode != 0:
+        return ""
+    lines = result.stdout.rstrip('\n').split('\n')
+    non_empty = [l for l in lines if l.strip()]
+    return '\n'.join(non_empty[-3:]) if non_empty else ""
+
+
 def get_pane_pid(name: str) -> int | None:
     """
     Get the PID of the shell process in a window's pane.

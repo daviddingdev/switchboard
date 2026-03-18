@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { fetchAuthStatus, logout } from './api'
 import { useIsMobile } from './hooks/useMediaQuery'
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
@@ -200,7 +200,33 @@ const mobileStyles = {
 
 export default function App() {
   const isMobile = useIsMobile()
-  const { permission: notifPermission, requestPermission: requestNotifPermission } = useNotifications()
+
+  // Worker count and idle tracking for page title + tab badges
+  const [workerCount, setWorkerCount] = useState(0)
+  const [idleWorkerNames, setIdleWorkerNames] = useState([])
+  useEffect(() => {
+    const onWorkers = (data) => {
+      const workers = Array.isArray(data) ? data : []
+      setWorkerCount(workers.length)
+      setIdleWorkerNames(workers.filter(w => w.idle).map(w => w.name).sort())
+    }
+    socket.on('workers:update', onWorkers)
+    return () => socket.off('workers:update', onWorkers)
+  }, [])
+
+  // Stable Set identity — only changes when the idle worker names actually change
+  const idleWorkers = useMemo(() => new Set(idleWorkerNames), [idleWorkerNames.join(',')])
+  const idleCount = idleWorkerNames.length
+
+  useEffect(() => {
+    if (workerCount === 0) {
+      document.title = 'Switchboard'
+    } else if (idleCount > 0) {
+      document.title = `(${idleCount} idle) Switchboard`
+    } else {
+      document.title = `(${workerCount}) Switchboard`
+    }
+  }, [workerCount, idleCount])
 
   // Auth state
   const [authChecked, setAuthChecked] = useState(false)
@@ -222,6 +248,17 @@ export default function App() {
   const [tabs, setTabs] = useState([])
   const [activeTabId, setActiveTabId] = useState(null)
 
+  // Notifications with "View" action that opens/focuses worker terminal tab
+  const handleViewWorker = useCallback((name) => {
+    const id = `terminal:${name}`
+    setTabs(prev => {
+      if (prev.find(t => t.id === id)) return prev
+      return [...prev, { id, type: 'terminal', label: name, path: name }]
+    })
+    setActiveTabId(id)
+  }, [])
+  const { permission: notifPermission, requestPermission: requestNotifPermission } = useNotifications({ onViewWorker: handleViewWorker })
+
   // Desktop panel sizes
   const [filesPanelWidth, setFilesPanelWidth] = useState(DEFAULT_FILES)
   const [activityPanelWidth, setActivityPanelWidth] = useState(DEFAULT_ACTIVITY)
@@ -238,18 +275,6 @@ export default function App() {
   const [mobilePreview, setMobilePreview] = useState(null)
   const [mobileTerminal, setMobileTerminal] = useState(null) // worker name or null
   const [mobileLogs, setMobileLogs] = useState(null) // worker name or null
-
-  // Worker count for page title
-  const [workerCount, setWorkerCount] = useState(0)
-  useEffect(() => {
-    const onWorkers = (data) => setWorkerCount(Array.isArray(data) ? data.length : 0)
-    socket.on('workers:update', onWorkers)
-    return () => socket.off('workers:update', onWorkers)
-  }, [])
-
-  useEffect(() => {
-    document.title = workerCount > 0 ? `(${workerCount}) Switchboard` : 'Switchboard'
-  }, [workerCount])
 
   // --- Tab management ---
 
@@ -633,6 +658,7 @@ export default function App() {
             <TabBar
               tabs={tabs}
               activeTab={activeTabId}
+              idleWorkers={idleWorkers}
               onTabSelect={setActiveTabId}
               onTabClose={closeTab}
               onTabReorder={reorderTab}

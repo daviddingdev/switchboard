@@ -468,7 +468,9 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                   <div
                     style={{
                       ...(m ? styles.statusDotMobile : styles.statusDot),
-                      background: worker.pid ? 'var(--success)' : 'var(--text-secondary)',
+                      background: !worker.pid ? 'var(--text-secondary)' : 'var(--success)',
+                      animation: worker.pid && !worker.idle ? 'status-pulse 2s ease-in-out infinite' : 'none',
+                      boxShadow: worker.pid && worker.idle ? '0 0 6px var(--success)' : 'none',
                     }}
                   />
                   <span style={m ? styles.nameMobile : styles.name}>

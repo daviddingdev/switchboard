@@ -34,13 +34,14 @@ export function ToastProvider({ children }) {
   }, [])
 
   const addToast = useCallback(
-    (message, type = 'info') => {
+    (message, type = 'info', duration, action) => {
       const id = ++toastIdCounter
       setToasts((prev) => {
-        const next = [...prev, { id, message, type, exiting: false }]
+        const next = [...prev, { id, message, type, exiting: false, action }]
         return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
       })
-      timersRef.current[id] = setTimeout(() => removeToast(id), TYPE_DURATIONS[type] || 3000)
+      const dur = duration || TYPE_DURATIONS[type] || 3000
+      timersRef.current[id] = setTimeout(() => removeToast(id), dur)
       return id
     },
     [removeToast]
@@ -76,7 +77,7 @@ export function ToastProvider({ children }) {
 }
 
 function ToastItem({ toast, onClose }) {
-  const { message, type, exiting } = toast
+  const { message, type, exiting, action } = toast
 
   const style = {
     display: 'flex',
@@ -107,12 +108,31 @@ function ToastItem({ toast, onClose }) {
     flexShrink: 0,
   }
 
+  const actionStyle = {
+    background: 'none',
+    border: '1px solid rgba(255,255,255,0.4)',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: 12,
+    padding: '2px 8px',
+    borderRadius: 4,
+    lineHeight: 1.4,
+    flexShrink: 0,
+  }
+
   return (
     <div style={style}>
       <span>{message}</span>
-      <button style={closeStyle} onClick={onClose} aria-label="Close">
-        ✕
-      </button>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+        {action && (
+          <button style={actionStyle} onClick={() => { action(); onClose() }}>
+            View
+          </button>
+        )}
+        <button style={closeStyle} onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+      </div>
     </div>
   )
 }
