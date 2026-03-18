@@ -269,6 +269,7 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
   const [pushing, setPushing] = useState(null)
   const [banner, setBanner] = useState(null) // { type, message }
   const [expandedSteps, setExpandedSteps] = useState({})
+  const [expandedCommits, setExpandedCommits] = useState({})
   const [actingProposal, setActingProposal] = useState(null)
 
   useEffect(() => {
@@ -334,6 +335,10 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
 
   const toggleSteps = (id) => {
     setExpandedSteps(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const toggleCommit = (hash) => {
+    setExpandedCommits(prev => ({ ...prev, [hash]: !prev[hash] }))
   }
 
   const changesCount = activity.changes?.reduce((sum, p) => sum + p.files.length, 0) || 0
@@ -480,9 +485,24 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
                       </button>
                     </div>
                     {project.commits.map((commit, i) => (
-                      <div key={i} style={styles.commitItem}>
-                        <span style={styles.commitHash}>{commit.hash}</span>
-                        <span style={styles.commitMessage}>{commit.message}</span>
+                      <div key={i}>
+                        <div
+                          style={{ ...styles.commitItem, cursor: commit.files?.length ? 'pointer' : 'default' }}
+                          onClick={() => commit.files?.length && toggleCommit(commit.hash)}
+                        >
+                          <span style={styles.commitHash}>
+                            {commit.files?.length ? (expandedCommits[commit.hash] ? '▾' : '▸') : ' '} {commit.hash}
+                          </span>
+                          <span style={styles.commitMessage}>{commit.message}</span>
+                        </div>
+                        {expandedCommits[commit.hash] && commit.files?.map((file, j) => (
+                          <div key={j} style={{ ...styles.fileItem, paddingLeft: '24px' }}>
+                            <span style={{ ...styles.statusBadge, ...getStatusStyle(file.status) }}>
+                              {file.status}
+                            </span>
+                            <span style={styles.fileName}>{file.path}</span>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>

@@ -725,9 +725,23 @@ def get_unpushed_commits(directory):
         for line in result.stdout.strip().splitlines():
             if line:
                 parts = line.split(' ', 1)
+                hash_str = parts[0]
+                # Get changed files for this commit
+                files_result = subprocess.run(
+                    ['git', '-C', directory, 'diff-tree', '--no-commit-id', '-r', '--name-status', hash_str],
+                    capture_output=True, text=True, timeout=5
+                )
+                files = []
+                if files_result.returncode == 0:
+                    for fline in files_result.stdout.strip().splitlines():
+                        if fline:
+                            fparts = fline.split('\t', 1)
+                            if len(fparts) == 2:
+                                files.append({'status': fparts[0], 'path': fparts[1]})
                 commits.append({
-                    'hash': parts[0],
-                    'message': parts[1] if len(parts) > 1 else ''
+                    'hash': hash_str,
+                    'message': parts[1] if len(parts) > 1 else '',
+                    'files': files
                 })
         return commits
     except (subprocess.TimeoutExpired, FileNotFoundError):
