@@ -92,9 +92,21 @@ const styles = {
     color: 'var(--text-secondary)',
     fontSize: '13px',
   },
+  filterInput: {
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    padding: '3px 8px',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    width: '120px',
+  },
   info: {
     fontSize: '11px',
     color: 'var(--text-secondary)',
+    whiteSpace: 'nowrap',
   },
 }
 
@@ -111,6 +123,7 @@ export default function LogViewer({ workerName }) {
   const [logInfo, setLogInfo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tail, setTail] = useState(500)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -140,6 +153,10 @@ export default function LogViewer({ workerName }) {
     setTail(prev => Math.min(prev + 1000, 5000))
   }
 
+  const filteredContent = filter
+    ? content.split('\n').filter(line => line.toLowerCase().includes(filter.toLowerCase())).join('\n')
+    : content
+
   if (loading) return <div style={styles.empty}>Loading...</div>
   if (files.length === 0) return <div style={styles.empty}>No log files found</div>
 
@@ -166,6 +183,12 @@ export default function LogViewer({ workerName }) {
           <div style={styles.contentHeader}>
             <span style={styles.contentTitle}>{selectedFile}</span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                style={styles.filterInput}
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter..."
+              />
               {logInfo && (
                 <span style={styles.info}>
                   {logInfo.showing}/{logInfo.total_lines} lines
@@ -179,7 +202,7 @@ export default function LogViewer({ workerName }) {
             </div>
           </div>
         )}
-        <pre style={styles.pre}>{content || 'Empty log file'}</pre>
+        <pre style={styles.pre}>{filteredContent || 'Empty log file'}</pre>
       </div>
     </div>
   )

@@ -287,19 +287,6 @@ function aggregateToWeekly(dailyData) {
   return Object.values(weeks).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-function aggregateToMonthly(dailyData) {
-  const months = {}
-  for (const d of dailyData) {
-    const monthKey = d.date.slice(0, 7)
-    if (!months[monthKey]) months[monthKey] = { date: monthKey, sessions: 0, messages: 0, tool_calls: 0, cost: 0 }
-    months[monthKey].sessions += d.sessions || 0
-    months[monthKey].messages += d.messages || 0
-    months[monthKey].tool_calls += d.tool_calls || 0
-    months[monthKey].cost += d.cost || 0
-  }
-  return Object.values(months).sort((a, b) => a.date.localeCompare(b.date))
-}
-
 function MetricRow({ name, value, isMobile }) {
   return (
     <div style={styles.metric}>
@@ -768,7 +755,7 @@ export default function Usage({ isMobile }) {
               {timeRange === 'all' ? 'Est. API Cost' : `Est. API Cost (${rangeConfig.label})`}
             </div>
             {data.pricing?.subscription && timeRange === '30d' && rangeOverview.total_cost > data.pricing.subscription && (
-              <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '4px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
                 Saving {formatCost(rangeOverview.total_cost - data.pricing.subscription)} vs API
               </div>
             )}
@@ -813,7 +800,7 @@ export default function Usage({ isMobile }) {
           {by_project && by_project.length > 0 && (
             <div style={styles.card}>
               <div style={styles.cardTitle}>By Project{timeRange !== 'all' ? ' (All Time)' : ''}</div>
-              <BarChart data={by_project} labelKey="name" valueKey="messages" color="#22c55e" maxItems={10} />
+              <BarChart data={by_project} labelKey="name" valueKey="messages" color="var(--success)" maxItems={10} />
             </div>
           )}
 

@@ -200,7 +200,7 @@ const mobileStyles = {
 
 export default function App() {
   const isMobile = useIsMobile()
-  useNotifications()
+  const { permission: notifPermission, requestPermission: requestNotifPermission } = useNotifications()
 
   // Auth state
   const [authChecked, setAuthChecked] = useState(false)
@@ -237,6 +237,7 @@ export default function App() {
   const [mobileSection, setMobileSection] = useState('workers')
   const [mobilePreview, setMobilePreview] = useState(null)
   const [mobileTerminal, setMobileTerminal] = useState(null) // worker name or null
+  const [mobileLogs, setMobileLogs] = useState(null) // worker name or null
 
   // Worker count for page title
   const [workerCount, setWorkerCount] = useState(0)
@@ -316,6 +317,31 @@ export default function App() {
     'm': () => openTab('monitor'),
     'u': () => openTab('usage'),
     '?': () => setShowShortcuts(s => !s),
+    'w': () => { if (activeTabId) closeTab(activeTabId) },
+    '[': () => {
+      if (tabs.length < 2) return
+      const idx = tabs.findIndex(t => t.id === activeTabId)
+      const prev = idx <= 0 ? tabs.length - 1 : idx - 1
+      setActiveTabId(tabs[prev].id)
+    },
+    ']': () => {
+      if (tabs.length < 2) return
+      const idx = tabs.findIndex(t => t.id === activeTabId)
+      const next = idx >= tabs.length - 1 ? 0 : idx + 1
+      setActiveTabId(tabs[next].id)
+    },
+    'Tab': () => {
+      if (tabs.length < 2) return
+      const idx = tabs.findIndex(t => t.id === activeTabId)
+      const next = idx >= tabs.length - 1 ? 0 : idx + 1
+      setActiveTabId(tabs[next].id)
+    },
+    ...Object.fromEntries(
+      Array.from({ length: 9 }, (_, i) => [
+        String(i + 1),
+        () => { if (tabs[i]) setActiveTabId(tabs[i].id) }
+      ])
+    ),
   })
 
   // --- Unified drag resize ---
@@ -405,9 +431,12 @@ export default function App() {
               onSpawn={() => setShowSpawnDialog(true)}
               onRefresh={() => setRefreshKey(k => k + 1)}
               onTerminal={(name) => { setMobilePreview(null); setMobileTerminal(name) }}
+              onLogs={(name) => { setMobilePreview(null); setMobileLogs(name) }}
               onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
               theme={theme}
               onLogout={authEnabled ? handleLogout : undefined}
+              notifPermission={notifPermission}
+              onRequestNotifPermission={requestNotifPermission}
             />
           )}
           {mobileSection === 'files' && (
@@ -471,11 +500,31 @@ export default function App() {
           </div>
         )}
 
+        {mobileLogs && (
+          <div style={mobileStyles.previewOverlay}>
+            <div style={mobileStyles.previewHeader}>
+              <button
+                style={mobileStyles.backBtn}
+                onClick={() => setMobileLogs(null)}
+              >
+                ← Back
+              </button>
+              <span style={mobileStyles.previewTitle}>
+                {mobileLogs} logs
+              </span>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <LogViewer workerName={mobileLogs} />
+            </div>
+          </div>
+        )}
+
         <MobileNav
           activeSection={mobileSection}
           onSectionChange={(s) => {
             setMobilePreview(null)
             setMobileTerminal(null)
+            setMobileLogs(null)
             setMobileSection(s)
           }}
         />
@@ -520,6 +569,8 @@ export default function App() {
           onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           theme={theme}
           onLogout={authEnabled ? handleLogout : undefined}
+          notifPermission={notifPermission}
+          onRequestNotifPermission={requestNotifPermission}
         />
       </div>
 
@@ -585,6 +636,7 @@ export default function App() {
               onTabSelect={setActiveTabId}
               onTabClose={closeTab}
               onTabReorder={reorderTab}
+              onShowShortcuts={() => setShowShortcuts(true)}
             />
           )}
           {tabs.length === 0 && (

@@ -35,14 +35,20 @@ Browser (any device)
 ## Startup / Shutdown
 
 ```bash
-./start.sh    # API + web dev server
-./stop.sh     # kills API + web (leaves tmux alive)
+./start.sh    # API server (serves static frontend build)
+./stop.sh     # kills API (leaves tmux alive)
 ```
 
 start.sh sequence:
 1. Launch API → `logs/api.log`, PID → `logs/api.pid`
-2. Launch web → `logs/web.log`, PID → `logs/web.pid`
+2. Frontend served as static build from `web/dist/`
 3. tmux session created lazily on first worker spawn
+
+For development with auto-reload:
+```bash
+DEV=1 python3 api/server.py    # Flask auto-reload on Python changes
+cd web && npm run dev           # Vite hot-reload on frontend changes
+```
 
 To fully kill tmux:
 ```bash
@@ -70,16 +76,31 @@ All routes prefixed with `/api`.
 Returns `{name, directory, status, pid, log_file}`.
 
 **Send** accepts `{text, raw}`. Used by worker card
-actions (Remote, Compact, Reset) and CLI helper.
+actions (Remote, Compact, Interrupt) and CLI helper.
 `raw: true` for special keys (Escape, Enter, C-c).
 `raw: false` for text (auto-appends Enter).
 
-**Output** default 50 lines. Captures 5x, filters
-blanks, returns last N non-empty lines.
+**Output** default 100 lines. Captures 5x, filters
+blanks, returns last N non-empty lines. Accepts `?lines=N`
+query param (up to 1000).
+
+### Auth
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/auth/status` | Check if auth is enabled + logged in |
+| POST | `/login` | Login with password |
+| POST | `/logout` | Logout (clear session) |
+
+Auth is optional. Enabled when `SWITCHBOARD_PASSWORD`
+env var is set. Uses Flask session cookies. WebSocket
+connections are authenticated on connect. A persistent
+secret key is stored in `state/secret.key`.
 
 ### Proposals
 
-Proposals are an optional API/CLI feature. No web UI exists for proposals.
+Proposals are viewable and actionable in the web UI
+(Activity panel). Workers submit via curl.
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -98,8 +119,10 @@ Workers submit via curl to POST endpoint.
 | GET | `/projects` | List discovered projects |
 | GET | `/home` | File tree (all projects) |
 | GET | `/file?path=` | File content |
+| PUT | `/file` | Save file content |
 | GET | `/diff?project=&path=` | Git diff |
 | GET | `/activity` | Changes + unpushed commits |
+| POST | `/push` | Push a project to remote |
 
 **`/projects`** returns project list with name +
 directory.
@@ -108,9 +131,24 @@ directory.
 for directories with `CLAUDE.md` files (max depth 3).
 Returns tree with git status per file (M/U/A/D).
 
+**`PUT /file`** saves file content (last-write-wins).
+Path validated against home directory.
+
 **`/activity`** aggregates: uncommitted changes
-and unpushed commits across all projects.
+and unpushed commits (with file lists per commit)
+across all projects.
 Pushed via WebSocket every 5s.
+
+### Worker Logs
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/logs/<name>` | List rotated log files for a worker |
+| GET | `/logs/<name>/<filename>` | Read a specific log file (tail N lines) |
+
+Log files are ANSI-stripped and cleaned (cursor movement
+converted to spaces, duplicate lines removed, blank lines
+collapsed).
 
 ### Workers & Context
 
@@ -160,6 +198,7 @@ Flask-SocketIO with `threading` async mode
 | `activity:update` | 5s | Git changes + unpushed commits (only on change) |
 | `metrics:update` | 2s | System metrics (only on change) |
 | `worker:output` | 500ms | Terminal output (targeted via rooms) |
+| `worker:idle` | — | Fired when a worker becomes idle (waiting for input) |
 | `files:update` | 5s | File tree (only on change) |
 
 All server-push events use hash-based change
@@ -256,7 +295,8 @@ or served as static build from API on :5001.
 ### Tab System
 
 Tab IDs: `file:<path>`, `diff:<project>:<path>`,
-`terminal:<name>`, `monitor`, `usage`.
+`terminal:<name>`, `log:<name>:<filename>`,
+`monitor`, `usage`.
 
 Clicking a file opens a tab (desktop) or
 full-screen overlay (mobile).
@@ -271,16 +311,19 @@ splice callback), visual feedback in TabBar.
 
 | Component | What it does |
 |-----------|-------------|
-| WorkerDashboard | Worker cards, spawn button, theme toggle |
+| WorkerDashboard | Worker cards, spawn button, theme/notifs/logout toggles |
 | FileTree | Project browser with git status badges |
-| Activity | Changed files + unpushed commits |
-| FilePreview | Syntax-highlighted file viewer |
+| Activity | Changed files, expandable unpushed commits, proposals |
+| FilePreview | Syntax-highlighted file viewer with inline editing |
 | DiffPreview | Color-coded git diff viewer |
-| TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input |
+| TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
+| LogViewer | Historical worker log viewer with text filter |
+| LoginPage | Password login when auth is enabled |
+| ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
-| Usage | Usage analytics with time range selector, adaptive charts |
+| Usage | Usage analytics with time range selector, adaptive charts, CSV export |
 | TabBar | Tab switching, close buttons, drag-and-drop reorder |
-| SpawnDialog | Name + directory form for new workers |
+| SpawnDialog | Name + directory + model form for new workers |
 | MobileNav | Bottom navigation bar |
 | ErrorBoundary | Crash recovery with reload button |
 | ConnectionBanner | WebSocket connection status indicator |
@@ -324,13 +367,14 @@ Terminal view uses dedicated `--terminal-bg` and
 
 ```
 state/
-├── proposals/*.yaml       # proposals (API/CLI only)
+├── proposals/*.yaml       # proposals
+├── workers.json           # persisted worker metadata (models, spawn times)
+├── secret.key             # auth secret key (auto-generated, gitignored)
 └── usage-archive.json     # persistent daily usage data
 
 logs/
 ├── api.log, api.pid       # API server
-├── web.log, web.pid       # dev server
-└── workers/*.log          # terminal output per worker
+└── workers/*.log          # terminal output per worker (rotated on spawn)
 ```
 
 ### Project Discovery
@@ -341,12 +385,12 @@ containing `CLAUDE.md` (max depth 3).
 
 `/api/home` also shows root-level `~/*.md` files.
 
-### Proposal Lifecycle (API/CLI only)
+### Proposal Lifecycle
 
 ```
 Worker submits POST /api/proposals
   → YAML file in state/proposals/
-  → Approve/reject via PATCH (CLI or API)
+  → Approve/reject via web UI or PATCH API
   → Worker checks status
 ```
 
@@ -358,7 +402,7 @@ Worker submits POST /api/proposals
   REST for actions and initial data
 - **Hash-based deduplication** — server only pushes when data changes
 - **threading async mode** — no monkey-patching, subprocess-safe
-- **No auth on web** — localhost assumption
+- **Optional auth** — single-password via `SWITCHBOARD_PASSWORD` env var
 - **File-based state** — YAML/JSON, git-friendly
 - **tmux named socket** — `-L switchboard`
 - **Lazy session creation** — tmux session created
@@ -396,3 +440,9 @@ Worker submits POST /api/proposals
   label-based fallback for correct context mapping
 - **Project discovery cache** — 30s TTL to avoid
   repeated filesystem scans
+- **Worker state persistence** — models and spawn times
+  saved to `state/workers.json`, survive API restarts
+- **Browser notifications** — `useNotifications` hook with
+  explicit permission request via UI button
+- **Log cleaning** — ANSI cursor-forward converted to
+  spaces, duplicate lines removed, blank lines collapsed

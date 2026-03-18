@@ -51,6 +51,16 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
   },
+  headerBtnMobile: {
+    background: 'var(--bg-tertiary)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
   grid: {
     display: 'flex',
     gap: '12px',
@@ -204,7 +214,7 @@ const styles = {
     minHeight: '44px',
   },
   actionBtnDanger: {
-    color: '#ef4444',
+    color: 'var(--danger)',
     borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   // Empty state
@@ -245,9 +255,9 @@ const styles = {
 }
 
 function getUsageColor(pct) {
-  if (pct >= 80) return '#ef4444'
+  if (pct >= 80) return 'var(--danger)'
   if (pct >= 60) return '#f59e0b'
-  return '#22c55e'
+  return 'var(--success)'
 }
 
 function formatUptime(spawnTime) {
@@ -262,7 +272,7 @@ function formatUptime(spawnTime) {
   return `${mins}m`
 }
 
-export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal, onLogs, onThemeToggle, theme, onLogout }) {
+export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonitor, onUsage, onTerminal, onLogs, onThemeToggle, theme, onLogout, notifPermission, onRequestNotifPermission }) {
   const [workers, setWorkers] = useState([])
   const [usage, setUsage] = useState({})
   const [modelLabels, setModelLabels] = useState({})
@@ -312,9 +322,6 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       .catch(() => {})
 
     const onWorkersUpdate = (data) => {
-      for (const w of data) {
-        if (w.name in modelLabels) w.model = modelLabels[w.name]
-      }
       setWorkers(data)
       setLoading(false)
     }
@@ -356,9 +363,9 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
           await sendToProcess(name, '/compact')
           addToast(`Sent compact to '${name}'`, 'success')
           break
-        case 'reset':
+        case 'interrupt':
           await sendToProcess(name, '\x03', true)
-          addToast(`Sent reset to '${name}'`, 'success')
+          addToast(`Sent Ctrl+C to '${name}'`, 'success')
           break
         case 'kill':
           await killProcess(name)
@@ -380,7 +387,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
     <div style={m ? styles.containerMobile : styles.container}>
       <div style={styles.header}>
         <span style={m ? styles.titleMobile : styles.title}>Workers</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: m ? '6px' : '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {!m && onUsage && (
             <button
               style={{ ...styles.spawnBtn, background: 'var(--bg-tertiary)' }}
@@ -397,16 +404,25 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
               📊 Monitor
             </button>
           )}
+          {onRequestNotifPermission && (
+            <button
+              style={m ? styles.headerBtnMobile : { ...styles.spawnBtn, background: 'var(--bg-tertiary)' }}
+              onClick={notifPermission === 'granted' ? undefined : onRequestNotifPermission}
+              title={notifPermission === 'granted' ? 'Notifications enabled' : notifPermission === 'denied' ? 'Notifications blocked — enable in browser settings' : 'Enable notifications'}
+            >
+              {notifPermission === 'granted' ? 'Notifs On' : notifPermission === 'denied' ? 'Notifs Off' : 'Notifs'}
+            </button>
+          )}
           {onLogout && (
             <button
-              style={{ ...(m ? styles.spawnBtnMobile : styles.spawnBtn), background: 'var(--bg-tertiary)' }}
+              style={m ? styles.headerBtnMobile : { ...styles.spawnBtn, background: 'var(--bg-tertiary)' }}
               onClick={onLogout}
             >
               Logout
             </button>
           )}
           <button
-            style={{ ...(m ? styles.spawnBtnMobile : styles.spawnBtn), background: 'var(--bg-tertiary)' }}
+            style={m ? styles.headerBtnMobile : { ...styles.spawnBtn, background: 'var(--bg-tertiary)' }}
             onClick={onThemeToggle}
           >
             {theme === 'dark' ? 'Light' : 'Dark'}
@@ -452,7 +468,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                   <div
                     style={{
                       ...(m ? styles.statusDotMobile : styles.statusDot),
-                      background: worker.pid ? '#22c55e' : '#6b7280',
+                      background: worker.pid ? 'var(--success)' : 'var(--text-secondary)',
                     }}
                   />
                   <span style={m ? styles.nameMobile : styles.name}>
@@ -514,11 +530,11 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                       Logs
                     </button>
                   )}
-                  {['rc', 'compact', 'reset', 'kill'].map(action => {
+                  {['rc', 'compact', 'interrupt', 'kill'].map(action => {
                     const key = `${worker.name}:${action}`
                     const isActing = acting === key
                     const isDanger = action === 'kill'
-                    const label = { rc: 'Remote', compact: 'Compact', reset: 'Reset', kill: 'Kill' }[action]
+                    const label = { rc: 'Remote', compact: 'Compact', interrupt: 'Interrupt', kill: 'Kill' }[action]
 
                     return (
                       <button
@@ -543,8 +559,8 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
 
       {confirming && (
         <ConfirmDialog
-          title={{ rc: 'Enable Remote Control', compact: 'Compact Context', reset: 'Reset Worker', kill: 'Kill Worker' }[confirming.action]}
-          description={{ rc: `Send /rc to ${confirming.name}?`, compact: `Compact ${confirming.name}'s context?`, reset: `Send Ctrl+C to ${confirming.name}?`, kill: `Kill ${confirming.name}? This cannot be undone.` }[confirming.action]}
+          title={{ rc: 'Enable Remote Control', compact: 'Compact Context', interrupt: 'Interrupt Worker', kill: 'Kill Worker' }[confirming.action]}
+          description={{ rc: `Send /rc to ${confirming.name}?`, compact: `Compact ${confirming.name}'s context?`, interrupt: `Send Ctrl+C to ${confirming.name}? This cancels the current operation.`, kill: `Kill ${confirming.name}? This cannot be undone.` }[confirming.action]}
           confirmLabel="Yes"
           danger={confirming.action === 'kill'}
           onConfirm={executeAction}

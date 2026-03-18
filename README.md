@@ -9,7 +9,7 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 ## What It Does
 
 - **Multi-worker management** — Spawn, monitor, and control Claude Code sessions from one interface
-- **Real-time terminals** — Stream worker output via WebSocket with quick command buttons
+- **Real-time terminals** — Stream worker output via WebSocket with quick command buttons, search, and load-more history
 - **File browser & editor** — Browse project files with syntax highlighting, git status badges, and inline editing
 - **Activity panel** — Git changes, unpushed commits with push button, proposal review (approve/reject)
 - **System monitor** — CPU, memory, GPU, disk, network, configurable services, and hardware health (thermal, SMART, power draw)
@@ -18,6 +18,7 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 - **Historical logs** — View rotated worker log files from the UI
 - **Browser notifications** — Get notified when workers go idle or are spawned/killed
 - **Optional auth** — Single-password protection via `SWITCHBOARD_PASSWORD` env var
+- **Terminal search** — Search terminal output with match highlighting and navigation
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
 - **Dark/light theme** — Toggle with persistence, including terminal colors
 - **Mobile responsive** — Desktop 3-panel layout, mobile bottom nav
@@ -88,6 +89,16 @@ SWITCHBOARD_PASSWORD=your-password ./start.sh
 ```
 
 This protects all API endpoints and WebSocket connections with session cookies. Unset the variable to disable auth. A persistent secret key is auto-generated in `state/secret.key` so sessions survive API restarts.
+
+## Development
+
+For auto-reload on code changes during development:
+
+```bash
+DEV=1 python3 api/server.py
+```
+
+This enables Flask's file watcher — the server restarts automatically when you edit Python files. Frontend changes still require `cd web && npm run build`.
 
 ## Stopping
 

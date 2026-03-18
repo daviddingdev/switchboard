@@ -98,7 +98,7 @@ input:focus {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--text-secondary);
 }
 
 /* Selection */

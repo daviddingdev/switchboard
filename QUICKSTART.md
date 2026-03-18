@@ -16,13 +16,13 @@
 
 1. **Open the UI** — http://localhost:5001 (or `http://<machine-ip>:5001` from another device)
 
-2. **Spawn a worker** — Click **+Spawn** (or press `n`). Pick a project and click Spawn.
+2. **Spawn a worker** — Click **+Spawn** (or press `n`). Pick a project, choose a model, and click Spawn.
 
 3. **Watch it work** — Click the **Term** button on the worker card to open a terminal tab streaming the worker's output in real-time.
 
-4. **Interact via remote control** — Workers start with remote control (`/rc`) enabled. Use Claude Code's remote-control feature to send tasks, or use the worker card buttons — Remote, Compact, Reset, Kill.
+4. **Interact via remote control** — Workers start with remote control (`/rc`) enabled. Use Claude Code's remote-control feature to send tasks, or use the worker card buttons — Remote, Compact, Interrupt, Kill.
 
-5. **Check Activity** — The right panel shows git changes and unpushed commits across all projects.
+5. **Check Activity** — The right panel shows git changes, unpushed commits (expandable to see changed files), and pending proposals.
 
 ## Key Workflows
 
@@ -33,7 +33,39 @@ Spawn workers in different projects to work in parallel. Each gets its own termi
 - **Spawn**: Click +Spawn or press `n`
 - **Switch**: Click terminal tabs to switch between workers
 - **Kill**: Use the Kill button on the worker card
-- **Actions**: Use worker card buttons — Remote (enable remote control), Compact, Reset, Kill
+- **Interrupt**: Send Ctrl+C to a worker (formerly "Reset")
+- **Actions**: Remote (enable remote control), Compact, Interrupt, Kill
+
+### Terminal Features
+
+- **Quick command buttons** — y/n, 1-3, Enter, Esc, Ctrl+C for fast interaction
+- **Text input** — Type and send custom text to the worker
+- **Search** — Click the search icon to find text in terminal output with match highlighting and prev/next navigation
+- **Load more** — Click "Load more" at the top of terminal output to fetch additional history (up to 1000 lines)
+
+### File Browser & Editor
+
+Browse project files in the left panel. Click a file to preview with syntax highlighting. Click **Edit** to modify files directly in the browser (last-write-wins).
+
+- Git status badges show modified (M), untracked (U), added (A), deleted (D) files
+- Click changed files in the Activity panel to view diffs
+
+### Activity Panel
+
+The right panel shows:
+- **Changed files** — Uncommitted changes across all projects, click to view diffs
+- **Unpushed commits** — Click a commit to expand and see changed files with status badges. Push button to push.
+- **Proposals** — Review and approve/reject worker proposals
+
+### Historical Logs
+
+Click the **Logs** button on a worker card to view rotated log files from previous sessions. Logs include a text filter for searching through output.
+
+### Browser Notifications
+
+Click the **Notifs** button in the header to enable browser notifications. You'll be notified when:
+- A worker goes idle (waiting for input)
+- A worker is spawned or killed
 
 ### Keyboard Shortcuts
 
@@ -69,6 +101,17 @@ Press `u` to see token usage across all sessions. Features:
 - Estimated API costs per model
 - Activity and cost trend charts
 - Breakdown by project, model, and hour
+- CSV export of usage data
+
+## Authentication
+
+To protect the UI with a password:
+
+```bash
+SWITCHBOARD_PASSWORD=your-password ./start.sh
+```
+
+Logout button appears in the header when auth is enabled.
 
 ## Tips
 
@@ -76,17 +119,19 @@ Press `u` to see token usage across all sessions. Features:
 
 - **Project discovery** — Switchboard finds projects by scanning `~` for `CLAUDE.md` files (configurable depth). Create a `CLAUDE.md` in any directory to make it appear in the spawn dialog.
 
-- **Mobile access** — Open `http://<machine-ip>:5001` on your phone. The UI adapts with a bottom navigation bar.
+- **Mobile access** — Open `http://<machine-ip>:5001` on your phone. The UI adapts with a bottom navigation bar, including terminal search and log viewing.
 
 - **Remote control** — Workers start with `/rc` mode enabled by default, allowing remote command execution via the API.
 
 - **Session persistence** — Workers run in tmux. If the web UI disconnects, workers keep running. Reconnect to see them again.
 
+- **Worker persistence** — Worker metadata (model, spawn time) is saved to `state/workers.json` and survives API restarts. Uptime is tracked from spawn time.
+
 - **Config changes** — After editing `config.yaml`, restart with `./stop.sh && ./start.sh`.
 
 - **API costs** — The Usage tab estimates what your usage would cost on API billing. Useful for evaluating Max subscription vs pay-per-use. Configure rates in `config.yaml`.
 
-- **Model labels** — Model labels are stored in memory. After restarting Switchboard, running workers will show without their model tag.
+- **Dark/light theme** — Toggle in the header. Persisted to localStorage.
 
 ## CLI Helper
 

@@ -219,21 +219,23 @@ const styles = {
     color: 'white',
     border: 'none',
     borderRadius: '4px',
-    padding: '4px 8px',
-    fontSize: '11px',
+    padding: '6px 8px',
+    fontSize: '12px',
     fontWeight: 600,
     cursor: 'pointer',
+    minHeight: '36px',
   },
   rejectBtn: {
     flex: 1,
     background: 'transparent',
-    color: '#ef4444',
+    color: 'var(--danger)',
     border: '1px solid rgba(239, 68, 68, 0.3)',
     borderRadius: '4px',
-    padding: '4px 8px',
-    fontSize: '11px',
+    padding: '6px 8px',
+    fontSize: '12px',
     fontWeight: 600,
     cursor: 'pointer',
+    minHeight: '36px',
   },
   proposalStatusBadge: {
     fontSize: '10px',
@@ -254,10 +256,10 @@ const styles = {
 }
 
 function getStatusStyle(status) {
-  if (status === 'M' || status === 'MM') return styles.statusM
-  if (status === 'A' || status === 'AM') return styles.statusA
+  if (status === 'M') return styles.statusM
+  if (status === 'A') return styles.statusA
   if (status === 'D') return styles.statusD
-  if (status === '??' || status === '?') return styles.statusQ
+  if (status === '?') return styles.statusQ
   return styles.statusM
 }
 
@@ -361,7 +363,7 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
           <div style={{
             ...styles.banner,
             background: banner.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-            color: banner.type === 'success' ? '#22c55e' : '#ef4444',
+            color: banner.type === 'success' ? 'var(--success)' : 'var(--danger)',
           }}>
             {banner.message}
           </div>
@@ -523,7 +525,7 @@ export default function Activity({ onFileClick, onCollapse, isMobile }) {
                       <span style={{
                         ...styles.proposalStatusBadge,
                         background: p.status === 'approved' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                        color: p.status === 'approved' ? '#22c55e' : '#ef4444',
+                        color: p.status === 'approved' ? 'var(--success)' : 'var(--danger)',
                       }}>
                         {p.status}
                       </span>

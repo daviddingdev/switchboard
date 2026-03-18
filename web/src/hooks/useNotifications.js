@@ -1,36 +1,31 @@
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import socket from '../socket'
 
 export default function useNotifications() {
   const prevWorkersRef = useRef(null)
-  const permissionGranted = useRef(false)
+  const [permission, setPermission] = useState(() => {
+    if ('Notification' in window) return Notification.permission
+    return 'unsupported'
+  })
 
-  // Request permission on first user interaction
-  useEffect(() => {
-    const requestOnClick = () => {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(p => {
-          permissionGranted.current = p === 'granted'
-        })
-      } else if ('Notification' in window) {
-        permissionGranted.current = Notification.permission === 'granted'
-      }
-      document.removeEventListener('click', requestOnClick)
+  const requestPermission = useCallback(() => {
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'granted') {
+      setPermission('granted')
+      return
     }
-    // If already granted, just set the flag
-    if ('Notification' in window && Notification.permission === 'granted') {
-      permissionGranted.current = true
-    } else {
-      document.addEventListener('click', requestOnClick)
+    if (Notification.permission === 'denied') {
+      setPermission('denied')
+      return
     }
-    return () => document.removeEventListener('click', requestOnClick)
+    Notification.requestPermission().then(p => setPermission(p))
   }, [])
 
   // Listen for worker:idle events
   useEffect(() => {
     const onIdle = (data) => {
       if (document.visibilityState === 'visible') return
-      if (!permissionGranted.current) return
+      if (permission !== 'granted') return
       new Notification('Worker Idle', {
         body: `${data.name} is waiting for input`,
         tag: `idle-${data.name}`,
@@ -39,19 +34,18 @@ export default function useNotifications() {
 
     socket.on('worker:idle', onIdle)
     return () => socket.off('worker:idle', onIdle)
-  }, [])
+  }, [permission])
 
   // Detect spawn/kill by diffing worker lists
   useEffect(() => {
     const onWorkers = (data) => {
       if (document.visibilityState === 'visible') return
-      if (!permissionGranted.current) return
+      if (permission !== 'granted') return
 
       const currentNames = new Set((data || []).map(w => w.name))
       const prevNames = prevWorkersRef.current
 
       if (prevNames !== null) {
-        // Detect new workers (spawned)
         for (const name of currentNames) {
           if (!prevNames.has(name)) {
             new Notification('Worker Spawned', {
@@ -60,7 +54,6 @@ export default function useNotifications() {
             })
           }
         }
-        // Detect removed workers (killed)
         for (const name of prevNames) {
           if (!currentNames.has(name)) {
             new Notification('Worker Stopped', {
@@ -76,5 +69,7 @@ export default function useNotifications() {
 
     socket.on('workers:update', onWorkers)
     return () => socket.off('workers:update', onWorkers)
-  }, [])
+  }, [permission])
+
+  return { permission, requestPermission }
 }

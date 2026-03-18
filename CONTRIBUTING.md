@@ -17,16 +17,21 @@ Open http://localhost:5001 to verify everything works.
 
 **API** (Flask-SocketIO, port 5001):
 ```bash
-# Edit api/server.py or api/tmux_manager.py
-# Restart via ./stop.sh && ./start.sh
+# For auto-reload on Python changes:
+DEV=1 python3 api/server.py
+
+# Or manual restart:
+./stop.sh && ./start.sh
 ```
 
 **Web UI** (React + Vite):
 ```bash
 cd web
 npm run dev       # hot-reload dev server on :3000 (proxies to :5001)
-npm run build     # production build (served by Flask)
+npm run build     # production build (served by Flask on :5001)
 ```
+
+**Important:** When running via `./start.sh`, the frontend is served as a static build from `web/dist/`. Any frontend changes require `cd web && npm run build` to take effect. Use `npm run dev` for hot-reload during frontend development.
 
 ## Project Structure
 

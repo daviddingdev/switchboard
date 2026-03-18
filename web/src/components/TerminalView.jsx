@@ -182,6 +182,8 @@ export default function TerminalView({ workerName, isMobile }) {
   const [connected, setConnected] = useState(true)
   const [inputText, setInputText] = useState('')
   const [flashIdx, setFlashIdx] = useState(null)
+  const [lineCount, setLineCount] = useState(200)
+  const [historicalOutput, setHistoricalOutput] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentMatch, setCurrentMatch] = useState(0)
@@ -271,13 +273,29 @@ export default function TerminalView({ workerName, isMobile }) {
     }
   }, [searchOpen])
 
+  const handleLoadMore = () => {
+    const newCount = lineCount + 200
+    setLineCount(newCount)
+    getOutput(workerName, newCount)
+      .then(data => {
+        if (data.output) {
+          setHistoricalOutput(data.output)
+        }
+      })
+      .catch(() => {})
+  }
+
+  // Use historical output if available and longer, otherwise use live output
+  const fullOutput = historicalOutput && historicalOutput.length > output.length
+    ? historicalOutput : output
+
   // Compute search results
   const { highlightedHtml, matchCount } = useMemo(() => {
     if (!searchQuery || !searchOpen) {
       return { highlightedHtml: null, matchCount: 0 }
     }
     // Step 1: HTML-escape the raw output
-    const escaped = escapeHtml(output || '')
+    const escaped = escapeHtml(fullOutput || '')
     // Step 2: Apply search regex on the escaped string to insert <mark> tags
     const pattern = new RegExp(escapeRegex(searchQuery), 'gi')
     let count = 0
@@ -291,7 +309,7 @@ export default function TerminalView({ workerName, isMobile }) {
         : `<mark style="background:rgba(234,179,8,0.25);color:inherit;border-radius:2px">${match}</mark>`
     })
     return { highlightedHtml: html, matchCount: count }
-  }, [output, searchQuery, searchOpen, currentMatch])
+  }, [fullOutput, searchQuery, searchOpen, currentMatch])
 
   // Auto-scroll to current match
   useEffect(() => {
@@ -336,10 +354,20 @@ export default function TerminalView({ workerName, isMobile }) {
   return (
     <div style={styles.container}>
       <div style={styles.output} ref={scrollRef} onScroll={handleScroll}>
+        {lineCount <= 1000 && (
+          <div style={{ textAlign: 'center', padding: '4px 0 8px', flexShrink: 0 }}>
+            <button
+              style={{ ...styles.quickBtn, fontSize: '10px', padding: '2px 10px' }}
+              onClick={handleLoadMore}
+            >
+              Load more
+            </button>
+          </div>
+        )}
         {useHighlightedOutput ? (
           <pre style={styles.pre} dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
         ) : (
-          <pre style={styles.pre}>{output || 'Waiting for output...'}</pre>
+          <pre style={styles.pre}>{fullOutput || 'Waiting for output...'}</pre>
         )}
       </div>
       {searchOpen && (
@@ -376,6 +404,12 @@ export default function TerminalView({ workerName, isMobile }) {
                 {btn.label}
               </button>
             ))}
+            <button
+              style={styles.quickBtnMobile}
+              onClick={toggleSearch}
+            >
+              Search
+            </button>
           </div>
           <input
             ref={inputRef}

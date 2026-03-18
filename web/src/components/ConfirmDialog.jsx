@@ -68,7 +68,7 @@ export default function ConfirmDialog({ title, description, onConfirm, onCancel,
         <div style={styles.buttons}>
           <button style={styles.cancel} onClick={onCancel}>Cancel</button>
           <button
-            style={{ ...styles.confirm, background: danger ? '#ef4444' : 'var(--accent)' }}
+            style={{ ...styles.confirm, background: danger ? 'var(--danger)' : 'var(--accent)' }}
             onClick={onConfirm}
           >
             {confirmLabel}

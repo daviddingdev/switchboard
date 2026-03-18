@@ -1,5 +1,88 @@
 # Switchboard Changelog
 
+## 2026-03-18
+
+### Pre-Release Feature Bundle
+
+**Optional Single-Password Auth**
+- `SWITCHBOARD_PASSWORD` env var enables auth on all endpoints and WebSocket
+- Login page, session cookies, logout button in header
+- Persistent secret key in `state/secret.key` survives API restarts
+- HTTP Basic Auth fallback for CLI/API access
+
+**Proposals UI**
+- Pending proposals shown in Activity panel with approve/reject buttons
+- Workers submit proposals via `POST /api/proposals`, reviewable in the web UI
+
+**Browser Push Notifications**
+- Notifs button in header to request notification permission
+- Notified when workers go idle, are spawned, or killed
+
+**File Editing**
+- Edit button in FilePreview for inline file editing
+- `PUT /api/file` endpoint with last-write-wins semantics
+- Path validated against home directory
+
+**Git Push Button**
+- Push button in Activity panel for unpushed commits
+- `POST /api/push` endpoint pushes to tracked remote
+
+**Worker Metadata Persistence & Uptime**
+- Worker models and spawn times saved to `state/workers.json`
+- Metadata survives API restarts
+- Uptime tracked from spawn time, displayed on worker cards
+
+**Historical Log Viewer**
+- Logs button on worker cards to browse rotated log files
+- LogViewer component with text filter for searching log content
+- ANSI stripping with cursor-movement conversion, blank line collapse, duplicate removal
+- Closable log tabs
+
+**Terminal Search**
+- Search icon in terminal view opens search bar
+- Match highlighting with prev/next navigation
+
+**Terminal Load More**
+- "Load more" button at top of terminal output
+- Fetches additional history in 200-line increments up to 1000 lines
+
+**Usage CSV Export**
+- Export button in Usage tab to download usage data as CSV
+
+**Unpushed Commit Details**
+- Click unpushed commits to expand and see changed files with status badges (M/A/D/R)
+- `git diff-tree --name-status` per commit in activity API
+
+**Keyboard Shortcuts for Tab Navigation**
+- `Tab` to go to next tab (no-op when no tabs open)
+- `[` / `]` to cycle through tabs (wraps around)
+- `1`–`9` to jump to tab by position
+- `w` to close active tab
+- `?` button added to right edge of tab bar for discoverability
+- Shortcuts help modal reorganized into sections (Tab Navigation / Views / General)
+- All shortcuts disabled while typing in terminal input (existing behavior)
+
+### UI & Mobile Improvements
+- Renamed "Reset" to "Interrupt" (sends Ctrl+C, not a reset)
+- Added search button to mobile terminal quick actions
+- LogViewer accessible on mobile via overlay
+- Compact header buttons on mobile (Notifs/Logout/Dark) vs large Spawn button
+- Proposal approve/reject buttons sized up for easier tapping
+
+### Cleanup & Modernization
+- Replaced all hardcoded hex colors with CSS variables across 7 files
+- Removed dead `aggregateToMonthly` function from Usage
+- Removed dead model mutation in WorkerDashboard socket handler
+- Simplified TabBar close button condition
+- Fixed scrollbar hover color for light theme
+- Collapsed `load_projects()` wrapper to alias
+- Fixed stale comments
+
+### Development & Operations
+- `DEV=1` env var enables Flask auto-reload for Python development
+- Rewrote `stop.sh` with wait loop, stale PID handling, SIGKILL fallback
+- Extracted `ConfirmDialog` as reusable component
+
 ## 2026-03-17
 
 ### Hardware Health Monitoring
@@ -697,4 +780,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: March 16, 2026*
+*Last updated: March 18, 2026*

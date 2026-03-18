@@ -54,7 +54,7 @@ const styles = {
   },
   error: {
     fontSize: '13px',
-    color: '#ef4444',
+    color: 'var(--danger)',
     marginBottom: '12px',
   },
 }

@@ -122,14 +122,24 @@ def _load_workers_state():
         if name in saved_times:
             _worker_spawn_times[name] = saved_times[name]
 
-# Cached model list (refreshed periodically)
+# Known models (always available immediately)
+_KNOWN_MODELS = [
+    {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5"},
+    {"id": "claude-opus-4-5", "label": "Opus 4.5"},
+    {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6"},
+    {"id": "claude-opus-4-6", "label": "Opus 4.6"},
+]
+
+# Cached model list (enriched by CLI discovery in background)
 _models_cache = None
 _models_cache_time = 0
 _MODELS_CACHE_TTL = 300  # 5 minutes
+_models_lock = threading.Lock()
 
 
-def _discover_models():
-    """Discover available Claude models from CLI, with fallback."""
+def _discover_models_background():
+    """Discover available Claude models from CLI and update cache."""
+    global _models_cache, _models_cache_time
     models = []
     try:
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
@@ -148,18 +158,15 @@ def _discover_models():
     except Exception:
         pass
 
-    # CLI may only return the default model; merge with known models
-    known = [
-        {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5"},
-        {"id": "claude-opus-4-5", "label": "Opus 4.5"},
-        {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6"},
-        {"id": "claude-opus-4-6", "label": "Opus 4.6"},
-    ]
+    # Merge with known models
     seen = {m["id"] for m in models}
-    for m in known:
+    for m in _KNOWN_MODELS:
         if m["id"] not in seen:
             models.append(m)
-    return models
+
+    with _models_lock:
+        _models_cache = models
+        _models_cache_time = time.time()
 
 
 def _get_models():
@@ -170,12 +177,16 @@ def _get_models():
     if isinstance(configured, list):
         return configured
 
-    # Auto mode: discover from CLI with caching
+    # Auto mode: return known models immediately, refresh via background thread
     now = time.time()
-    if _models_cache is None or (now - _models_cache_time) > _MODELS_CACHE_TTL:
-        _models_cache = _discover_models()
-        _models_cache_time = now
-    return _models_cache
+    with _models_lock:
+        needs_refresh = _models_cache is None or (now - _models_cache_time) > _MODELS_CACHE_TTL
+        current = _models_cache
+
+    if needs_refresh:
+        threading.Thread(target=_discover_models_background, daemon=True).start()
+
+    return current if current is not None else list(_KNOWN_MODELS)
 
 # --- Auth configuration ---
 _AUTH_PASSWORD = os.environ.get('SWITCHBOARD_PASSWORD', '')
@@ -586,9 +597,7 @@ def discover_projects(root_dir=None, max_depth=None):
     return _projects_cache
 
 
-def load_projects():
-    """Auto-discover projects with CLAUDE.md files."""
-    return discover_projects()
+load_projects = discover_projects
 
 
 def get_project_directory(project_name):
@@ -1095,6 +1104,8 @@ def get_activity():
 
 # ANSI escape sequence stripping — handles CSI, OSC, and single-char escapes
 _ANSI_RE = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*\x07)')
+# Cursor movement forward (e.g. \x1b[3C) — replace with spaces instead of stripping
+_CURSOR_FORWARD_RE = re.compile(r'\x1b\[(\d+)C')
 _SAFE_WORKER_NAME = re.compile(r'^[a-zA-Z0-9_-]+$')
 _SAFE_LOG_FILENAME = re.compile(r'^[a-zA-Z0-9_-]+(-\d{8}-\d{6})?\.log$')
 
@@ -1135,15 +1146,37 @@ def get_worker_log(name, filename):
     tail = min(request.args.get('tail', 500, type=int), 5000)
     try:
         with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
-            lines = f.readlines()
-        # Take last N lines
-        content = ''.join(lines[-tail:])
-        # Strip ANSI escape sequences
+            raw_content = f.read()
+        # Replace cursor-forward sequences with spaces before stripping
+        content = _CURSOR_FORWARD_RE.sub(lambda m: ' ' * int(m.group(1)), raw_content)
+        # Strip remaining ANSI escape sequences
         content = _ANSI_RE.sub('', content)
+        # Strip BEL characters
+        content = content.replace('\x07', '')
+        # Clean up: collapse blank lines, remove duplicate consecutive lines
+        lines = content.splitlines()
+        cleaned = []
+        prev_line = None
+        blank_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                blank_count += 1
+                if blank_count <= 1:
+                    cleaned.append('')
+                continue
+            blank_count = 0
+            # Skip consecutive duplicate lines (spinner frames)
+            if stripped == prev_line:
+                continue
+            prev_line = stripped
+            cleaned.append(line)
+        # Take last N lines
+        tail_lines = cleaned[-tail:]
         return jsonify({
-            "content": content,
-            "total_lines": len(lines),
-            "showing": min(tail, len(lines)),
+            "content": '\n'.join(tail_lines),
+            "total_lines": len(cleaned),
+            "showing": min(tail, len(cleaned)),
         })
     except Exception as e:
         return {"error": str(e)}, 500
@@ -1234,7 +1267,7 @@ def push_project():
 
 
 # =============================================================================
-# Partner Context Management endpoints
+# Worker Context & Session endpoints
 # =============================================================================
 
 def get_project_session_dir(directory):
@@ -2198,5 +2231,6 @@ def _start_background_monitors():
 if __name__ == '__main__':
     _get_models()  # warm cache so first request is instant
     _start_background_monitors()
+    dev_mode = os.environ.get('DEV', '').strip() == '1'
     socketio.run(app, host=CONFIG.get('host', '0.0.0.0'), port=CONFIG.get('port', 5001),
-                 allow_unsafe_werkzeug=True)
+                 allow_unsafe_werkzeug=True, use_reloader=dev_mode)

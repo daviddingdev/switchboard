@@ -262,20 +262,18 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
             />
             <div style={styles.hint}>Where Claude Code will run</div>
           </div>
-          {models.length > 0 && (
-            <div style={styles.field}>
-              <label style={styles.label}>Model</label>
-              <select
-                style={{ ...styles.input, cursor: 'pointer' }}
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                {models.map(m => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div style={styles.field}>
+            <label style={styles.label}>Model</label>
+            <select
+              style={{ ...styles.input, cursor: 'pointer' }}
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              {models.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
 
           {error && <div style={styles.error}>{error}</div>}
 

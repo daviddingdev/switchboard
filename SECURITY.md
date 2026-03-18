@@ -41,10 +41,11 @@ If you find a security issue, please open a GitHub issue. Since this tool is des
 - Proposal IDs are validated with regex before filesystem operations
 - Log viewer validates worker names and filenames against strict patterns
 - Subprocess calls use list form (not shell strings) to prevent injection
-- System update package names are validated against allowed characters
+- System update package names are validated against allowed characters (system updates require `sudo` access)
 - The `CLAUDECODE` environment variable is stripped to prevent nested session issues
 - Optional auth: session cookies, WebSocket auth on connect, HTTP Basic Auth fallback
-- Auth secret key persisted to `state/secret.key` (gitignored) to survive restarts
+- Auth secret key auto-generated and persisted to `state/secret.key` (gitignored) to survive restarts
+- Worker log filenames validated against strict patterns before filesystem access
 
 ## What We Don't Do (by design)
 

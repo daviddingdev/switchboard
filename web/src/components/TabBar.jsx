@@ -45,6 +45,27 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  spacer: {
+    flex: 1,
+  },
+  shortcutHint: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 24,
+    height: 24,
+    margin: '0 8px',
+    flexShrink: 0,
+    background: 'none',
+    border: '1px solid var(--border)',
+    borderRadius: 4,
+    color: 'var(--text-tertiary)',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 600,
+    fontFamily: 'monospace',
+    alignSelf: 'center',
+  },
   closeButton: {
     background: 'none',
     border: 'none',
@@ -64,7 +85,7 @@ const styles = {
   },
 }
 
-export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTabReorder }) {
+export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTabReorder, onShowShortcuts }) {
   const [dragIndex, setDragIndex] = useState(null)
   const [dragOverIndex, setDragOverIndex] = useState(null)
   const [hoverIndex, setHoverIndex] = useState(null)
@@ -127,8 +148,7 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTab
             {tab.type === 'terminal' ? '●' : tab.type === 'log' ? '📋' : tab.type === 'diff' ? '±' : tab.type === 'monitor' ? '📊' : tab.type === 'usage' ? '📈' : '📄'}
           </span>
           <span style={styles.tabLabel}>{tab.label}</span>
-          {(tab.type === 'file' || tab.type === 'diff' || tab.type === 'monitor' || tab.type === 'usage' || tab.type === 'terminal' || tab.type === 'log') && (
-            <button
+          <button
               style={{
                 ...styles.closeButton,
                 ...(hoverClose === tab.id ? { background: 'var(--bg-tertiary)', color: 'var(--text-primary)' } : {}),
@@ -143,9 +163,18 @@ export default function TabBar({ tabs, activeTab, onTabSelect, onTabClose, onTab
             >
               ×
             </button>
-          )}
         </div>
       ))}
+      <div style={styles.spacer} />
+      {onShowShortcuts && (
+        <button
+          style={styles.shortcutHint}
+          onClick={onShowShortcuts}
+          title="Keyboard shortcuts (?)"
+        >
+          ?
+        </button>
+      )}
     </div>
   )
 }
