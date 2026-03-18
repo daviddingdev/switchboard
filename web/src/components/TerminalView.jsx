@@ -3,11 +3,11 @@ import { getOutput, sendToProcess } from '../api'
 import socket from '../socket'
 
 const QUICK_BUTTONS = [
-  { label: 'y', text: 'y', raw: false },
-  { label: 'n', text: 'n', raw: false },
-  { label: '1', text: '1', raw: false },
-  { label: '2', text: '2', raw: false },
-  { label: '3', text: '3', raw: false },
+  { label: 'y', text: 'y', raw: true },
+  { label: 'n', text: 'n', raw: true },
+  { label: '1', text: '1', raw: true },
+  { label: '2', text: '2', raw: true },
+  { label: '3', text: '3', raw: true },
   { label: '↵', text: 'Enter', raw: true },
   { label: 'Esc', text: 'Escape', raw: true },
   { label: 'Ctrl+C', text: 'C-c', raw: true, danger: true },
