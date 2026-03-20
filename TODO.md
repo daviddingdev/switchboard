@@ -78,6 +78,14 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ## Completed
 
+### Programmatic Idle Detection (Mar 19, 2026)
+
+- [x] HTTP hooks (Stop + UserPromptSubmit) for instant idle/active detection
+- [x] JSONL session file parsing as polling fallback (5s)
+- [x] Removed tmux output pattern matching (_SPINNER_CHARS, _ACTIVITY_RE, hash tracking)
+- [x] `scripts/setup-hooks.sh` for merging hook config into ~/.claude/settings.json
+- [x] Updated architecture.md, SETUP.md, QUICKSTART.md with hook setup docs
+
 ### Pre-Open-Source Release (Mar 17-18, 2026)
 
 - [x] Optional single-password auth — `SWITCHBOARD_PASSWORD`, login page, session cookies, logout
@@ -169,4 +177,4 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ---
 
-*Last updated: March 18, 2026*
+*Last updated: March 19, 2026*

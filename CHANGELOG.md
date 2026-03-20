@@ -1,5 +1,34 @@
 # Switchboard Changelog
 
+## 2026-03-19
+
+### Programmatic Idle Detection via Hooks + JSONL
+
+Replaced fragile tmux output pattern-matching with Claude Code's own state machine.
+
+**HTTP hooks (primary, instant):**
+- **Stop hook** → `POST /api/hooks/stop` — Fired when Claude finishes generating. Marks worker idle immediately (no file I/O on the hot path). ~1-2s total latency from Claude's synchronous hook execution overhead.
+- **UserPromptSubmit hook** → `POST /api/hooks/prompt` — Fired when user submits a prompt. Marks worker as active immediately.
+- Both endpoints auth-exempt (local hooks don't need password), return 204. Handler is instant — any perceived delay is Claude Code's hook execution, not Switchboard.
+- `scripts/setup-hooks.sh` — Merges hook config into `~/.claude/settings.json`, preserving existing hooks
+
+**JSONL polling (fallback, 5s):**
+- `_check_session_idle(filepath)` — Parses last ~8KB of session JSONL, skips progress entries, determines idle from last assistant message content types
+- `_bg_idle_monitor` rewritten — Skips workers with recent hook events (hooks authoritative for 30s), checks file mtime (modified within 10s = active), falls back to JSONL parsing
+- Works for workers without hooks configured (non-Claude backends)
+
+**Removed:**
+- `_SPINNER_CHARS`, `_ACTIVITY_RE`, `_has_activity_indicator()` — terminal pattern matching
+- `tmux.capture_last_line()` calls from idle monitor
+- Hash-based output change tracking (`prev_outputs`)
+
+### Documentation Updates
+
+- **architecture.md** — Rewrote idle detection section (hooks + JSONL), added hooks API endpoints
+- **QUICKSTART.md** — Added hook setup step to setup checklist
+- **docs/SETUP.md** — Added Claude Code hooks configuration section
+- **TODO.md** — Updated completed entries
+
 ## 2026-03-18
 
 ### Pre-Release Feature Bundle
@@ -780,4 +809,4 @@ cp state/projects.example.yaml state/projects.yaml
 
 ---
 
-*Last updated: March 18, 2026*
+*Last updated: March 19, 2026*

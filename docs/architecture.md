@@ -84,6 +84,16 @@ actions (Remote, Compact, Interrupt) and CLI helper.
 blanks, returns last N non-empty lines. Accepts `?lines=N`
 query param (up to 1000).
 
+### Hooks (Idle Detection)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/hooks/stop` | Claude finished generating (Stop hook) |
+| POST | `/hooks/prompt` | User submitted a prompt (UserPromptSubmit hook) |
+
+Both auth-exempt. Receive JSON with `session_id`, `cwd`,
+`transcript_path`. Return 204.
+
 ### Auth
 
 | Method | Path | Purpose |
@@ -213,12 +223,51 @@ detection — only emit when data actually changes.
 
 ### Background Threads
 
-5 background threads started on API boot:
-1. `_bg_workers_monitor` — polls tmux, pushes worker list
-2. `_bg_usage_monitor` — polls session files, pushes usage
-3. `_bg_activity_monitor` — polls git status, pushes activity
-4. `_bg_metrics_monitor` — reads system metrics, pushes
-5. `_bg_terminal_monitor` — captures terminal output for subscribed workers
+6 background threads started on API boot:
+1. `_bg_workers_monitor` — polls tmux, pushes worker list (2s)
+2. `_bg_usage_monitor` — polls session files, pushes usage (5s)
+3. `_bg_activity_monitor` — polls git status + file tree, pushes activity (5s)
+4. `_bg_metrics_monitor` — reads system metrics, pushes (2s)
+5. `_bg_terminal_monitor` — captures terminal output for subscribed workers (500ms)
+6. `_bg_idle_monitor` — detects idle workers via prompt detection (5s)
+
+### Idle Detection
+
+Two-layer system: **HTTP hooks** (primary, instant) and
+**JSONL polling** (fallback, 5s).
+
+**Primary — HTTP hooks:**
+Claude Code fires HTTP hooks on state transitions. Switchboard
+registers two hooks in `~/.claude/settings.json`:
+
+- `Stop` → `POST /api/hooks/stop` — Claude finished generating.
+  Reads the session transcript JSONL to check the last assistant
+  entry: text-only content = idle, tool_use content = still working.
+- `UserPromptSubmit` → `POST /api/hooks/prompt` — User submitted
+  a prompt. Marks worker as active immediately.
+
+Hooks fire on state change with ~1-2s delay (Claude Code
+executes HTTP hooks synchronously before showing the prompt).
+The Switchboard handler itself is instant (no file I/O) — the
+latency is entirely Claude's hook execution overhead.
+Both endpoints are auth-exempt (local hooks don't need password).
+Non-2xx responses are non-blocking, so hooks silently fail if
+Switchboard is down.
+
+**Fallback — JSONL polling:**
+`_bg_idle_monitor` runs every 5s for workers without recent hook
+events (>30s since last hook). For each worker:
+
+1. Skip if hook fired within 30s (hook state is authoritative)
+2. Check session file mtime — modified within 10s = active
+3. Parse last ~8KB of JSONL, skip progress entries, check last
+   assistant message: text-only = idle, tool_use = active
+
+**Setup:** Run `scripts/setup-hooks.sh` to configure hooks.
+
+Detection triggers `worker:idle` socket event on transition,
+which drives browser notifications and visual indicators (status
+dot, tab badge, page title count).
 
 ---
 

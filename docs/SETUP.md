@@ -52,6 +52,29 @@ Access the UI:
 - Same machine: http://localhost:5001
 - Other devices: http://\<machine-ip\>:5001
 
+## Claude Code Hooks (Idle Detection)
+
+Switchboard uses Claude Code's HTTP hooks for instant idle detection.
+Run the setup script to configure them:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This adds `Stop` and `UserPromptSubmit` hooks to `~/.claude/settings.json`
+that notify Switchboard when Claude finishes generating or when a prompt
+is submitted. Existing hooks are preserved.
+
+If Switchboard runs on a non-default port:
+```bash
+./scripts/setup-hooks.sh 8080
+```
+
+With hooks, idle detection has ~1-2s latency (Claude Code executes HTTP
+hooks synchronously — the delay is Claude's overhead, not Switchboard's).
+Without hooks, detection falls back to JSONL file polling (~10-15s delay).
+Hooks are recommended for the best experience.
+
 ## Configuration
 
 Copy `config.yaml.example` to `config.yaml` (done automatically by `setup.sh`).
