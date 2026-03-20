@@ -1,5 +1,25 @@
 # Switchboard Changelog
 
+## 2026-03-20
+
+### Refactored server.py into Modules
+
+Internal reorganization only — no behavioral changes, no API changes, no wire protocol changes.
+
+Split the 2,467-line `api/server.py` monolith into focused modules:
+
+- **`shared.py`** (36 lines) — `AppContext` shared state bag + `data_hash()` utility
+- **`idle_detector.py`** (250 lines) — Hook endpoints (`/api/hooks/*`), JSONL idle parsing, background idle monitor
+- **`system_monitor.py`** (541 lines) — System metrics, GPU/thermal/SMART, `PlatformClient`, update routes, background metrics monitor
+- **`project_sync.py`** (729 lines) — Project discovery, file tree, git status/diff/push, session file helpers
+- **`server.py`** (987 lines) — Core app, auth, workers CRUD, proposals, activity feed, usage, websockets, remaining background monitors
+
+Architecture: `AppContext` object holds all cross-module state. Each module gets `init(ctx)` at startup. Routes use Flask Blueprints (no URL prefix). Auth middleware in server.py applies to all routes including blueprint routes.
+
+**Documentation updated:**
+- `CONTRIBUTING.md` — Project structure now lists all API modules
+- `docs/architecture.md` — Added Module Structure section, updated ASCII diagram and background thread locations
+
 ## 2026-03-19
 
 ### Programmatic Idle Detection via Hooks + JSONL

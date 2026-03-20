@@ -17,10 +17,15 @@ Browser (any device)
 └────┬─────┘
      │ WebSocket (persistent, server push)
      │ HTTP (one-off actions: spawn, kill, send)
-┌────┴──────────┐
-│ Flask-SocketIO │  :5001 (threading async mode)
-│   server.py    │  runs on the Claude Code machine
-└────┬───────────┘
+┌────┴──────────────────────────────────────────┐
+│ Flask-SocketIO  :5001 (threading async mode)  │
+│                                               │
+│  server.py ── core, auth, workers, proposals  │
+│  idle_detector.py ── hooks + JSONL idle       │
+│  system_monitor.py ── metrics + updates       │
+│  project_sync.py ── files, git, projects      │
+│  shared.py ── AppContext (shared state)       │
+└────┬──────────────────────────────────────────┘
      │ subprocess
 ┌────┴──────┐
 │   tmux    │  socket: switchboard
@@ -224,12 +229,12 @@ detection — only emit when data actually changes.
 ### Background Threads
 
 6 background threads started on API boot:
-1. `_bg_workers_monitor` — polls tmux, pushes worker list (2s)
-2. `_bg_usage_monitor` — polls session files, pushes usage (5s)
-3. `_bg_activity_monitor` — polls git status + file tree, pushes activity (5s)
-4. `_bg_metrics_monitor` — reads system metrics, pushes (2s)
-5. `_bg_terminal_monitor` — captures terminal output for subscribed workers (500ms)
-6. `_bg_idle_monitor` — detects idle workers via prompt detection (5s)
+1. `_bg_workers_monitor` (server.py) — polls tmux, pushes worker list (2s)
+2. `_bg_usage_monitor` (server.py) — polls session files, pushes usage (5s)
+3. `_bg_activity_monitor` (server.py) — polls git status + file tree, pushes activity (5s)
+4. `bg_metrics_monitor` (system_monitor.py) — reads system metrics, pushes (2s)
+5. `_bg_terminal_monitor` (server.py) — captures terminal output for subscribed workers (500ms)
+6. `bg_idle_monitor` (idle_detector.py) — detects idle workers via prompt detection (5s)
 
 ### Idle Detection
 
@@ -268,6 +273,31 @@ events (>30s since last hook). For each worker:
 Detection triggers `worker:idle` socket event on transition,
 which drives browser notifications and visual indicators (status
 dot, tab badge, page title count).
+
+---
+
+## Module Structure
+
+`server.py` is the entry point. Shared state lives in an `AppContext`
+object (`shared.py`) passed to each module via `init(ctx)`. Modules
+expose Flask Blueprints for their routes.
+
+| Module | Owns | Blueprint routes |
+|--------|------|-----------------|
+| `shared.py` | `AppContext`, `data_hash()` | — |
+| `idle_detector.py` | Hook endpoints, JSONL parsing, idle monitor | `/api/hooks/*` |
+| `system_monitor.py` | Metrics, GPU/thermal/SMART, updates, `PlatformClient` | `/api/metrics`, `/api/system/*` |
+| `project_sync.py` | Projects, files, git, session helpers | `/api/projects`, `/api/home`, `/api/file`, `/api/diff`, `/api/push` |
+| `server.py` | App, auth, workers, proposals, activity, usage, websockets | everything else |
+
+No circular imports. Dependency graph:
+```
+shared.py       <-- no api/ imports
+idle_detector   --> shared, tmux_manager, flask
+system_monitor  --> shared, flask, psutil
+project_sync    --> shared, flask, subprocess
+server.py       --> shared, idle_detector, system_monitor, project_sync, tmux_manager
+```
 
 ---
 

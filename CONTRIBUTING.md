@@ -36,12 +36,19 @@ npm run build     # production build (served by Flask on :5001)
 ## Project Structure
 
 ```
-api/              # Flask backend + tmux manager
-web/src/          # React frontend (inline styles, no CSS modules)
-state/            # Runtime state (usage stats)
-logs/             # Runtime logs (not committed)
-docs/             # Architecture docs
-contrib/          # Optional integrations (Telegram bot, hooks)
+api/
+  server.py           # Core: app, auth, workers, proposals, websockets
+  shared.py           # AppContext (shared state) + data_hash utility
+  idle_detector.py    # Hook endpoints + JSONL idle detection
+  system_monitor.py   # System metrics, hardware, updates
+  project_sync.py     # Projects, files, git, session helpers
+  tmux_manager.py     # tmux subprocess wrapper
+  tests/              # API tests
+web/src/              # React frontend (inline styles, no CSS modules)
+state/                # Runtime state (usage stats)
+logs/                 # Runtime logs (not committed)
+docs/                 # Architecture docs
+contrib/              # Optional integrations (Telegram bot, hooks)
 ```
 
 ## Code Style

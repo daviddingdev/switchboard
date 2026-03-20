@@ -30,7 +30,7 @@ if [ ! -d "web/dist" ]; then
 fi
 
 echo "Starting Switchboard..."
-nohup python3 api/server.py > logs/api.log 2>&1 &
+nohup env DEV=1 python3 api/server.py > logs/api.log 2>&1 &
 echo $! > logs/api.pid
 sleep 2
 
