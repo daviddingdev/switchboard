@@ -35,3 +35,11 @@ state/setup-complete
 # OS
 .DS_Store
 Thumbs.db
+
+# macOS extended attributes
+._*
+
+# Temporary files
+*.tmp
+*.swp
+*~

@@ -2,6 +2,14 @@
 
 ## 2026-03-25
 
+### Open Source Release Prep
+
+- Password visibility toggle (eye icon) on setup wizard and login page — shared `showPassword` state toggles both password and confirm fields
+- README overhaul: hero screenshot, collapsible gallery (dashboard, setup wizard, spawn dialog, mobile), license/version/platform badges
+- Updated `## Updating` section wording in README
+- `docs/GITHUB_DESCRIPTION.md` — repo description, topics, and website placeholder for GitHub settings
+- `.gitignore` additions: macOS extended attributes (`._*`), temp files (`*.tmp`, `*.swp`, `*~`)
+
 ### New User Experience Polish
 
 **Onboarding & Setup:**
@@ -49,12 +57,13 @@ Changed `project_root` default from `~` (home directory) to the parent of the Sw
 
 ### First-Run Setup Wizard
 
-New users see a 4-step onboarding wizard before the main UI:
+New users see a 5-step onboarding wizard before the main UI:
 
-1. **Password + Contributor** — Set a dashboard password (optional, skippable). Stored as SHA-256 hash in `state/auth.json`. Contributor checkbox sets `show_self: true` in `config.yaml` to include Switchboard in the project list.
-2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code prompt tips. Continue saves content, Skip bypasses file creation entirely. Written to project root.
-3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field appends `lsof` output as a `## Port Scan Output` section. Switchboard header auto-prepended. Continue saves, Skip bypasses. Written to project root.
-4. **Done** — Summary of what was configured, "Apply to Global Config" buttons that write references to `~/.claude/CLAUDE.md` (with duplicate detection), git/GitHub context note.
+1. **Prerequisites** — Checks for Claude CLI (installed + auth status) and tmux
+2. **Password + Contributor** — Set a dashboard password (optional, skippable) with visibility toggle. Stored as SHA-256 hash in `state/auth.json`. Contributor checkbox sets `show_self: true` in `config.yaml` to include Switchboard in the project list.
+3. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code prompt tips. Continue saves content, Skip bypasses file creation entirely. Written to project root.
+4. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field appends `lsof` output as a `## Port Scan Output` section. Switchboard header auto-prepended. Continue saves, Skip bypasses. Written to project root.
+5. **Done** — Summary of what was configured, "Apply to Global Config" buttons that write references to `~/.claude/CLAUDE.md` (with duplicate detection), git/GitHub context note.
 
 **Backend:**
 - `GET /api/setup/status` — Returns `{complete, auth_enabled}` (auth-exempt)
@@ -66,7 +75,7 @@ New users see a 4-step onboarding wizard before the main UI:
 **Migration:** Existing installations (with `state/workers.json` or `state/usage-stats.json`) auto-skip the wizard via `start.sh` detection.
 
 **Frontend:**
-- `SetupWizard` component with "Step N of 4" indicators, inline styles consistent with dark theme
+- `SetupWizard` component with "Step N of 5" indicators, inline styles consistent with dark theme
 - Textareas pre-filled with real default content (not placeholder text) — editable before saving
 - Skip/Continue semantics: Continue saves content as-is, Skip bypasses file creation
 - Contributor checkbox on password step for Switchboard developers

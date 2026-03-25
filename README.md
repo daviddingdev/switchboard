@@ -1,10 +1,51 @@
 # Switchboard
 
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-green)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
+
 Manage AI coding agents across all your projects from one dashboard.
 
 Spawn and monitor multiple Claude Code workers, browse files, track usage and costs, push code — all from a single web UI accessible from any device.
 
 > **Note:** Designed for local/trusted network use. Optional password auth is available but is not a substitute for proper network security. See [SECURITY.md](SECURITY.md).
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-1.png" alt="Switchboard Dashboard" width="800">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+**File Preview & Syntax Highlighting**
+<p align="center">
+  <img src="docs/screenshots/dashboard-2.png" alt="File Preview" width="800">
+</p>
+
+**System Monitor**
+<p align="center">
+  <img src="docs/screenshots/dashboard-3.png" alt="System Monitor" width="800">
+</p>
+
+**Setup Wizard**
+<p align="center">
+  <img src="docs/screenshots/setup-1.png" alt="Prerequisites Check" width="400">
+  <img src="docs/screenshots/setup-3.png" alt="Working Style" width="400">
+</p>
+
+**Spawn Dialog**
+<p align="center">
+  <img src="docs/screenshots/spawn-dialog.png" alt="Spawn Dialog" width="400">
+</p>
+
+**Mobile**
+<p align="center">
+  <img src="docs/screenshots/mobile-1.png" alt="Mobile Workers" width="200">
+  <img src="docs/screenshots/mobile-2.png" alt="Mobile Terminal" width="200">
+  <img src="docs/screenshots/mobile-3.png" alt="Mobile Monitor" width="200">
+</p>
+
+</details>
 
 ## What It Does
 
@@ -91,7 +132,7 @@ The env var takes precedence. Both methods protect all endpoints with session co
 bash scripts/update.sh
 ```
 
-Stops the server, pulls latest code, reinstalls dependencies, rebuilds the frontend, and restarts. Your password, config, SOUL.md, and INFRASTRUCTURE.md are all preserved.
+Stops the server, pulls the latest code, reinstalls dependencies, rebuilds the frontend, and restarts. Your password, working style (SOUL.md), infrastructure map, and all configuration are preserved.
 
 ## Stopping
 

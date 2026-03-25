@@ -266,6 +266,7 @@ export default function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(0)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [contributor, setContributor] = useState(false)
   const [soul, setSoul] = useState(SOUL_DEFAULT)
   const [infrastructure, setInfrastructure] = useState(INFRA_DEFAULT)
@@ -500,22 +501,64 @@ export default function SetupWizard({ onComplete }) {
             Anyone on your network could access it otherwise.
           </div>
 
-          <input
-            style={styles.input}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            autoFocus
-          />
-          <input
-            style={styles.input}
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm password"
-            onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordContinue() }}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              style={{ ...styles.input, paddingRight: '40px' }}
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(s => !s)}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                padding: '4px',
+              }}
+              tabIndex={-1}
+            >
+              {showPassword ? '🙈' : '👁'}
+            </button>
+          </div>
+          <div style={{ position: 'relative' }}>
+            <input
+              style={{ ...styles.input, paddingRight: '40px' }}
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm password"
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordContinue() }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(s => !s)}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                padding: '4px',
+              }}
+              tabIndex={-1}
+            >
+              {showPassword ? '🙈' : '👁'}
+            </button>
+          </div>
 
           <div style={styles.checkboxRow}>
             <input

@@ -61,6 +61,7 @@ const styles = {
 
 export default function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -84,14 +85,35 @@ export default function LoginPage({ onLogin }) {
         <div style={styles.title}>Switchboard</div>
         <div style={styles.subtitle}>Enter password to continue</div>
         {error && <div style={styles.error}>{error}</div>}
-        <input
-          style={styles.input}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          autoFocus
-        />
+        <div style={{ position: 'relative' }}>
+          <input
+            style={{ ...styles.input, paddingRight: '40px' }}
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(s => !s)}
+            style={{
+              position: 'absolute',
+              right: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '14px',
+              padding: '4px',
+            }}
+            tabIndex={-1}
+          >
+            {showPassword ? '🙈' : '👁'}
+          </button>
+        </div>
         <button
           style={{ ...styles.button, opacity: loading ? 0.5 : 1 }}
           type="submit"
