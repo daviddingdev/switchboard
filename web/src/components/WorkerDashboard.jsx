@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
-import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage, fetchModels } from '../api'
+import { fetchProcesses, killProcess, sendToProcess, fetchWorkersUsage, fetchModels, fetchHealth } from '../api'
 import socket from '../socket'
 import { useToast } from './Toast'
 import ConfirmDialog from './ConfirmDialog'
@@ -279,6 +279,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
   const [acting, setActing] = useState(null)
   const [confirming, setConfirming] = useState(null) // { name, action } awaiting confirmation
   const [loading, setLoading] = useState(true)
+  const [version, setVersion] = useState('')
   const [, forceUpdate] = useReducer(x => x + 1, 0)
   const { addToast } = useToast()
 
@@ -313,6 +314,9 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
   useEffect(() => {
     loadWorkers().finally(() => setLoading(false))
     loadUsage()
+    fetchHealth()
+      .then(data => setVersion(data.version || ''))
+      .catch(() => {})
     fetchModels()
       .then(data => {
         const map = {}
@@ -322,7 +326,12 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       .catch(() => {})
 
     const onWorkersUpdate = (data) => {
-      setWorkers(data)
+      setWorkers(prev => {
+        if (prev.length === 0 && data.length > 0) {
+          addToast('Worker started! Click "Term" to watch it work, or send commands via the terminal input.', 'info', 8000)
+        }
+        return data
+      })
       setLoading(false)
     }
     const onUsageUpdate = (data) => {
@@ -386,7 +395,10 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
   return (
     <div style={m ? styles.containerMobile : styles.container}>
       <div style={styles.header}>
-        <span style={m ? styles.titleMobile : styles.title}>Workers</span>
+        <span style={m ? styles.titleMobile : styles.title}>
+          Workers
+          {version && <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>v{version}</span>}
+        </span>
         <div style={{ display: 'flex', gap: m ? '6px' : '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {!m && onUsage && (
             <button
@@ -448,6 +460,9 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
       ) : !loading && workers.length === 0 ? (
         <div style={styles.emptyContainer}>
           <span style={styles.emptyText}>No workers running</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '12px', textAlign: 'center', maxWidth: '320px' }}>
+            Start a Claude Code session in one of your projects. Each worker runs independently — spawn multiple to work in parallel.
+          </span>
           <button
             style={m ? styles.emptySpawnBtnMobile : styles.emptySpawnBtn}
             onClick={onSpawn}
@@ -520,6 +535,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                     <button
                       style={m ? styles.actionBtnMobile : styles.actionBtn}
                       onClick={() => onTerminal(worker.name)}
+                      title="Open live terminal output for this worker"
                     >
                       Term
                     </button>
@@ -528,6 +544,7 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                     <button
                       style={m ? styles.actionBtnMobile : styles.actionBtn}
                       onClick={() => onLogs(worker.name)}
+                      title="View historical log files from previous sessions"
                     >
                       Logs
                     </button>
@@ -536,7 +553,12 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                     const key = `${worker.name}:${action}`
                     const isActing = acting === key
                     const isDanger = action === 'kill'
-                    const label = { rc: 'Remote', compact: 'Compact', interrupt: 'Interrupt', kill: 'Kill' }[action]
+                    const cfg = {
+                      rc: { label: 'Remote', tooltip: 'Enable remote control — allows sending commands to this session from the dashboard' },
+                      compact: { label: 'Compact', tooltip: 'Compress conversation history to free up context window space' },
+                      interrupt: { label: 'Interrupt', tooltip: 'Send Ctrl+C to cancel the current operation' },
+                      kill: { label: 'Kill', tooltip: 'Terminate this worker session permanently' },
+                    }[action]
 
                     return (
                       <button
@@ -547,8 +569,9 @@ export default function WorkerDashboard({ isMobile, onSpawn, onRefresh, onMonito
                         }}
                         onClick={() => handleAction(worker.name, action)}
                         disabled={isActing}
+                        title={cfg.tooltip}
                       >
-                        {isActing ? '...' : label}
+                        {isActing ? '...' : cfg.label}
                       </button>
                     )
                   })}

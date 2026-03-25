@@ -18,13 +18,12 @@ scan_depth: 3
 # Default: false
 show_self: false
 
-# Merge usage stats from old project directory names into the current name.
-# Claude Code stores sessions under sanitized paths (e.g., -home-user-projectname).
-# When a repo is renamed, old sessions appear as a separate project in usage stats.
-# Map old names → current name to consolidate.
+# Merge usage stats when projects are renamed or sessions ran from subdirectories.
+# Project names are auto-resolved from Claude Code session paths (history.jsonl + cwd).
+# Aliases let you consolidate entries that auto-resolution can't merge on its own.
 # project_aliases:
-#   old-name: current-name
-#   another-old-name: current-name
+#   old-repo-name: current-name
+#   web: my-project          # sessions from my-project/web/ → my-project
 
 # tmux session settings
 tmux_socket: "switchboard"

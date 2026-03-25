@@ -2,6 +2,29 @@
 
 ## 2026-03-25
 
+### New User Experience Polish
+
+**Onboarding & Setup:**
+- `scripts/update.sh` — One-command update (stop, pull, setup, start) preserving all config
+- Setup wizard now auto-configures Claude Code hooks for instant idle detection
+- Platform-aware config defaults — macOS gets GPU monitoring disabled automatically
+- Version display (`v1.0.0`) in the Workers header
+
+**Spawn Dialog:**
+- Empty state guidance when no projects found, with "Check again" button
+- "+ Add a new project" — enter a directory path, creates `CLAUDE.md` template, auto-selects
+- `POST /api/projects/init` endpoint for project initialization
+
+**Worker Dashboard:**
+- Tooltips on all action buttons (Term, Logs, Remote, Compact, Interrupt, Kill)
+- First-spawn toast with guidance on using Term and terminal input
+- Empty state description explaining parallel worker concept
+
+**Project Discovery:**
+- Excluded archive directories (`_Archive`, `_archive`, `archive`, `Archive`) from scan
+- Usage analytics: improved project name resolution via session file `cwd` fallback
+- Case-normalized project names (macOS `Family-Vault` merges with Linux `family-vault`)
+
 ### PWA Support + Cross-Platform Auto-Start (Mar 24)
 
 **Progressive Web App:**

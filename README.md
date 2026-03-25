@@ -2,109 +2,96 @@
 
 Manage AI coding agents across all your projects from one dashboard.
 
-> **Warning:** Switchboard is designed for local/trusted network use. Optional password auth is available via `SWITCHBOARD_PASSWORD` but is not a substitute for proper network security. See [SECURITY.md](SECURITY.md).
+Spawn and monitor multiple Claude Code workers, browse files, track usage and costs, push code — all from a single web UI accessible from any device.
 
-Spawn and manage multiple Claude Code workers from one web UI. Monitor system metrics, track usage analytics with estimated API costs, browse and edit files — all in real-time via WebSocket.
+> **Note:** Designed for local/trusted network use. Optional password auth is available but is not a substitute for proper network security. See [SECURITY.md](SECURITY.md).
 
 ## What It Does
 
-- **Multi-worker management** — Spawn, monitor, and control Claude Code sessions from one interface
-- **Real-time terminals** — Stream worker output via WebSocket with quick command buttons, search, and load-more history
-- **File browser & editor** — Browse project files with syntax highlighting, git status badges, and inline editing
-- **Activity panel** — Git changes, unpushed commits with push button, proposal review (approve/reject)
-- **System monitor** — CPU, memory, GPU, disk, network, configurable services, and hardware health (thermal, SMART, power draw)
-- **Usage analytics** — Token usage tracking with estimated API cost comparison, CSV export
-- **Worker persistence** — Uptime tracking, model/spawn state survives API restarts
-- **Historical logs** — View rotated worker log files from the UI
-- **Browser notifications** — Get notified when workers go idle or are spawned/killed
-- **Setup wizard** — First-run onboarding with pre-filled defaults: password, contributor mode, working style (SOUL.md), infrastructure map (INFRASTRUCTURE.md)
-- **Optional auth** — Password via setup wizard or `SWITCHBOARD_PASSWORD` env var
-- **Terminal search** — Search terminal output with match highlighting and navigation
+- **Multi-worker management** — Spawn, monitor, and control Claude Code sessions across projects
+- **Real-time terminals** — Stream worker output with quick command buttons, search, and history
+- **File browser & editor** — Browse project files with syntax highlighting, git status badges, inline editing
+- **Activity panel** — Git changes, unpushed commits with one-click push, proposal review
+- **System monitor** — CPU, memory, GPU, disk, network, NVMe health, configurable services
+- **Usage analytics** — Token usage tracking with estimated API costs, time-range filtering, CSV export
+- **Setup wizard** — Guided onboarding: password, working style (SOUL.md), infrastructure map
+- **Mobile responsive** — Full functionality on phones and tablets via PWA
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
-- **Dark/light theme** — Toggle with persistence, including terminal colors
-- **Mobile responsive** — Desktop 3-panel layout, mobile bottom nav
-- **PWA installable** — Install as a native app on desktop or mobile
-- **Auto-start** — Optional login auto-start via macOS LaunchAgent or Linux systemd
-
-## How It Works
-
-Switchboard runs on the machine where your Claude Code sessions live. It manages them via tmux and serves a web UI accessible from any browser.
-
-```
-  Browser (any device)
-      │ WebSocket + REST
-      ▼
-  Switchboard server (:5001)
-      │ subprocess
-      ▼
-  tmux → Claude Code workers
-```
 
 ## Requirements
 
 - Python 3.10+
 - Node.js 18+
-- tmux (`apt install tmux` or `brew install tmux`)
+- tmux (`apt install tmux` / `brew install tmux`)
 - Claude CLI (`npm install -g @anthropic-ai/claude-code`)
-- Claude Max subscription (for Claude Code)
+- Claude Max subscription
 
 ## Quick Start
 
 ```bash
 git clone <your-repo-url>/switchboard.git
 cd switchboard
-
-# Install dependencies + build frontend
-./setup.sh
-
-# Start
-./start.sh
+./setup.sh    # Install deps, build frontend, configure hooks
+./start.sh    # Start the server
 ```
 
-Open http://localhost:5001 (or `http://<machine-ip>:5001` from another device).
+Open **http://localhost:5001** (or `http://<your-machine-ip>:5001` from another device).
 
-See [QUICKSTART.md](QUICKSTART.md) for a full walkthrough including first session and example prompts.
+The **Setup Wizard** walks you through initial configuration on first launch — password, working style, infrastructure map. All steps are optional and skippable.
 
-## How Projects Are Discovered
+## Adding Projects
 
-Switchboard auto-discovers projects by scanning its parent directory for directories containing a `CLAUDE.md` file. No manual configuration needed. Override with `project_root` in `config.yaml`.
+Switchboard discovers projects by scanning for directories with a `CLAUDE.md` file. By default it scans its parent directory (so place your projects alongside switchboard).
 
-To add a project: create a `CLAUDE.md` file in its root directory.
+**Three ways to add a project:**
+
+1. **Create a CLAUDE.md manually:**
+   ```bash
+   echo "# My Project" > ~/my-project/CLAUDE.md
+   ```
+
+2. **From the spawn dialog:** Click "+ Add a new project", enter the directory path, and Switchboard creates a `CLAUDE.md` template for you.
+
+3. **Custom directory:** Use the custom fields in the spawn dialog to start a worker in any directory — no `CLAUDE.md` required.
+
+Override the scan root with `project_root` in `config.yaml`. Adjust scan depth with `scan_depth` (default: 3).
 
 ## Configuration
 
-Copy `config.yaml.example` to `config.yaml` to customize:
+`setup.sh` creates `config.yaml` from `config.yaml.example` on first run. Platform defaults are applied automatically (e.g., GPU monitoring disabled on macOS).
 
-- **Server** — port, host
-- **Project discovery** — `show_self` to include Switchboard in project list (default: false)
-- **Models** — Claude models available in spawn dialog
-- **Monitor** — GPU command, tracked services, disk path, SMART device
-- **Pricing** — API cost estimation rates per model
-- **Platform dashboard** — optional integration for system updates
+Key settings:
+
+| Setting | What it does |
+|---------|-------------|
+| `port` | Server port (default: 5001) |
+| `project_root` | Where to scan for projects (default: parent of switchboard/) |
+| `show_self` | Show Switchboard itself in the spawn dialog (default: false) |
+| `models` | `"auto"` to discover from Claude CLI, or explicit list |
+| `monitor.gpu` | GPU monitoring config (auto-disabled on macOS) |
+| `monitor.services` | Track processes by name (Ollama, Postgres, etc.) |
+| `pricing` | Per-model API rates for cost estimation |
+| `project_aliases` | Merge renamed projects in usage stats |
 
 See `config.yaml.example` for all options with inline documentation.
 
 ## Authentication
 
-On first run, the **Setup Wizard** lets you set a dashboard password (stored as a SHA-256 hash in `state/auth.json`). This is optional and can be skipped.
-
-You can also set a password via environment variable (takes precedence over `state/auth.json`):
+Set a password during the Setup Wizard, or via environment variable:
 
 ```bash
 SWITCHBOARD_PASSWORD=your-password ./start.sh
 ```
 
-Both methods protect all API endpoints and WebSocket connections with session cookies. A persistent secret key is auto-generated in `state/secret.key` so sessions survive API restarts.
+The env var takes precedence. Both methods protect all endpoints with session cookies.
 
-## Development
-
-For auto-reload on code changes during development:
+## Updating
 
 ```bash
-DEV=1 python3 api/server.py
+bash scripts/update.sh
 ```
 
-This enables Flask's file watcher — the server restarts automatically when you edit Python files. Frontend changes still require `cd web && npm run build`.
+Stops the server, pulls latest code, reinstalls dependencies, rebuilds the frontend, and restarts. Your password, config, SOUL.md, and INFRASTRUCTURE.md are all preserved.
 
 ## Stopping
 
@@ -112,9 +99,17 @@ This enables Flask's file watcher — the server restarts automatically when you
 ./stop.sh
 ```
 
-To fully kill the tmux session:
+Workers continue running in tmux after the web UI stops. To kill the tmux session entirely:
+
 ```bash
 tmux -L switchboard kill-session -t switchboard
+```
+
+## Development
+
+```bash
+DEV=1 python3 api/server.py   # Auto-reload on Python changes
+cd web && npm run build        # Rebuild frontend after JS changes
 ```
 
 ## Project Structure
@@ -122,26 +117,29 @@ tmux -L switchboard kill-session -t switchboard
 ```
 switchboard/
 ├── api/              # Flask-SocketIO backend
-│   ├── server.py     # API + WebSocket endpoints
-│   └── tmux_manager.py
+│   ├── server.py     # HTTP + WebSocket endpoints
+│   ├── tmux_manager.py
+│   ├── project_sync.py
+│   └── system_monitor.py
 ├── web/              # React frontend (Vite)
 │   └── src/
-├── scripts/          # CLI helper, systemd, usage compute
-├── state/            # Runtime state (usage archive)
+├── scripts/          # setup, update, hooks, autostart, usage compute
+├── state/            # Runtime state (auth, workers, usage archive)
 ├── docs/             # Architecture docs
-├── contrib/          # Optional integrations (Telegram bot)
-├── setup.sh          # Install dependencies
-├── start.sh          # Launch Switchboard
-└── stop.sh           # Stop Switchboard
+├── config.yaml.example
+├── setup.sh          # Install dependencies + build
+├── start.sh          # Launch server
+└── stop.sh           # Stop server
 ```
 
 ## Documentation
 
-- [QUICKSTART.md](QUICKSTART.md) — Setup checklist, first session, usage patterns
-- [docs/SETUP.md](docs/SETUP.md) — Detailed setup for Linux/macOS
+- [QUICKSTART.md](QUICKSTART.md) — First session walkthrough, keyboard shortcuts, tips
+- [docs/SETUP.md](docs/SETUP.md) — Detailed setup for Linux and macOS
 - [docs/architecture.md](docs/architecture.md) — Technical design
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Development guide
 - [SECURITY.md](SECURITY.md) — Security model
+- [CHANGELOG.md](CHANGELOG.md) — Release history
 
 ## License
 

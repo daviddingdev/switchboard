@@ -137,31 +137,65 @@ def build_session_project_map():
 
 
 def build_dir_name_map():
-    """Build sanitized_dir_name -> real project path from history.jsonl.
+    """Build sanitized_dir_name -> real project path.
 
     Claude Code stores sessions under sanitized paths like -home-user-project.
-    history.jsonl has the real paths. This lets us recover the actual project
-    name (os.path.basename) instead of guessing from the sanitized form.
+    We recover real paths from two sources:
+    1. history.jsonl — maps session IDs to project paths
+    2. Session file cwd — first JSONL entry often contains the real working directory
+
+    This lets us use os.path.basename for clean project names regardless of
+    the user's directory structure or platform.
     """
     mapping = {}
-    if not HISTORY_FILE.exists():
-        return mapping
-    try:
-        with open(HISTORY_FILE) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    project = entry.get('project', '')
-                    if project:
-                        sanitized = project.replace('/', '-')
-                        mapping[sanitized] = project
-                except json.JSONDecodeError:
-                    continue
-    except Exception:
-        pass
+
+    # Source 1: history.jsonl project paths
+    if HISTORY_FILE.exists():
+        try:
+            with open(HISTORY_FILE) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        project = entry.get('project', '')
+                        if project:
+                            sanitized = project.replace('/', '-')
+                            mapping[sanitized] = project
+                    except json.JSONDecodeError:
+                        continue
+        except Exception:
+            pass
+
+    # Source 2: cwd from first session file in each project dir
+    if PROJECTS_DIR.exists():
+        for proj_dir in PROJECTS_DIR.iterdir():
+            if not proj_dir.is_dir() or proj_dir.name in mapping:
+                continue
+            # Find any JSONL file to read cwd from
+            jsonl_file = next(proj_dir.glob("*.jsonl"), None)
+            if not jsonl_file:
+                jsonl_file = next(proj_dir.glob("*/subagents/*.jsonl"), None)
+            if not jsonl_file or not jsonl_file.is_file():
+                continue
+            try:
+                with open(jsonl_file) as f:
+                    for _, raw_line in zip(range(10), f):
+                        raw_line = raw_line.strip()
+                        if not raw_line:
+                            continue
+                        try:
+                            entry = json.loads(raw_line)
+                            cwd = entry.get('cwd', '')
+                            if cwd:
+                                mapping[proj_dir.name] = cwd
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            except Exception:
+                continue
+
     return mapping
 
 
@@ -180,24 +214,19 @@ def load_project_aliases():
 def dir_name_to_project(dir_name, aliases=None, dir_name_map=None):
     """Convert sanitized dir name to readable project name.
 
-    Uses dir_name_map (from history.jsonl) to recover the real path and
-    extract os.path.basename. Falls back to heuristic if no mapping exists.
-    Applies aliases last to merge renamed projects.
+    Uses dir_name_map (from history.jsonl + session cwd) to recover the real
+    path and extract os.path.basename. Falls back to last path segment if no
+    mapping exists. Applies aliases to merge renamed projects.
     """
-    # Try exact match from history.jsonl mapping
+    # Try real path from mapping (history.jsonl or session cwd)
     if dir_name_map and dir_name in dir_name_map:
         real_path = dir_name_map[dir_name]
         name = os.path.basename(real_path.rstrip('/')) or real_path
     else:
-        # Fallback heuristic: strip known home prefixes
-        # Handles -home-user-project and -Users-user-project
-        parts = dir_name.lstrip('-').split('-')
-        if len(parts) >= 3 and parts[0] in ('home', 'Users'):
-            name = '-'.join(parts[2:])
-        elif len(parts) >= 2:
-            name = '-'.join(parts[1:])
-        else:
-            name = dir_name
+        # Fallback: use dir name as-is (stripped of leading dash)
+        name = dir_name.lstrip('-') or dir_name
+    # Normalize case so macOS Family-Vault and Linux family-vault merge
+    name = name.lower()
     if aliases and name in aliases:
         return aliases[name]
     return name

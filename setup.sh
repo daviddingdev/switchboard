@@ -62,7 +62,25 @@ mkdir -p logs/workers
 if [ ! -f config.yaml ]; then
   echo "Creating default config.yaml..."
   cp config.yaml.example config.yaml
+
+  # Platform-specific adjustments
+  if [ "$(uname)" = "Darwin" ]; then
+    python3 -c "
+import yaml
+with open('config.yaml') as f:
+    cfg = yaml.safe_load(f)
+cfg.setdefault('monitor', {}).setdefault('gpu', {})['enabled'] = False
+cfg['monitor']['services'] = []
+with open('config.yaml', 'w') as f:
+    yaml.dump(cfg, f, default_flow_style=False)
+" 2>/dev/null || true
+    echo "  (adjusted defaults for macOS — GPU monitoring disabled)"
+  fi
 fi
+
+# Configure Claude Code hooks for instant idle detection
+echo "Setting up Claude Code hooks..."
+bash scripts/setup-hooks.sh 2>/dev/null || echo "  (skipped — hooks can be set up later with scripts/setup-hooks.sh)"
 
 echo ""
 echo "=== Switchboard setup complete ==="

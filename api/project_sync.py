@@ -17,7 +17,8 @@ _ctx = None
 CLAUDE_PROJECTS_DIR = os.path.expanduser('~/.claude/projects')
 
 # Directories to exclude from file listings
-EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', '.next', '.cache'}
+EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', '.next', '.cache',
+                '_Archive', '_archive', 'archive', 'Archive'}
 EXCLUDE_FILES = {'.DS_Store', 'Thumbs.db'}
 MAX_DEPTH = 4
 
@@ -504,6 +505,44 @@ def list_projects():
         'projects': load_projects(),
         'show_self': _ctx.config.get('show_self', False),
     })
+
+
+@bp.route('/api/projects/init', methods=['POST'])
+def init_project():
+    """Create a CLAUDE.md in a directory to register it as a project."""
+    data = request.json or {}
+    directory = data.get('directory', '').strip()
+
+    if not directory:
+        return {"error": "directory is required"}, 400
+
+    directory = os.path.expanduser(directory)
+
+    # Security: must be within project_root
+    root_dir = os.path.expanduser(_ctx.config.get('project_root', str(Path(__file__).parent.parent.parent)))
+    real_dir = os.path.realpath(directory)
+    if not real_dir.startswith(os.path.realpath(root_dir)):
+        return {"error": "Directory must be within project root"}, 403
+
+    if not os.path.isdir(directory):
+        return {"error": "Directory does not exist"}, 404
+
+    claude_md = os.path.join(directory, 'CLAUDE.md')
+    if os.path.exists(claude_md):
+        invalidate_projects_cache()
+        return jsonify({"status": "exists", "directory": directory, "name": os.path.basename(directory)})
+
+    proj_name = os.path.basename(directory)
+    template = f"# {proj_name}\n\n## Overview\n\n(Describe your project here)\n\n## Key Files\n\n(List important files and their purposes)\n\n## Development\n\n(How to run, test, and build this project)\n"
+
+    try:
+        with open(claude_md, 'w', encoding='utf-8') as f:
+            f.write(template)
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+    invalidate_projects_cache()
+    return jsonify({"status": "created", "directory": directory, "name": proj_name})
 
 
 @bp.route('/api/home')

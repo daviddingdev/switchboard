@@ -139,6 +139,25 @@ export async function fetchProjects() {
 
 // Projects, Files, Changes, Activity
 
+export async function initProject(directory) {
+  const res = await apiFetch(`${API_BASE}/projects/init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ directory }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to initialize project');
+  }
+  return res.json();
+}
+
+export async function fetchHealth() {
+  const res = await apiFetch(`${API_BASE}/health`);
+  if (!res.ok) throw new Error(`Failed to fetch health: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchHome() {
   const res = await apiFetch(`${API_BASE}/home`);
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);

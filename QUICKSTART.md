@@ -7,8 +7,7 @@
 - [ ] tmux installed (`tmux -V`)
 - [ ] Claude CLI installed (`claude --version`)
 - [ ] Claude Max subscription active
-- [ ] Run `./setup.sh` (installs deps, builds frontend)
-- [ ] Run `./scripts/setup-hooks.sh` (enables instant idle detection)
+- [ ] Run `./setup.sh` (installs deps, builds frontend, configures hooks)
 - [ ] Run `./start.sh` (starts server)
 - [ ] Open http://localhost:5001 in browser
 - [ ] At least one project has a `CLAUDE.md` file

@@ -29,6 +29,8 @@ import idle_detector
 import system_monitor
 import project_sync
 
+SWITCHBOARD_VERSION = "1.0.0"
+
 PROJECT_ROOT = Path(__file__).parent.parent
 STATE_DIR = PROJECT_ROOT / 'state'
 PROPOSALS_DIR = STATE_DIR / 'proposals'
@@ -442,7 +444,7 @@ def not_found(e):
 @app.route('/api/health')
 def health():
     """Health check endpoint."""
-    return {"status": "ok", "session": tmux.ensure_session()}
+    return {"status": "ok", "session": tmux.ensure_session(), "version": SWITCHBOARD_VERSION}
 
 
 @app.route('/api/models')

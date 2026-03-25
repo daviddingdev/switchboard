@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { spawnProcess, fetchProjects, fetchModels } from '../api'
+import { spawnProcess, fetchProjects, fetchModels, initProject } from '../api'
 
 const styles = {
   overlay: {
@@ -154,8 +154,11 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
   const [selectedProject, setSelectedProject] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showAddProject, setShowAddProject] = useState(false)
+  const [newProjectDir, setNewProjectDir] = useState('')
+  const [addingProject, setAddingProject] = useState(false)
 
-  useEffect(() => {
+  const loadProjects = () => {
     fetchProjects()
       .then(data => {
         const all = data.projects || data
@@ -163,6 +166,10 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
         setProjects(showSelf ? all : all.filter(p => !p.is_self))
       })
       .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadProjects()
     fetchModels()
       .then(data => {
         const models = data.models || []
@@ -171,6 +178,26 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
       })
       .catch(() => {})
   }, [])
+
+  const handleAddProject = async () => {
+    if (!newProjectDir.trim()) return
+    setAddingProject(true)
+    setError(null)
+    try {
+      const result = await initProject(newProjectDir.trim())
+      loadProjects()
+      setShowAddProject(false)
+      setNewProjectDir('')
+      // Auto-select the new project
+      setSelectedProject(result.name)
+      setName(result.name)
+      setDirectory(result.directory)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAddingProject(false)
+    }
+  }
 
   const handleProjectClick = (project) => {
     setSelectedProject(project.name)
@@ -217,24 +244,72 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
 
         <div style={styles.section}>
           <div style={styles.sectionLabel}>Projects</div>
-          <div style={{
-            ...styles.projectGrid,
-            ...(isMobile ? { gridTemplateColumns: '1fr' } : {}),
-          }}>
-            {projects.map(project => (
+          {projects.length === 0 ? (
+            <div style={{ padding: '16px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '8px' }}>No projects found</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '12px' }}>
+                Switchboard discovers projects by looking for folders with a <code>CLAUDE.md</code> file in your project root.
+              </div>
               <button
-                key={project.name}
                 type="button"
-                style={{
-                  ...styles.projectButton,
-                  ...(selectedProject === project.name ? styles.projectButtonSelected : {}),
-                }}
-                onClick={() => handleProjectClick(project)}
+                style={{ ...styles.cancelButton, fontSize: '12px', padding: '6px 12px' }}
+                onClick={loadProjects}
               >
-                <div style={styles.projectName}>{project.name}</div>
-                <div style={styles.projectDir}>{project.relative_dir || project.directory}</div>
+                Check again
               </button>
-            ))}
+            </div>
+          ) : (
+            <div style={{
+              ...styles.projectGrid,
+              ...(isMobile ? { gridTemplateColumns: '1fr' } : {}),
+            }}>
+              {projects.map(project => (
+                <button
+                  key={project.name}
+                  type="button"
+                  style={{
+                    ...styles.projectButton,
+                    ...(selectedProject === project.name ? styles.projectButtonSelected : {}),
+                  }}
+                  onClick={() => handleProjectClick(project)}
+                >
+                  <div style={styles.projectName}>{project.name}</div>
+                  <div style={styles.projectDir}>{project.relative_dir || project.directory}</div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Add a new project */}
+          <div style={{ marginTop: '8px' }}>
+            {!showAddProject ? (
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', padding: '4px 0' }}
+                onClick={() => setShowAddProject(true)}
+              >
+                + Add a new project
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  style={{ ...styles.input, flex: 1, fontSize: '12px', padding: '6px 10px' }}
+                  type="text"
+                  value={newProjectDir}
+                  onChange={(e) => setNewProjectDir(e.target.value)}
+                  placeholder="~/path/to/project"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
+                />
+                <button
+                  type="button"
+                  style={{ ...styles.spawnButton, fontSize: '12px', padding: '6px 12px', opacity: addingProject || !newProjectDir.trim() ? 0.5 : 1 }}
+                  disabled={addingProject || !newProjectDir.trim()}
+                  onClick={handleAddProject}
+                >
+                  {addingProject ? '...' : 'Create CLAUDE.md'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

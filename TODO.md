@@ -78,6 +78,21 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ## Completed
 
+### New User Experience Polish (Mar 25, 2026)
+
+- [x] `scripts/update.sh` one-command update script
+- [x] Hooks auto-configured during `setup.sh`
+- [x] Empty spawn dialog guidance with "Check again" button
+- [x] "Add a new project" from spawn dialog (creates CLAUDE.md template)
+- [x] Worker button tooltips (Term, Logs, Remote, Compact, Interrupt, Kill)
+- [x] Platform-aware config defaults (macOS GPU disabled)
+- [x] Exclude archive directories from project discovery
+- [x] Version display in Workers header (v1.0.0)
+- [x] First-spawn toast with guidance
+- [x] Empty state description in WorkerDashboard
+- [x] Usage project name resolution via session cwd + case normalization
+- [x] README rewritten for new user clarity
+
 ### Usage Analytics + Process Handling (Mar 25, 2026)
 
 - [x] By Project and By Model charts reflect selected time range (not always all-time)
