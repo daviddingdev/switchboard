@@ -10,6 +10,7 @@ Cron: 0 2 * * 0 cd ~/switchboard && python3 scripts/compute-usage.py
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -135,6 +136,35 @@ def build_session_project_map():
     return mapping
 
 
+def build_dir_name_map():
+    """Build sanitized_dir_name -> real project path from history.jsonl.
+
+    Claude Code stores sessions under sanitized paths like -home-user-project.
+    history.jsonl has the real paths. This lets us recover the actual project
+    name (os.path.basename) instead of guessing from the sanitized form.
+    """
+    mapping = {}
+    if not HISTORY_FILE.exists():
+        return mapping
+    try:
+        with open(HISTORY_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    project = entry.get('project', '')
+                    if project:
+                        sanitized = project.replace('/', '-')
+                        mapping[sanitized] = project
+                except json.JSONDecodeError:
+                    continue
+    except Exception:
+        pass
+    return mapping
+
+
 def load_project_aliases():
     """Load project name aliases from config.yaml."""
     if CONFIG_FILE.exists():
@@ -147,17 +177,27 @@ def load_project_aliases():
     return {}
 
 
-def dir_name_to_project(dir_name, aliases=None):
-    """Convert project dir hash to readable name, applying aliases.
-    e.g., '-home-username-myproject' -> 'myproject'
-    Aliases map old names to current name (e.g., {'helm': 'switchboard'}).
+def dir_name_to_project(dir_name, aliases=None, dir_name_map=None):
+    """Convert sanitized dir name to readable project name.
+
+    Uses dir_name_map (from history.jsonl) to recover the real path and
+    extract os.path.basename. Falls back to heuristic if no mapping exists.
+    Applies aliases last to merge renamed projects.
     """
-    parts = dir_name.lstrip('-').split('-')
-    # Skip 'home' and username, take the rest
-    if len(parts) >= 3:
-        name = '-'.join(parts[2:])
+    # Try exact match from history.jsonl mapping
+    if dir_name_map and dir_name in dir_name_map:
+        real_path = dir_name_map[dir_name]
+        name = os.path.basename(real_path.rstrip('/')) or real_path
     else:
-        name = dir_name
+        # Fallback heuristic: strip known home prefixes
+        # Handles -home-user-project and -Users-user-project
+        parts = dir_name.lstrip('-').split('-')
+        if len(parts) >= 3 and parts[0] in ('home', 'Users'):
+            name = '-'.join(parts[2:])
+        elif len(parts) >= 2:
+            name = '-'.join(parts[1:])
+        else:
+            name = dir_name
     if aliases and name in aliases:
         return aliases[name]
     return name
@@ -364,6 +404,7 @@ def compute_all():
 
     pricing = load_pricing()
     aliases = load_project_aliases()
+    dir_name_map = build_dir_name_map()
 
     session_project_map = build_session_project_map()
     print(f"  Found {len(session_project_map)} sessions in history")
@@ -391,7 +432,8 @@ def compute_all():
         'tokens': {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}
     })
     project_model_agg = defaultdict(lambda: defaultdict(lambda: {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}))
-    daily_model_agg = defaultdict(lambda: defaultdict(lambda: {'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}))
+    daily_model_agg = defaultdict(lambda: defaultdict(lambda: {'messages': 0, 'input': 0, 'output': 0, 'cache_read': 0, 'cache_creation': 0}))
+    daily_project_agg = defaultdict(lambda: defaultdict(lambda: {'sessions': 0, 'messages': 0, 'tool_calls': 0}))
     hourly_agg = defaultdict(int)
     unpriced_models = set()
     all_dates = set()
@@ -404,7 +446,7 @@ def compute_all():
     print(f"  Scanning {len(project_dirs)} project directories...")
 
     for proj_dir in sorted(project_dirs):
-        proj_name = dir_name_to_project(proj_dir.name, aliases)
+        proj_name = dir_name_to_project(proj_dir.name, aliases, dir_name_map)
         # Include both direct sessions and subagent sessions
         jsonl_files = list(proj_dir.glob("*.jsonl"))
         subagent_files = list(proj_dir.glob("*/subagents/*.jsonl"))
@@ -470,8 +512,13 @@ def compute_all():
                 daily_agg[date_str]['tool_calls'] += day_data.get('tool_calls', 0)
                 for k in ['input', 'output', 'cache_read', 'cache_creation']:
                     daily_agg[date_str]['tokens'][k] += day_data.get(k, 0)
+                # Per-project per-day
+                daily_project_agg[date_str][proj_name]['sessions'] += sessions_count
+                daily_project_agg[date_str][proj_name]['messages'] += day_data.get('messages', 0)
+                daily_project_agg[date_str][proj_name]['tool_calls'] += day_data.get('tool_calls', 0)
                 # Accumulate per-model-per-day tokens for cost
                 for model, m_tokens in day_data.get('by_model', {}).items():
+                    daily_model_agg[date_str][model]['messages'] += day_data.get('messages', 0)
                     for k in ['input', 'output', 'cache_read', 'cache_creation']:
                         daily_model_agg[date_str][model][k] += m_tokens.get(k, 0)
 
@@ -649,6 +696,28 @@ def compute_all():
 
     duration = time.time() - start_time
 
+    # Build daily_by_project: {date: {project: {messages, sessions}}}
+    daily_by_project = {}
+    for date_str in sorted(daily_project_agg.keys()):
+        daily_by_project[date_str] = {
+            proj: {'messages': data['messages'], 'sessions': data['sessions']}
+            for proj, data in daily_project_agg[date_str].items()
+        }
+
+    # Build daily_by_model: {date: {model: {messages, tokens}}}
+    daily_by_model = {}
+    for date_str in sorted(daily_model_agg.keys()):
+        daily_by_model[date_str] = {
+            model: {
+                'messages': data['messages'],
+                'input': data['input'],
+                'output': data['output'],
+                'cache_read': data['cache_read'],
+                'cache_creation': data['cache_creation'],
+            }
+            for model, data in daily_model_agg[date_str].items()
+        }
+
     result = {
         'computed_at': datetime.now(timezone.utc).isoformat(),
         'compute_duration_secs': round(duration, 1),
@@ -658,6 +727,8 @@ def compute_all():
         'by_project': project_list,
         'by_model': model_dict,
         'by_hour': hourly_dict,
+        'daily_by_project': daily_by_project,
+        'daily_by_model': daily_by_model,
         'comparison': comparison,
         'snapshots': snapshots,
         'pricing': {

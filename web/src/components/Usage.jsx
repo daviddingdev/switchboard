@@ -287,6 +287,77 @@ function aggregateToWeekly(dailyData) {
   return Object.values(weeks).sort((a, b) => a.date.localeCompare(b.date))
 }
 
+function aggregateByProjectForRange(dailyByProject, rangeKey) {
+  if (!dailyByProject) return []
+  const dates = Object.keys(dailyByProject)
+  let filteredDates = dates
+  if (rangeKey !== 'all') {
+    const range = TIME_RANGES.find(r => r.key === rangeKey)
+    if (range && range.days) {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - range.days)
+      const cutoffStr = cutoff.toISOString().slice(0, 10)
+      filteredDates = dates.filter(d => d >= cutoffStr)
+    }
+  }
+  const agg = {}
+  for (const date of filteredDates) {
+    const projects = dailyByProject[date] || {}
+    for (const [proj, data] of Object.entries(projects)) {
+      if (!agg[proj]) agg[proj] = { name: proj, messages: 0, sessions: 0 }
+      agg[proj].messages += data.messages || 0
+      agg[proj].sessions += data.sessions || 0
+    }
+  }
+  return Object.values(agg).sort((a, b) => b.messages - a.messages)
+}
+
+function aggregateByModelForRange(dailyByModel, rangeKey, pricing) {
+  if (!dailyByModel) return {}
+  const dates = Object.keys(dailyByModel)
+  let filteredDates = dates
+  if (rangeKey !== 'all') {
+    const range = TIME_RANGES.find(r => r.key === rangeKey)
+    if (range && range.days) {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - range.days)
+      const cutoffStr = cutoff.toISOString().slice(0, 10)
+      filteredDates = dates.filter(d => d >= cutoffStr)
+    }
+  }
+  const agg = {}
+  for (const date of filteredDates) {
+    const models = dailyByModel[date] || {}
+    for (const [model, data] of Object.entries(models)) {
+      if (!agg[model]) agg[model] = { messages: 0, tokens: { input: 0, output: 0, cache_read: 0, cache_creation: 0 }, cost: 0 }
+      agg[model].messages += data.messages || 0
+      agg[model].tokens.input += data.input || 0
+      agg[model].tokens.output += data.output || 0
+      agg[model].tokens.cache_read += data.cache_read || 0
+      agg[model].tokens.cache_creation += data.cache_creation || 0
+    }
+  }
+  // Calculate cost per model if pricing available
+  if (pricing?.models) {
+    for (const [model, data] of Object.entries(agg)) {
+      let mp = null
+      for (const key of Object.keys(pricing.models).sort((a, b) => b.length - a.length)) {
+        if (model.startsWith(key)) { mp = pricing.models[key]; break }
+      }
+      if (mp) {
+        const cache = pricing.cache || {}
+        data.cost = (
+          data.tokens.input / 1e6 * mp.input +
+          data.tokens.output / 1e6 * mp.output +
+          data.tokens.cache_read / 1e6 * mp.input * (1 - (cache.read_discount || 0)) +
+          data.tokens.cache_creation / 1e6 * mp.input * (1 + (cache.creation_premium || 0))
+        )
+      }
+    }
+  }
+  return agg
+}
+
 function MetricRow({ name, value, isMobile }) {
   return (
     <div style={styles.metric}>
@@ -296,16 +367,21 @@ function MetricRow({ name, value, isMobile }) {
   )
 }
 
-function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems }) {
+function BarChart({ data, labelKey, valueKey, color = 'var(--accent)', maxItems, labelWidth }) {
   const items = maxItems ? data.slice(-maxItems) : data
   const max = Math.max(...items.map(d => d[valueKey] || 0), 1)
+  // Auto-size label width from longest label if not specified
+  const autoWidth = labelWidth || Math.min(180, Math.max(70, ...items.map(d => {
+    const label = String(d[labelKey] || '')
+    return label.length * 6.5 + 8  // rough char width estimate
+  })))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
       {items.map((d, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span title={typeof d[labelKey] === 'string' ? d[labelKey] : undefined} style={{
             fontSize: '11px', color: 'var(--text-secondary)',
-            width: '100px', flexShrink: 0, textAlign: 'right',
+            width: `${autoWidth}px`, flexShrink: 0, textAlign: 'right',
             fontVariantNumeric: 'tabular-nums',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -645,7 +721,7 @@ export default function Usage({ isMobile }) {
     )
   }
 
-  const { overview: allTimeOverview, daily, by_project, by_model, by_hour, comparison } = data
+  const { overview: allTimeOverview, daily, by_project, by_model, by_hour, comparison, daily_by_project, daily_by_model } = data
   const rangeConfig = TIME_RANGES.find(r => r.key === timeRange)
 
   // Filter and aggregate based on selected time range
@@ -677,6 +753,7 @@ export default function Usage({ isMobile }) {
   // Always compute from daily data for consistency across ranges
   // (backend overview counts files; daily sums count session-days which can differ)
   const rangeOverview = computeOverviewFromDaily(filteredDaily)
+  const allTimeDailyOverview = timeRange !== 'all' ? computeOverviewFromDaily(daily || []) : rangeOverview
 
   // Adaptive chart granularity (fill date gaps for daily views)
   let chartData, chartLabel
@@ -692,6 +769,14 @@ export default function Usage({ isMobile }) {
   }
 
   const chartColor = (timeRange === '7d' || timeRange === '30d') ? 'var(--accent)' : '#8b5cf6'
+
+  // Filter by-project and by-model for selected time range
+  const rangeProjects = daily_by_project
+    ? aggregateByProjectForRange(daily_by_project, timeRange)
+    : by_project || []
+  const rangeModels = daily_by_model
+    ? aggregateByModelForRange(daily_by_model, timeRange, data.pricing)
+    : by_model || {}
 
   return (
     <div style={m ? styles.containerMobile : styles.container}>
@@ -766,11 +851,11 @@ export default function Usage({ isMobile }) {
         {timeRange !== 'all' && (
           <div style={styles.allTimeSummary}>
             <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>All Time</span>
-            <span>{formatNum(allTimeOverview.total_sessions)} sessions</span>
-            <span>{formatNum(allTimeOverview.total_messages)} messages</span>
-            <span>{formatNum(allTimeOverview.total_tokens?.output)} output tokens</span>
-            <span>{allTimeOverview.days_active} days</span>
-            <span style={{ color: '#f59e0b' }}>{formatCost(allTimeOverview.total_cost)} est. cost</span>
+            <span>{formatNum(allTimeDailyOverview.total_sessions)} sessions</span>
+            <span>{formatNum(allTimeDailyOverview.total_messages)} messages</span>
+            <span>{formatNum(allTimeDailyOverview.total_tokens?.output)} output tokens</span>
+            <span>{allTimeDailyOverview.days_active} days</span>
+            <span style={{ color: '#f59e0b' }}>{formatCost(allTimeDailyOverview.total_cost)} est. cost</span>
           </div>
         )}
 
@@ -797,17 +882,17 @@ export default function Usage({ isMobile }) {
 
         {/* By project and By model side by side */}
         <div style={m ? styles.gridMobile : { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          {by_project && by_project.length > 0 && (
+          {rangeProjects.length > 0 && (
             <div style={styles.card}>
-              <div style={styles.cardTitle}>By Project{timeRange !== 'all' ? ' (All Time)' : ''}</div>
-              <BarChart data={by_project} labelKey="name" valueKey="messages" color="var(--success)" maxItems={10} />
+              <div style={styles.cardTitle}>By Project</div>
+              <BarChart data={rangeProjects} labelKey="name" valueKey="messages" color="var(--success)" maxItems={10} />
             </div>
           )}
 
-          {by_model && Object.keys(by_model).length > 0 && (
+          {Object.keys(rangeModels).length > 0 && (
             <div style={styles.card}>
-              <div style={styles.cardTitle}>By Model{timeRange !== 'all' ? ' (All Time)' : ''}</div>
-              {Object.entries(by_model).map(([model, info]) => {
+              <div style={styles.cardTitle}>By Model</div>
+              {Object.entries(rangeModels).map(([model, info]) => {
                 const shortModel = model.replace('claude-', '').replace(/-\d{8}$/, '')
                 return (
                   <div key={model} style={{ marginBottom: '8px' }}>
@@ -828,7 +913,7 @@ export default function Usage({ isMobile }) {
         {/* Hourly heatmap */}
         {by_hour && (
           <div style={styles.cardWide}>
-            <div style={styles.cardTitle}>Activity by Hour (Local Time){timeRange !== 'all' ? ' — All Time' : ''}</div>
+            <div style={styles.cardTitle}>Activity by Hour (Local Time, All Time)</div>
             <HourHeatmap hourCounts={by_hour} />
           </div>
         )}
