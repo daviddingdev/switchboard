@@ -78,6 +78,17 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ## Completed
 
+### Usage Analytics + Process Handling (Mar 25, 2026)
+
+- [x] By Project and By Model charts reflect selected time range (not always all-time)
+- [x] Backend emits `daily_by_project` and `daily_by_model` for frontend filtering
+- [x] Project name resolution via `history.jsonl` real paths (handles cross-platform)
+- [x] `project_aliases` config merges usage from renamed repos
+- [x] All-time summary bar consistent with All filter (fixes cost mismatch)
+- [x] BarChart label auto-sizing (capped 180px) prevents name truncation
+- [x] `stop.sh` kills orphan processes still holding the port
+- [x] `start.sh` clears stale PID files, reclaims port from orphans
+
 ### Setup Wizard v2 + Config + SpawnDialog (Mar 25, 2026)
 
 - [x] 4-step onboarding wizard: password, SOUL.md, INFRASTRUCTURE.md, launch

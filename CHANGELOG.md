@@ -62,6 +62,18 @@ New users see a 4-step onboarding wizard before the main UI:
 
 `setup.sh` now resets `web/package-lock.json` after `npm install` to prevent platform-specific changes from showing as dirty git status.
 
+### Usage Analytics Improvements
+
+- **Time-range filtering for all charts:** By Project and By Model charts now reflect the selected time range (7d, 30d, etc.) instead of always showing all-time data. Backend emits `daily_by_project` and `daily_by_model` breakdowns; frontend aggregates for the selected range.
+- **Project name resolution:** `compute-usage.py` reads `history.jsonl` to recover real project paths from Claude's sanitized directory names. Handles cross-platform paths (macOS `/Users/...` and Linux `/home/...`). Falls back to improved heuristic when history is unavailable.
+- **Project aliases:** New `project_aliases` config option merges usage from renamed repos (e.g., `helm → switchboard`). Also handles cross-machine directory names.
+- **Consistent cost display:** All-time summary bar now uses the same data source as the All filter, fixing a mismatch where archived MAX-merge data could diverge from per-model aggregates.
+- **Auto-sizing chart labels:** BarChart label column auto-sizes based on longest label text (capped at 180px), preventing project name truncation.
+
+### Orphan Process Handling
+
+`stop.sh` now kills any process still holding the port after stopping the tracked PID. `start.sh` clears stale PID files and reclaims the port from orphan processes before starting.
+
 ## 2026-03-20
 
 ### Refactored server.py into Modules
