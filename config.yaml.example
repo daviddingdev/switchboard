@@ -12,10 +12,19 @@ host: "0.0.0.0"
 # project_root: "~/projects"
 scan_depth: 3
 
-# Whether to include Switchboard itself in project discovery.
+# Whether to show Switchboard in the spawn dialog project list.
+# Switchboard always appears in the file tree and activity panel.
 # Set to true if you develop Switchboard itself.
-# Default: false (Switchboard hidden from project list and activity)
+# Default: false
 show_self: false
+
+# Merge usage stats from old project directory names into the current name.
+# Claude Code stores sessions under sanitized paths (e.g., -home-user-projectname).
+# When a repo is renamed, old sessions appear as a separate project in usage stats.
+# Map old names → current name to consolidate.
+# project_aliases:
+#   old-name: current-name
+#   another-old-name: current-name
 
 # tmux session settings
 tmux_socket: "switchboard"

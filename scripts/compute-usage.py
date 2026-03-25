@@ -135,15 +135,32 @@ def build_session_project_map():
     return mapping
 
 
-def dir_name_to_project(dir_name):
-    """Convert project dir hash to readable name.
+def load_project_aliases():
+    """Load project name aliases from config.yaml."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = yaml.safe_load(f) or {}
+            return cfg.get('project_aliases', {}) or {}
+        except Exception:
+            pass
+    return {}
+
+
+def dir_name_to_project(dir_name, aliases=None):
+    """Convert project dir hash to readable name, applying aliases.
     e.g., '-home-username-myproject' -> 'myproject'
+    Aliases map old names to current name (e.g., {'helm': 'switchboard'}).
     """
     parts = dir_name.lstrip('-').split('-')
     # Skip 'home' and username, take the rest
     if len(parts) >= 3:
-        return '-'.join(parts[2:])
-    return dir_name
+        name = '-'.join(parts[2:])
+    else:
+        name = dir_name
+    if aliases and name in aliases:
+        return aliases[name]
+    return name
 
 
 def extract_tokens_chunked(filepath):
@@ -346,6 +363,7 @@ def compute_all():
     print("Computing usage stats...")
 
     pricing = load_pricing()
+    aliases = load_project_aliases()
 
     session_project_map = build_session_project_map()
     print(f"  Found {len(session_project_map)} sessions in history")
@@ -386,7 +404,7 @@ def compute_all():
     print(f"  Scanning {len(project_dirs)} project directories...")
 
     for proj_dir in sorted(project_dirs):
-        proj_name = dir_name_to_project(proj_dir.name)
+        proj_name = dir_name_to_project(proj_dir.name, aliases)
         # Include both direct sessions and subagent sessions
         jsonl_files = list(proj_dir.glob("*.jsonl"))
         subagent_files = list(proj_dir.glob("*/subagents/*.jsonl"))
