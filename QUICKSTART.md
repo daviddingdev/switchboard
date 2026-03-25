@@ -19,8 +19,8 @@ On first launch, Switchboard shows a guided setup wizard:
 
 1. **Password + Contributor** — Optionally set a dashboard password (skippable if you're on a private network). Contributor checkbox includes Switchboard in the project list.
 2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code tips. Continue saves, Skip bypasses file creation.
-3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template and `lsof` command. Continue saves, Skip bypasses file creation.
-4. **Done** — Summary, next steps, and copy-pasteable commands to apply SOUL.md and INFRASTRUCTURE.md globally
+3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field for `lsof` output. Continue saves, Skip bypasses file creation.
+4. **Done** — Summary, "Apply to Global Config" buttons to add references to `~/.claude/CLAUDE.md`, next steps.
 
 All steps are skippable — you can complete the wizard in 4 clicks. Textareas contain real defaults you can edit before saving.
 

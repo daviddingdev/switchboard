@@ -118,13 +118,14 @@ Both auth-exempt. Receive JSON with `session_id`, `cwd`,
 | POST | `/logout` | Logout (clear session) |
 | GET | `/setup/status` | Check if first-run setup is complete |
 | POST | `/setup` | Complete setup (password, soul, infrastructure, contributor) |
+| POST | `/setup/apply-global` | Append SOUL/INFRA references to ~/.claude/CLAUDE.md |
 
 Auth is optional. Enabled via `SWITCHBOARD_PASSWORD`
 env var or `state/auth.json` (created by setup wizard).
 Env var takes precedence. Uses Flask session cookies.
 WebSocket connections are authenticated on connect.
 A persistent secret key is stored in `state/secret.key`.
-Setup endpoints are auth-exempt.
+Setup endpoints are auth-exempt (`/api/setup/*`).
 
 ### Proposals
 
@@ -413,7 +414,7 @@ splice callback), visual feedback in TabBar.
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
 | LogViewer | Historical worker log viewer with text filter |
 | LoginPage | Password login when auth is enabled |
-| SetupWizard | First-run onboarding (password+contributor, SOUL.md, INFRASTRUCTURE.md, done) |
+| SetupWizard | First-run onboarding (password+contributor, SOUL.md, INFRASTRUCTURE.md+scan paste, done+apply global) |
 | ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts, CSV export |

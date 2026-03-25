@@ -26,12 +26,13 @@ New users see a 4-step onboarding wizard before the main UI:
 
 1. **Password + Contributor** — Set a dashboard password (optional, skippable). Stored as SHA-256 hash in `state/auth.json`. Contributor checkbox sets `show_self: true` in `config.yaml` to include Switchboard in the project list.
 2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code prompt tips. Continue saves content, Skip bypasses file creation entirely. Written to project root.
-3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template and `lsof` command. Switchboard header auto-prepended. Continue saves, Skip bypasses. Written to project root.
-4. **Done** — Summary of what was configured, commands to apply SOUL.md and INFRASTRUCTURE.md globally, git/GitHub context note.
+3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field appends `lsof` output as a `## Port Scan Output` section. Switchboard header auto-prepended. Continue saves, Skip bypasses. Written to project root.
+4. **Done** — Summary of what was configured, "Apply to Global Config" buttons that write references to `~/.claude/CLAUDE.md` (with duplicate detection), git/GitHub context note.
 
 **Backend:**
 - `GET /api/setup/status` — Returns `{complete, auth_enabled}` (auth-exempt)
-- `POST /api/setup` — Accepts `{password, soul, infrastructure, contributor}`, writes `state/auth.json`, `SOUL.md`, `INFRASTRUCTURE.md`, and optionally `show_self: true` to `config.yaml`
+- `POST /api/setup` — Accepts `{password, soul, infrastructure, contributor}`, writes `state/auth.json`, `SOUL.md`, `INFRASTRUCTURE.md`, and optionally `show_self: true` to `config.yaml`. Hot-reloads config and invalidates project cache.
+- `POST /api/setup/apply-global` — Accepts `{soul_path, infrastructure_path}`, appends references to `~/.claude/CLAUDE.md` with duplicate detection (auth-exempt)
 - Auth system now checks both `SWITCHBOARD_PASSWORD` env var and `state/auth.json` (env var takes precedence)
 - `project_sync.get_soul_md_path()` and `get_infrastructure_md_path()` helpers
 
@@ -42,12 +43,14 @@ New users see a 4-step onboarding wizard before the main UI:
 - Textareas pre-filled with real default content (not placeholder text) — editable before saving
 - Skip/Continue semantics: Continue saves content as-is, Skip bypasses file creation
 - Contributor checkbox on password step for Switchboard developers
+- Infrastructure "Quick Scan" paste field for `lsof` output
+- "Apply to Global Config" buttons on Done step (replaces copy-paste commands)
 - Copy button with "Copied!" confirmation on Claude Code prompts and terminal commands
 - Mobile-responsive layout
 
-### Configurable Self-Exclusion from Project Discovery
+### Configurable Self-Exclusion from Spawn Dialog
 
-New `show_self` config option (default: `false`). When false, Switchboard's own directory is hidden from project discovery and the activity panel. Set to `true` in `config.yaml` if you develop Switchboard itself.
+`show_self` config option (default: `false`) controls whether Switchboard appears in the SpawnDialog project list. Switchboard always appears in the file tree and activity panel regardless of this setting — only spawning new workers on the Switchboard codebase is gated. Projects include an `is_self` boolean field. `/api/projects` returns `{projects, show_self}` so the frontend can filter.
 
 ### SpawnDialog Improvements
 

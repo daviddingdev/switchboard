@@ -46,7 +46,7 @@ If you find a security issue, please open a GitHub issue. Since this tool is des
 - Optional auth: session cookies, WebSocket auth on connect, HTTP Basic Auth fallback
 - Setup wizard password stored as SHA-256 hash in `state/auth.json` (gitignored)
 - Auth secret key auto-generated and persisted to `state/secret.key` (gitignored) to survive restarts
-- Setup endpoints (`/api/setup/status`, `/api/setup`) are auth-exempt
+- Setup endpoints (`/api/setup/status`, `/api/setup`, `/api/setup/apply-global`) are auth-exempt
 - Worker log filenames validated against strict patterns before filesystem access
 
 ## What We Don't Do (by design)

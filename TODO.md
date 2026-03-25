@@ -83,13 +83,16 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 - [x] 4-step onboarding wizard: password, SOUL.md, INFRASTRUCTURE.md, launch
 - [x] Password stored as SHA-256 hash in `state/auth.json`, works alongside `SWITCHBOARD_PASSWORD` env var
 - [x] SOUL.md pre-filled with default template (session naming convention, Claude Code tips)
-- [x] INFRASTRUCTURE.md pre-filled with port/service template, `lsof` command, Switchboard header auto-prepended
+- [x] INFRASTRUCTURE.md pre-filled with port/service template, optional scan paste field
 - [x] Skip/Continue semantics: Continue saves content, Skip bypasses file creation
 - [x] Contributor checkbox sets `show_self: true` in config.yaml
-- [x] Done step with git/GitHub context note, copy-pasteable global apply commands
-- [x] Setup endpoints auth-exempt (`/api/setup/status`, `/api/setup`)
+- [x] Done step with "Apply to Global Config" buttons for ~/.claude/CLAUDE.md
+- [x] `POST /api/setup/apply-global` endpoint with duplicate detection
+- [x] Setup config changes hot-reload (no restart needed)
+- [x] Setup endpoints auth-exempt (`/api/setup/status`, `/api/setup`, `/api/setup/apply-global`)
 - [x] Existing installations auto-skip via `start.sh` migration
-- [x] `show_self` config option (default false) for self-exclusion from project discovery
+- [x] `show_self` only gates spawn dialog; Switchboard always visible in file tree/activity
+- [x] Projects include `is_self` field, `/api/projects` returns `{projects, show_self}`
 - [x] `/api/projects` returns `relative_dir` field
 - [x] SpawnDialog shows relative paths, truncates long directories with RTL ellipsis
 - [x] `setup.sh` resets package-lock.json after npm install to prevent platform drift
