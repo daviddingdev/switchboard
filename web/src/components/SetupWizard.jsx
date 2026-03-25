@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { completeSetup } from '../api'
+import { completeSetup, applyGlobalConfig } from '../api'
 
 const styles = {
   container: {
@@ -207,6 +207,16 @@ const styles = {
     marginTop: '4px',
     lineHeight: '1.4',
   },
+  sectionHeader: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: '10px',
+    paddingBottom: '6px',
+    borderBottom: '1px solid var(--border)',
+  },
 }
 
 const TOTAL_STEPS = 4
@@ -265,6 +275,11 @@ export default function SetupWizard({ onComplete }) {
   // Track whether user explicitly skipped (vs Continue with content)
   const [soulSkipped, setSoulSkipped] = useState(false)
   const [infraSkipped, setInfraSkipped] = useState(false)
+  const [scanOutput, setScanOutput] = useState('')
+  // Global config apply state
+  const [soulApplied, setSoulApplied] = useState(false)
+  const [infraApplied, setInfraApplied] = useState(false)
+  const [applyError, setApplyError] = useState(null)
 
   const renderStepIndicator = () => (
     <div style={styles.stepIndicator}>
@@ -319,7 +334,11 @@ export default function SetupWizard({ onComplete }) {
     setLoading(true)
     setError(null)
     const sendSoul = soulSkipped ? '' : soul
-    const sendInfra = skipInfra ? '' : infrastructure
+    let sendInfra = skipInfra ? '' : infrastructure
+    // Append scan output if provided
+    if (sendInfra && scanOutput.trim()) {
+      sendInfra += '\n\n## Port Scan Output\n```\n' + scanOutput.trim() + '\n```'
+    }
     try {
       const res = await completeSetup(password, sendSoul, sendInfra, contributor)
       setResult({
@@ -456,7 +475,7 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 2: INFRASTRUCTURE.md — pre-filled with defaults
+  // Step 2: INFRASTRUCTURE.md — pre-filled with defaults + scan paste
   if (step === 2) {
     return (
       <div style={styles.container}>
@@ -469,6 +488,7 @@ export default function SetupWizard({ onComplete }) {
             sessions reference this to avoid port conflicts and understand your setup.
           </div>
 
+          <div style={styles.sectionHeader}>Current Template</div>
           <textarea
             style={styles.textarea}
             value={infrastructure}
@@ -476,16 +496,26 @@ export default function SetupWizard({ onComplete }) {
             autoFocus
           />
 
+          <div style={{ ...styles.sectionHeader, marginTop: '20px' }}>Quick Scan (optional)</div>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: '1.5' }}>
+            Paste the output of a port scan to help fill in your infrastructure:
+          </div>
+          <div style={styles.codeBlock}>
+            <CopyButton text={PORTS_CMD} />
+            {PORTS_CMD}
+          </div>
+          <textarea
+            style={{ ...styles.textarea, minHeight: '80px', marginTop: '8px' }}
+            value={scanOutput}
+            onChange={(e) => setScanOutput(e.target.value)}
+            placeholder="Paste command output here..."
+          />
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.4' }}>
+            When you paste output here, it gets appended to your Infrastructure file under a "Port Scan" section. You can edit everything in the template above.
+          </div>
+
           <div style={styles.tipBox}>
-            <div style={styles.tipLabel}>Tip</div>
             <div style={styles.tipText}>
-              Edit the defaults above. Not sure what ports are in use? Run this in your terminal:
-            </div>
-            <div style={styles.codeBlock}>
-              <CopyButton text={PORTS_CMD} />
-              {PORTS_CMD}
-            </div>
-            <div style={{ ...styles.tipText, marginTop: '8px', marginBottom: 0 }}>
               Or ask Claude Code: "Scan my system for listening ports and services,
               then help me write an INFRASTRUCTURE.md documenting what's running."
             </div>
@@ -515,12 +545,26 @@ export default function SetupWizard({ onComplete }) {
   }
 
   // Step 3: Done
-  const soulCmd = result?.soulPath
-    ? `echo 'Read and follow ${result.soulPath} for working style guidance.' >> ~/.claude/CLAUDE.md`
-    : null
-  const infraCmd = result?.infrastructurePath
-    ? `echo 'Read ${result.infrastructurePath} for environment details.' >> ~/.claude/CLAUDE.md`
-    : null
+  const handleApplyGlobal = async (type) => {
+    setApplyError(null)
+    try {
+      const res = await applyGlobalConfig(
+        type === 'soul' || type === 'both' ? result.soulPath : null,
+        type === 'infrastructure' || type === 'both' ? result.infrastructurePath : null,
+      )
+      if (res.applied.includes('soul')) setSoulApplied(true)
+      if (res.applied.includes('infrastructure')) setInfraApplied(true)
+      // If nothing was applied (already existed), still mark as done
+      if (type === 'soul' && !res.applied.includes('soul')) setSoulApplied(true)
+      if (type === 'infrastructure' && !res.applied.includes('infrastructure')) setInfraApplied(true)
+      if (type === 'both') {
+        setSoulApplied(true)
+        setInfraApplied(true)
+      }
+    } catch (err) {
+      setApplyError(err.message)
+    }
+  }
 
   return (
     <div style={styles.container}>
@@ -549,6 +593,64 @@ export default function SetupWizard({ onComplete }) {
           </div>
         </div>
 
+        {result?.hasSoul && result.soulPath && (
+          <div style={{ ...styles.tipBox, marginTop: '20px' }}>
+            <div style={styles.sectionHeader}>Apply Working Style Globally</div>
+            {soulApplied ? (
+              <div style={{ ...styles.checkItem, marginTop: '8px', marginBottom: 0 }}>
+                <span style={{ ...styles.checkIcon, color: 'var(--success)' }}>{'\u2713'}</span>
+                Reference added to ~/.claude/CLAUDE.md
+              </div>
+            ) : (
+              <>
+                <div style={styles.tipText}>
+                  To make all Claude Code sessions use your working style, add a reference to your global Claude config.
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', fontFamily: '"SF Mono", "Fira Code", monospace' }}>
+                  This will append to ~/.claude/CLAUDE.md:{'\n'}
+                  Read and follow {result.soulPath} for working style guidance.
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <button style={{ ...styles.primaryBtn, fontSize: '13px', padding: '8px 16px' }} onClick={() => handleApplyGlobal('soul')}>
+                    Apply to Global Config
+                  </button>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>or skip — do this manually later</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {result?.hasInfra && result.infrastructurePath && (
+          <div style={{ ...styles.tipBox, marginTop: '12px' }}>
+            <div style={styles.sectionHeader}>Apply Infrastructure Globally</div>
+            {infraApplied ? (
+              <div style={{ ...styles.checkItem, marginTop: '8px', marginBottom: 0 }}>
+                <span style={{ ...styles.checkIcon, color: 'var(--success)' }}>{'\u2713'}</span>
+                Reference added to ~/.claude/CLAUDE.md
+              </div>
+            ) : (
+              <>
+                <div style={styles.tipText}>
+                  To make all sessions aware of your environment, add a reference to your global Claude config.
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', fontFamily: '"SF Mono", "Fira Code", monospace' }}>
+                  This will append to ~/.claude/CLAUDE.md:{'\n'}
+                  Read {result.infrastructurePath} for environment details.
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <button style={{ ...styles.primaryBtn, fontSize: '13px', padding: '8px 16px' }} onClick={() => handleApplyGlobal('infrastructure')}>
+                    Apply to Global Config
+                  </button>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>or skip — do this manually later</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {applyError && <div style={{ ...styles.error, marginTop: '12px' }}>{applyError}</div>}
+
         <div style={styles.nextSteps}>
           <strong style={{ color: 'var(--text-primary)' }}>What's next:</strong>
           <ul style={{ margin: '8px 0 0', paddingLeft: '20px' }}>
@@ -557,38 +659,6 @@ export default function SetupWizard({ onComplete }) {
             <li>Browse files, track git changes, and monitor system health from the sidebar</li>
           </ul>
         </div>
-
-        {result?.hasSoul && soulCmd && (
-          <div style={{ ...styles.tipBox, marginTop: '20px' }}>
-            <div style={styles.tipLabel}>Apply working style globally</div>
-            <div style={styles.tipText}>
-              To use your working style in all Claude Code sessions, run this in any terminal:
-            </div>
-            <div style={styles.codeBlock}>
-              <CopyButton text={soulCmd} />
-              {soulCmd}
-            </div>
-            <div style={{ ...styles.tipText, marginTop: '8px', marginBottom: 0 }}>
-              Or ask Claude Code: "Add a reference to {result.soulPath} in my global CLAUDE.md so all sessions use my working style."
-            </div>
-          </div>
-        )}
-
-        {result?.hasInfra && infraCmd && (
-          <div style={{ ...styles.tipBox, marginTop: '12px' }}>
-            <div style={styles.tipLabel}>Apply infrastructure map globally</div>
-            <div style={styles.tipText}>
-              To make your infrastructure map available to all sessions:
-            </div>
-            <div style={styles.codeBlock}>
-              <CopyButton text={infraCmd} />
-              {infraCmd}
-            </div>
-            <div style={{ ...styles.tipText, marginTop: '8px', marginBottom: 0 }}>
-              Or ask Claude Code: "Add a reference to {result.infrastructurePath} in my global CLAUDE.md so all sessions know my environment setup."
-            </div>
-          </div>
-        )}
 
         <div style={styles.infoBox}>
           <strong style={{ color: 'var(--text-primary)' }}>Git & GitHub:</strong> Switchboard

@@ -63,7 +63,6 @@ def discover_projects(root_dir=None, max_depth=None):
         max_depth = _ctx.config.get('scan_depth', 3)
 
     switchboard_dir = os.path.realpath(str(Path(__file__).parent.parent))
-    show_self = _ctx.config.get('show_self', False)
 
     projects = []
 
@@ -77,14 +76,12 @@ def discover_projects(root_dir=None, max_depth=None):
 
         # Check if this directory has CLAUDE.md
         if 'CLAUDE.md' in entries:
-            # Skip Switchboard's own directory unless show_self is enabled
-            if os.path.realpath(directory) == switchboard_dir and not show_self:
-                return
             projects.append({
                 'name': os.path.basename(directory),
                 'directory': directory,
                 'relative_dir': os.path.relpath(directory, root_dir),
-                'has_claude_md': True
+                'has_claude_md': True,
+                'is_self': os.path.realpath(directory) == switchboard_dir,
             })
             return  # Don't recurse into projects
 
@@ -103,6 +100,13 @@ def discover_projects(root_dir=None, max_depth=None):
 
 
 load_projects = discover_projects
+
+
+def invalidate_projects_cache():
+    """Clear the projects cache so next call re-scans."""
+    global _projects_cache, _projects_cache_time
+    _projects_cache = None
+    _projects_cache_time = 0
 
 
 def get_project_directory(project_name):
@@ -496,7 +500,10 @@ def parse_session_usage(session_file):
 @bp.route('/api/projects')
 def list_projects():
     """Auto-discover projects with CLAUDE.md files."""
-    return jsonify(load_projects())
+    return jsonify({
+        'projects': load_projects(),
+        'show_self': _ctx.config.get('show_self', False),
+    })
 
 
 @bp.route('/api/home')

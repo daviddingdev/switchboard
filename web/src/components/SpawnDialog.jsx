@@ -157,7 +157,11 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
 
   useEffect(() => {
     fetchProjects()
-      .then(data => setProjects(data))
+      .then(data => {
+        const all = data.projects || data
+        const showSelf = data.show_self || false
+        setProjects(showSelf ? all : all.filter(p => !p.is_self))
+      })
       .catch(() => {})
     fetchModels()
       .then(data => {

@@ -28,6 +28,22 @@ export async function completeSetup(password, soul, infrastructure, contributor)
   return res.json();
 }
 
+export async function applyGlobalConfig(soulPath, infrastructurePath) {
+  const res = await apiFetch(`${API_BASE}/setup/apply-global`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      soul_path: soulPath || null,
+      infrastructure_path: infrastructurePath || null,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to apply global config');
+  }
+  return res.json();
+}
+
 export async function fetchAuthStatus() {
   const res = await apiFetch(`${API_BASE}/auth/status`);
   if (!res.ok) throw new Error(`Failed to check auth: ${res.status}`);

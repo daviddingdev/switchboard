@@ -241,7 +241,7 @@ app.register_blueprint(project_sync.bp)
 
 _AUTH_EXEMPT = {'/api/login', '/api/logout', '/api/auth/status',
                 '/api/hooks/stop', '/api/hooks/prompt',
-                '/api/setup/status', '/api/setup'}
+                '/api/setup/status', '/api/setup', '/api/setup/apply-global'}
 
 
 @app.before_request
@@ -360,10 +360,54 @@ def complete_setup():
     # Return project_root for use in Done step commands
     result['project_root'] = os.path.expanduser(CONFIG.get('project_root', str(PROJECT_ROOT.parent)))
 
+    # Hot-reload config so changes take effect immediately
+    CONFIG.update(load_config())
+    ctx.config = CONFIG
+    project_sync.invalidate_projects_cache()
+
     # Mark setup as complete
     SETUP_COMPLETE_FILE.touch()
 
     return jsonify(result)
+
+
+@app.route('/api/setup/apply-global', methods=['POST'])
+def apply_global_config():
+    """Append SOUL.md / INFRASTRUCTURE.md references to ~/.claude/CLAUDE.md."""
+    data = request.json or {}
+    soul_path = data.get('soul_path')
+    infra_path = data.get('infrastructure_path')
+
+    claude_md = os.path.expanduser('~/.claude/CLAUDE.md')
+    os.makedirs(os.path.dirname(claude_md), exist_ok=True)
+
+    existing = ''
+    if os.path.exists(claude_md):
+        with open(claude_md, 'r', encoding='utf-8') as f:
+            existing = f.read()
+
+    applied = []
+    lines_to_add = []
+
+    if soul_path:
+        ref = f'Read and follow {soul_path} for working style guidance.'
+        if ref not in existing:
+            lines_to_add.append(ref)
+            applied.append('soul')
+
+    if infra_path:
+        ref = f'Read {infra_path} for environment details.'
+        if ref not in existing:
+            lines_to_add.append(ref)
+            applied.append('infrastructure')
+
+    if lines_to_add:
+        with open(claude_md, 'a', encoding='utf-8') as f:
+            if existing and not existing.endswith('\n'):
+                f.write('\n')
+            f.write('\n'.join(lines_to_add) + '\n')
+
+    return jsonify({"status": "ok", "applied": applied})
 
 
 # Terminal subscriptions: {sid: set of worker names}
