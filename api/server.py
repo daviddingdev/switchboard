@@ -304,10 +304,11 @@ def setup_status():
 
 @app.route('/api/setup', methods=['POST'])
 def complete_setup():
-    """Complete first-run setup: optionally set password and create SOUL.md."""
+    """Complete first-run setup: optionally set password, create SOUL.md and INFRASTRUCTURE.md."""
     data = request.json or {}
     password = data.get('password')
     soul = data.get('soul')
+    infrastructure = data.get('infrastructure')
     result = {"status": "ok"}
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -325,6 +326,24 @@ def complete_setup():
         with open(soul_path, 'w', encoding='utf-8') as f:
             f.write(soul)
         result['soul_path'] = soul_path
+
+    # Write INFRASTRUCTURE.md if provided
+    if infrastructure:
+        infra_path = project_sync.get_infrastructure_md_path()
+        header = """# Infrastructure
+
+## Switchboard
+- Port 5001: Switchboard dashboard (API + web UI)
+- Port 3000: Switchboard dev server (only when running `npm run dev`)
+- tmux socket: `switchboard` (manages Claude Code worker sessions)
+
+"""
+        with open(infra_path, 'w', encoding='utf-8') as f:
+            f.write(header + infrastructure)
+        result['infrastructure_path'] = infra_path
+
+    # Return project_root for use in Done step commands
+    result['project_root'] = os.path.expanduser(CONFIG.get('project_root', str(PROJECT_ROOT.parent)))
 
     # Mark setup as complete
     SETUP_COMPLETE_FILE.touch()

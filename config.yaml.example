@@ -12,6 +12,11 @@ host: "0.0.0.0"
 # project_root: "~/projects"
 scan_depth: 3
 
+# Whether to include Switchboard itself in project discovery.
+# Set to true if you develop Switchboard itself.
+# Default: false (Switchboard hidden from project list and activity)
+show_self: false
+
 # tmux session settings
 tmux_socket: "switchboard"
 tmux_session: "switchboard"

@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import time
+from pathlib import Path
 
 from flask import Blueprint, request, jsonify
 
@@ -40,6 +41,11 @@ def get_soul_md_path():
     return os.path.join(os.path.expanduser(_ctx.config.get('project_root', '.')), 'SOUL.md')
 
 
+def get_infrastructure_md_path():
+    """Return the path where INFRASTRUCTURE.md should live (project root)."""
+    return os.path.join(os.path.expanduser(_ctx.config.get('project_root', '.')), 'INFRASTRUCTURE.md')
+
+
 def discover_projects(root_dir=None, max_depth=None):
     """
     Auto-discover projects by finding directories with CLAUDE.md files.
@@ -56,6 +62,9 @@ def discover_projects(root_dir=None, max_depth=None):
     if max_depth is None:
         max_depth = _ctx.config.get('scan_depth', 3)
 
+    switchboard_dir = os.path.realpath(str(Path(__file__).parent.parent))
+    show_self = _ctx.config.get('show_self', False)
+
     projects = []
 
     def scan_dir(directory, depth=0):
@@ -68,9 +77,13 @@ def discover_projects(root_dir=None, max_depth=None):
 
         # Check if this directory has CLAUDE.md
         if 'CLAUDE.md' in entries:
+            # Skip Switchboard's own directory unless show_self is enabled
+            if os.path.realpath(directory) == switchboard_dir and not show_self:
+                return
             projects.append({
                 'name': os.path.basename(directory),
                 'directory': directory,
+                'relative_dir': os.path.relpath(directory, root_dir),
                 'has_claude_md': True
             })
             return  # Don't recurse into projects

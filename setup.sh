@@ -48,6 +48,9 @@ pip3 install -r api/requirements.txt --quiet
 echo "Installing Node dependencies..."
 cd web && npm install --silent && cd ..
 
+# Reset package-lock.json to avoid platform-specific drift showing in git status
+git -C web checkout package-lock.json 2>/dev/null || true
+
 echo "Building web frontend..."
 cd web && npm run build && cd ..
 

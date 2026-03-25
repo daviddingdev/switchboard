@@ -10,11 +10,15 @@ export async function fetchSetupStatus() {
   return res.json();
 }
 
-export async function completeSetup(password, soul) {
+export async function completeSetup(password, soul, infrastructure) {
   const res = await apiFetch(`${API_BASE}/setup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: password || null, soul: soul || null }),
+    body: JSON.stringify({
+      password: password || null,
+      soul: soul || null,
+      infrastructure: infrastructure || null,
+    }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

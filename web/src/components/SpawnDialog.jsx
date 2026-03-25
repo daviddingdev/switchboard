@@ -55,6 +55,8 @@ const styles = {
     textAlign: 'left',
     cursor: 'pointer',
     transition: 'border-color 0.15s, background 0.15s',
+    overflow: 'hidden',
+    minWidth: 0,
   },
   projectButtonSelected: {
     borderColor: 'var(--accent)',
@@ -69,6 +71,11 @@ const styles = {
   projectDir: {
     fontSize: '11px',
     color: 'var(--text-secondary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    direction: 'rtl',
+    textAlign: 'left',
   },
   divider: {
     display: 'flex',
@@ -221,7 +228,7 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
                 onClick={() => handleProjectClick(project)}
               >
                 <div style={styles.projectName}>{project.name}</div>
-                <div style={styles.projectDir}>{project.directory}</div>
+                <div style={styles.projectDir}>{project.relative_dir || project.directory}</div>
               </button>
             ))}
           </div>
