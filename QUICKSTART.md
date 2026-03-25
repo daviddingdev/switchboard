@@ -17,12 +17,12 @@
 
 On first launch, Switchboard shows a guided setup wizard:
 
-1. **Password** — Optionally set a dashboard password (skippable if you're on a private network)
-2. **Working Style** — Optionally write a SOUL.md to shape how Claude Code sessions behave. Includes a copy-pasteable prompt you can give to Claude Code to help you write one.
-3. **Infrastructure** — Optionally create an INFRASTRUCTURE.md documenting your ports, services, and machine details. Includes a terminal command to discover listening ports.
+1. **Password + Contributor** — Optionally set a dashboard password (skippable if you're on a private network). Contributor checkbox includes Switchboard in the project list.
+2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code tips. Continue saves, Skip bypasses file creation.
+3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template and `lsof` command. Continue saves, Skip bypasses file creation.
 4. **Done** — Summary, next steps, and copy-pasteable commands to apply SOUL.md and INFRASTRUCTURE.md globally
 
-All steps are skippable — you can complete the wizard in 4 clicks.
+All steps are skippable — you can complete the wizard in 4 clicks. Textareas contain real defaults you can edit before saving.
 
 ## Your First Session
 

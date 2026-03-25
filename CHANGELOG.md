@@ -24,14 +24,14 @@ Changed `project_root` default from `~` (home directory) to the parent of the Sw
 
 New users see a 4-step onboarding wizard before the main UI:
 
-1. **Password** — Set a dashboard password (optional, skippable). Stored as SHA-256 hash in `state/auth.json`.
-2. **Working Style (SOUL.md)** — Write or paste a working style document. Includes a copy-pasteable Claude Code prompt to help generate one. Placeholder includes session naming convention. Written to project root.
-3. **Infrastructure (INFRASTRUCTURE.md)** — Document ports, services, and machine details. Includes copy-pasteable `lsof` command. Switchboard header auto-prepended. Written to project root.
+1. **Password + Contributor** — Set a dashboard password (optional, skippable). Stored as SHA-256 hash in `state/auth.json`. Contributor checkbox sets `show_self: true` in `config.yaml` to include Switchboard in the project list.
+2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code prompt tips. Continue saves content, Skip bypasses file creation entirely. Written to project root.
+3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template and `lsof` command. Switchboard header auto-prepended. Continue saves, Skip bypasses. Written to project root.
 4. **Done** — Summary of what was configured, commands to apply SOUL.md and INFRASTRUCTURE.md globally, git/GitHub context note.
 
 **Backend:**
 - `GET /api/setup/status` — Returns `{complete, auth_enabled}` (auth-exempt)
-- `POST /api/setup` — Accepts `{password, soul, infrastructure}`, writes `state/auth.json`, `SOUL.md`, and `INFRASTRUCTURE.md`, returns `{soul_path, infrastructure_path, project_root}`, marks setup complete
+- `POST /api/setup` — Accepts `{password, soul, infrastructure, contributor}`, writes `state/auth.json`, `SOUL.md`, `INFRASTRUCTURE.md`, and optionally `show_self: true` to `config.yaml`
 - Auth system now checks both `SWITCHBOARD_PASSWORD` env var and `state/auth.json` (env var takes precedence)
 - `project_sync.get_soul_md_path()` and `get_infrastructure_md_path()` helpers
 
@@ -39,7 +39,9 @@ New users see a 4-step onboarding wizard before the main UI:
 
 **Frontend:**
 - `SetupWizard` component with "Step N of 4" indicators, inline styles consistent with dark theme
-- All steps skippable — wizard completable in 4 clicks
+- Textareas pre-filled with real default content (not placeholder text) — editable before saving
+- Skip/Continue semantics: Continue saves content as-is, Skip bypasses file creation
+- Contributor checkbox on password step for Switchboard developers
 - Copy button with "Copied!" confirmation on Claude Code prompts and terminal commands
 - Mobile-responsive layout
 

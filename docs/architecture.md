@@ -117,7 +117,7 @@ Both auth-exempt. Receive JSON with `session_id`, `cwd`,
 | POST | `/login` | Login with password |
 | POST | `/logout` | Logout (clear session) |
 | GET | `/setup/status` | Check if first-run setup is complete |
-| POST | `/setup` | Complete setup (password, SOUL.md, INFRASTRUCTURE.md) |
+| POST | `/setup` | Complete setup (password, soul, infrastructure, contributor) |
 
 Auth is optional. Enabled via `SWITCHBOARD_PASSWORD`
 env var or `state/auth.json` (created by setup wizard).
@@ -413,7 +413,7 @@ splice callback), visual feedback in TabBar.
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
 | LogViewer | Historical worker log viewer with text filter |
 | LoginPage | Password login when auth is enabled |
-| SetupWizard | First-run onboarding (password, SOUL.md, INFRASTRUCTURE.md, launch) |
+| SetupWizard | First-run onboarding (password+contributor, SOUL.md, INFRASTRUCTURE.md, done) |
 | ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts, CSV export |

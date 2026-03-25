@@ -82,8 +82,10 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 - [x] 4-step onboarding wizard: password, SOUL.md, INFRASTRUCTURE.md, launch
 - [x] Password stored as SHA-256 hash in `state/auth.json`, works alongside `SWITCHBOARD_PASSWORD` env var
-- [x] SOUL.md with session naming convention in placeholder, Claude Code prompt tips
-- [x] INFRASTRUCTURE.md step with port/service template, `lsof` command, Switchboard header auto-prepended
+- [x] SOUL.md pre-filled with default template (session naming convention, Claude Code tips)
+- [x] INFRASTRUCTURE.md pre-filled with port/service template, `lsof` command, Switchboard header auto-prepended
+- [x] Skip/Continue semantics: Continue saves content, Skip bypasses file creation
+- [x] Contributor checkbox sets `show_self: true` in config.yaml
 - [x] Done step with git/GitHub context note, copy-pasteable global apply commands
 - [x] Setup endpoints auth-exempt (`/api/setup/status`, `/api/setup`)
 - [x] Existing installations auto-skip via `start.sh` migration

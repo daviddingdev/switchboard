@@ -17,7 +17,7 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 - **Worker persistence** — Uptime tracking, model/spawn state survives API restarts
 - **Historical logs** — View rotated worker log files from the UI
 - **Browser notifications** — Get notified when workers go idle or are spawned/killed
-- **Setup wizard** — First-run onboarding: password, working style (SOUL.md), infrastructure map (INFRASTRUCTURE.md)
+- **Setup wizard** — First-run onboarding with pre-filled defaults: password, contributor mode, working style (SOUL.md), infrastructure map (INFRASTRUCTURE.md)
 - **Optional auth** — Password via setup wizard or `SWITCHBOARD_PASSWORD` env var
 - **Terminal search** — Search terminal output with match highlighting and navigation
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
