@@ -4,6 +4,25 @@ function apiFetch(url, options = {}) {
   return fetch(url, { credentials: 'include', ...options });
 }
 
+export async function fetchSetupStatus() {
+  const res = await apiFetch(`${API_BASE}/setup/status`);
+  if (!res.ok) throw new Error('Failed to check setup status');
+  return res.json();
+}
+
+export async function completeSetup(password, soul) {
+  const res = await apiFetch(`${API_BASE}/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: password || null, soul: soul || null }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Setup failed');
+  }
+  return res.json();
+}
+
 export async function fetchAuthStatus() {
   const res = await apiFetch(`${API_BASE}/auth/status`);
   if (!res.ok) throw new Error(`Failed to check auth: ${res.status}`);

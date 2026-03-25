@@ -4,6 +4,7 @@ Flask API server for Switchboard.
 Provides HTTP endpoints for managing Claude Code worker sessions.
 """
 
+import hashlib
 import os
 import subprocess
 import json
@@ -170,6 +171,35 @@ def _get_models():
 
 # --- Auth configuration ---
 _AUTH_PASSWORD = os.environ.get('SWITCHBOARD_PASSWORD', '')
+AUTH_JSON_FILE = STATE_DIR / 'auth.json'
+SETUP_COMPLETE_FILE = STATE_DIR / 'setup-complete'
+
+
+def _get_auth_hash():
+    """Load password hash from state/auth.json. Returns None if not set."""
+    if not AUTH_JSON_FILE.exists():
+        return None
+    try:
+        with open(AUTH_JSON_FILE) as f:
+            data = json.load(f)
+        return data.get('password_hash')
+    except Exception:
+        return None
+
+
+def _is_auth_enabled():
+    """Check if any form of authentication is configured."""
+    return bool(_AUTH_PASSWORD) or _get_auth_hash() is not None
+
+
+def _check_password(password):
+    """Verify a password against env var or state/auth.json hash."""
+    if _AUTH_PASSWORD:
+        return password == _AUTH_PASSWORD
+    stored_hash = _get_auth_hash()
+    if stored_hash:
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+    return False
 
 
 def _get_secret_key():
@@ -210,13 +240,14 @@ app.register_blueprint(project_sync.bp)
 # --- Auth middleware (only active when SWITCHBOARD_PASSWORD is set) ---
 
 _AUTH_EXEMPT = {'/api/login', '/api/logout', '/api/auth/status',
-                '/api/hooks/stop', '/api/hooks/prompt'}
+                '/api/hooks/stop', '/api/hooks/prompt',
+                '/api/setup/status', '/api/setup'}
 
 
 @app.before_request
 def _check_auth():
-    """Enforce auth if SWITCHBOARD_PASSWORD is set. No-op otherwise."""
-    if not _AUTH_PASSWORD:
+    """Enforce auth if any password is configured. No-op otherwise."""
+    if not _is_auth_enabled():
         return  # Auth disabled
     # Static files and non-API routes are exempt
     if not request.path.startswith('/api'):
@@ -228,17 +259,17 @@ def _check_auth():
         return
     # Check HTTP Basic Auth
     auth = request.authorization
-    if auth and auth.password == _AUTH_PASSWORD:
+    if auth and _check_password(auth.password):
         return
     return jsonify({"error": "authentication required"}), 401
 
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    if not _AUTH_PASSWORD:
+    if not _is_auth_enabled():
         return jsonify({"status": "ok", "auth_enabled": False})
     data = request.json or {}
-    if data.get('password') == _AUTH_PASSWORD:
+    if _check_password(data.get('password', '')):
         session['authenticated'] = True
         return jsonify({"status": "ok"})
     return jsonify({"error": "invalid password"}), 401
@@ -252,12 +283,53 @@ def logout():
 
 @app.route('/api/auth/status')
 def auth_status():
-    if not _AUTH_PASSWORD:
+    if not _is_auth_enabled():
         return jsonify({"auth_enabled": False, "authenticated": True})
     return jsonify({
         "auth_enabled": True,
         "authenticated": bool(session.get('authenticated')),
     })
+
+
+# --- Setup endpoints ---
+
+@app.route('/api/setup/status')
+def setup_status():
+    """Check if first-run setup has been completed."""
+    return jsonify({
+        "complete": SETUP_COMPLETE_FILE.exists(),
+        "auth_enabled": _is_auth_enabled(),
+    })
+
+
+@app.route('/api/setup', methods=['POST'])
+def complete_setup():
+    """Complete first-run setup: optionally set password and create SOUL.md."""
+    data = request.json or {}
+    password = data.get('password')
+    soul = data.get('soul')
+    result = {"status": "ok"}
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Set password if provided
+    if password:
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        with open(AUTH_JSON_FILE, 'w') as f:
+            json.dump({"password_hash": password_hash}, f)
+        session['authenticated'] = True
+
+    # Write SOUL.md if provided
+    if soul:
+        soul_path = project_sync.get_soul_md_path()
+        with open(soul_path, 'w', encoding='utf-8') as f:
+            f.write(soul)
+        result['soul_path'] = soul_path
+
+    # Mark setup as complete
+    SETUP_COMPLETE_FILE.touch()
+
+    return jsonify(result)
 
 
 # Terminal subscriptions: {sid: set of worker names}
@@ -823,7 +895,7 @@ _load_workers_state()
 @socketio.on('connect')
 def handle_connect():
     # Reject unauthenticated WebSocket connections when auth is enabled
-    if _AUTH_PASSWORD and not flask.session.get('authenticated'):
+    if _is_auth_enabled() and not flask.session.get('authenticated'):
         return False  # Cleanly reject connection without exception
     with ctx.clients_lock:
         ctx.connected_clients += 1

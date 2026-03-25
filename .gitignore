@@ -25,6 +25,8 @@ state/usage-stats.json
 state/usage-archive.json
 state/workers.json
 state/secret.key
+state/auth.json
+state/setup-complete
 
 # IDE
 .vscode/

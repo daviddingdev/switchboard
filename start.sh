@@ -16,6 +16,13 @@ try:
 except: print(5001)
 " 2>/dev/null || echo 5001)
 
+# Skip setup wizard for existing installations
+if [ ! -f state/setup-complete ]; then
+    if [ -f state/workers.json ] || [ -f state/usage-stats.json ]; then
+        touch state/setup-complete
+    fi
+fi
+
 # Check if already running
 if [ -f logs/api.pid ] && kill -0 $(cat logs/api.pid) 2>/dev/null; then
     echo "Switchboard already running (PID $(cat logs/api.pid))"

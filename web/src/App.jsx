@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { fetchAuthStatus, logout } from './api'
+import { fetchAuthStatus, fetchSetupStatus, logout } from './api'
 import { useIsMobile } from './hooks/useMediaQuery'
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts'
 import useNotifications from './hooks/useNotifications'
 import socket from './socket'
 import LoginPage from './components/LoginPage'
+import SetupWizard from './components/SetupWizard'
 import FileTree from './components/FileTree'
 import TabBar from './components/TabBar'
 import FilePreview from './components/FilePreview'
@@ -228,7 +229,8 @@ export default function App() {
     }
   }, [workerCount, idleCount])
 
-  // Auth state
+  // Setup + Auth state
+  const [setupComplete, setSetupComplete] = useState(null) // null = loading, true/false
   const [authChecked, setAuthChecked] = useState(false)
   const [authenticated, setAuthenticated] = useState(false)
   const [authEnabled, setAuthEnabled] = useState(false)
@@ -420,15 +422,25 @@ export default function App() {
     setRefreshKey(k => k + 1)
   }
 
-  // --- Auth check ---
+  // --- Setup + Auth check ---
   useEffect(() => {
-    fetchAuthStatus()
+    fetchSetupStatus()
       .then(data => {
+        if (!data.complete) {
+          setSetupComplete(false)
+          return
+        }
+        setSetupComplete(true)
+        return fetchAuthStatus()
+      })
+      .then(data => {
+        if (!data) return // setup incomplete, skip auth
         setAuthEnabled(data.auth_enabled)
         setAuthenticated(!data.auth_enabled || data.authenticated)
         setAuthChecked(true)
       })
       .catch(() => {
+        setSetupComplete(true)
         setAuthenticated(true)
         setAuthChecked(true)
       })
@@ -441,6 +453,25 @@ export default function App() {
 
   // --- Render ---
 
+  if (setupComplete === null) return null // loading
+  if (setupComplete === false) {
+    return (
+      <SetupWizard onComplete={() => {
+        setSetupComplete(true)
+        // Re-check auth status after setup
+        fetchAuthStatus()
+          .then(data => {
+            setAuthEnabled(data.auth_enabled)
+            setAuthenticated(!data.auth_enabled || data.authenticated)
+            setAuthChecked(true)
+          })
+          .catch(() => {
+            setAuthenticated(true)
+            setAuthChecked(true)
+          })
+      }} />
+    )
+  }
   if (!authChecked) return null
   if (!authenticated) return <LoginPage onLogin={() => setAuthenticated(true)} />
 

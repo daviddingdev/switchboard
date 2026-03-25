@@ -35,6 +35,11 @@ def init(ctx):
     _ctx = ctx
 
 
+def get_soul_md_path():
+    """Return the path where SOUL.md should live (project root, sibling of switchboard dir)."""
+    return os.path.join(os.path.expanduser(_ctx.config.get('project_root', '.')), 'SOUL.md')
+
+
 def discover_projects(root_dir=None, max_depth=None):
     """
     Auto-discover projects by finding directories with CLAUDE.md files.
