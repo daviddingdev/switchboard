@@ -4,6 +4,7 @@
 
 ### Open Source Release Prep
 
+- Remote control info note on prerequisites step — explains `/rc` auto-enable and one-time permission prompt
 - Password visibility toggle (eye icon) on setup wizard and login page — shared `showPassword` state toggles both password and confirm fields
 - README overhaul: hero screenshot, collapsible gallery (dashboard, setup wizard, spawn dialog, mobile), license/version/platform badges
 - Updated `## Updating` section wording in README

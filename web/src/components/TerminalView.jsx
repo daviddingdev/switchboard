@@ -27,6 +27,7 @@ const styles = {
     padding: '12px 16px',
     minHeight: 0,
     WebkitOverflowScrolling: 'touch',
+    overscrollBehavior: 'contain',
   },
   pre: {
     margin: 0,

@@ -16,7 +16,7 @@
 
 On first launch, Switchboard shows a guided setup wizard:
 
-1. **Prerequisites** — Checks for Claude CLI and tmux. If Claude CLI is missing, shows expanded guidance (account signup, Max subscription, install command, login). If installed but not logged in, shows a login prompt. Re-check button to retry after installing.
+1. **Prerequisites** — Checks for Claude CLI and tmux. If Claude CLI is missing, shows expanded guidance (account signup, Max subscription, install command, login). If installed but not logged in, shows a login prompt. Info note about remote control (`/rc`) auto-enable. Re-check button to retry after installing.
 2. **Password + Contributor** — Optionally set a dashboard password (skippable if you're on a private network). Eye icon toggles password visibility. Contributor checkbox includes Switchboard in the project list.
 3. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code tips. Continue saves, Skip bypasses file creation.
 4. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field for `lsof` output. Continue saves, Skip bypasses file creation.

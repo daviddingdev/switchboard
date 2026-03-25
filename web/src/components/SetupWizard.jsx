@@ -470,6 +470,12 @@ export default function SetupWizard({ onComplete }) {
             </div>
           )}
 
+          <div style={styles.infoBox}>
+            <strong style={{ color: 'var(--text-primary)' }}>ℹ️ Remote Control</strong>
+            <br />
+            Switchboard automatically enables remote control (<code style={{ background: 'var(--bg-primary)', padding: '1px 4px', borderRadius: '3px' }}>/rc</code>) when spawning workers. This allows sending commands to Claude Code sessions from the dashboard. You may see a one-time permission prompt in the terminal when a worker first starts.
+          </div>
+
           <div style={{ ...styles.buttonRow, justifyContent: 'space-between' }}>
             <button style={styles.skipBtn} onClick={() => { loadPrereqs() }}>
               Re-check

@@ -415,7 +415,7 @@ splice callback), visual feedback in TabBar.
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
 | LogViewer | Historical worker log viewer with text filter |
 | LoginPage | Password login when auth is enabled, visibility toggle |
-| SetupWizard | First-run onboarding (prerequisites, password+contributor with visibility toggle, SOUL.md, INFRASTRUCTURE.md+scan paste, done+apply global) |
+| SetupWizard | First-run onboarding (prerequisites with /rc info note, password+contributor with visibility toggle, SOUL.md, INFRASTRUCTURE.md+scan paste, done+apply global) |
 | ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts, CSV export |
