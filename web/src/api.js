@@ -152,6 +152,12 @@ export async function initProject(directory) {
   return res.json();
 }
 
+export async function fetchPrerequisites() {
+  const res = await apiFetch(`${API_BASE}/prerequisites`);
+  if (!res.ok) throw new Error(`Failed to check prerequisites: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchHealth() {
   const res = await apiFetch(`${API_BASE}/health`);
   if (!res.ok) throw new Error(`Failed to fetch health: ${res.status}`);

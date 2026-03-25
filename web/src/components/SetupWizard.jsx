@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { completeSetup, applyGlobalConfig } from '../api'
+import { useState, useEffect } from 'react'
+import { completeSetup, applyGlobalConfig, fetchPrerequisites } from '../api'
 
 const styles = {
   container: {
@@ -219,7 +219,7 @@ const styles = {
   },
 }
 
-const TOTAL_STEPS = 4
+const TOTAL_STEPS = 5
 
 const CLAUDE_PROMPT = `Help me write a SOUL.md working style document. Ask me 5-10 questions about how I like to work with AI coding assistants, then draft a SOUL.md based on my answers.`
 
@@ -276,10 +276,23 @@ export default function SetupWizard({ onComplete }) {
   const [soulSkipped, setSoulSkipped] = useState(false)
   const [infraSkipped, setInfraSkipped] = useState(false)
   const [scanOutput, setScanOutput] = useState('')
+  // Prerequisites
+  const [prereqs, setPrereqs] = useState(null)
+  const [prereqLoading, setPrereqLoading] = useState(true)
   // Global config apply state
   const [soulApplied, setSoulApplied] = useState(false)
   const [infraApplied, setInfraApplied] = useState(false)
   const [applyError, setApplyError] = useState(null)
+
+  const loadPrereqs = () => {
+    setPrereqLoading(true)
+    fetchPrerequisites()
+      .then(data => setPrereqs(data.checks || []))
+      .catch(() => setPrereqs(null))
+      .finally(() => setPrereqLoading(false))
+  }
+
+  useEffect(() => { loadPrereqs() }, [])
 
   const renderStepIndicator = () => (
     <div style={styles.stepIndicator}>
@@ -287,37 +300,37 @@ export default function SetupWizard({ onComplete }) {
     </div>
   )
 
-  // Step 0: Password
+  // Step 1: Password
   const handlePasswordContinue = () => {
     if (password && password !== confirmPassword) {
       setError('Passwords do not match')
       return
     }
     setError(null)
-    setStep(1)
+    setStep(2)
   }
 
   const handlePasswordSkip = () => {
     setPassword('')
     setConfirmPassword('')
     setError(null)
-    setStep(1)
+    setStep(2)
   }
 
-  // Step 1: SOUL.md — Continue saves content, Skip creates nothing
+  // Step 2: SOUL.md — Continue saves content, Skip creates nothing
   const handleSoulContinue = () => {
     setSoulSkipped(false)
     setError(null)
-    setStep(2)
+    setStep(3)
   }
 
   const handleSoulSkip = () => {
     setSoulSkipped(true)
     setError(null)
-    setStep(2)
+    setStep(3)
   }
 
-  // Step 2: INFRASTRUCTURE.md — Continue saves content, Skip creates nothing
+  // Step 3: INFRASTRUCTURE.md — Continue saves content, Skip creates nothing
   const handleInfraContinue = () => {
     setInfraSkipped(false)
     setError(null)
@@ -349,7 +362,7 @@ export default function SetupWizard({ onComplete }) {
         infrastructurePath: res.infrastructure_path || null,
         projectRoot: res.project_root || null,
       })
-      setStep(3)
+      setStep(4)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -357,8 +370,120 @@ export default function SetupWizard({ onComplete }) {
     }
   }
 
-  // Step 0: Password + Contributor
+  const claudeCheck = prereqs?.find(c => c.name === 'Claude CLI')
+
+  // Step 0: Prerequisites
   if (step === 0) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          {renderStepIndicator()}
+          <div style={styles.title}>Prerequisites</div>
+          <div style={styles.subtitle}>
+            Checking that the tools Switchboard needs are available.
+          </div>
+
+          {prereqLoading ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px 0' }}>
+              Checking...
+            </div>
+          ) : prereqs === null ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px 0' }}>
+              Could not check prerequisites.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {prereqs.map(check => {
+                if (check.name === 'Claude CLI') {
+                  if (!check.ok) {
+                    // Not installed — expanded guidance
+                    return (
+                      <div key={check.name} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '14px 16px' }}>
+                        <div style={styles.checkItem}>
+                          <span style={{ ...styles.checkIcon, color: 'var(--danger)' }}>{'\u274C'}</span>
+                          <span><strong>Claude CLI</strong> — not found</span>
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginTop: '8px', paddingLeft: '26px' }}>
+                          <div>Claude Code is the AI coding agent that Switchboard manages.</div>
+                          <div style={{ marginTop: '4px' }}>You need a Claude account with a Max subscription ($100/month).</div>
+                          <ol style={{ margin: '10px 0 0', paddingLeft: '18px' }}>
+                            <li>Sign up or log in at <strong>claude.ai</strong></li>
+                            <li>Subscribe to <strong>Claude Max</strong> (required for Claude Code)</li>
+                            <li>Install the CLI:
+                              <div style={{ ...styles.codeBlock, marginTop: '4px', marginBottom: '4px' }}>
+                                <CopyButton text="npm install -g @anthropic-ai/claude-code" />
+                                npm install -g @anthropic-ai/claude-code
+                              </div>
+                            </li>
+                            <li>Log in:
+                              <div style={{ ...styles.codeBlock, marginTop: '4px', marginBottom: '4px' }}>
+                                <CopyButton text="claude" />
+                                claude
+                              </div>
+                              <span style={{ fontSize: '12px' }}>(follow the prompts)</span>
+                            </li>
+                          </ol>
+                          <div style={{ marginTop: '8px', fontStyle: 'italic' }}>
+                            Without Claude Code, Switchboard has nothing to manage.
+                            You can still explore the UI, but workers won't be able to spawn.
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (check.ok && check.authed === false) {
+                    // Installed but not logged in
+                    return (
+                      <div key={check.name} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '14px 16px' }}>
+                        <div style={styles.checkItem}>
+                          <span style={{ ...styles.checkIcon, color: 'var(--warning, #f59e0b)' }}>{'\u26A0\uFE0F'}</span>
+                          <span><strong>Claude CLI</strong> ({check.version}) — not logged in</span>
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', marginTop: '4px', paddingLeft: '26px' }}>
+                          Run <code style={{ background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>claude</code> in your terminal and complete the login flow.
+                        </div>
+                      </div>
+                    )
+                  }
+                  // Installed and authed (or auth unknown)
+                  return (
+                    <div key={check.name} style={styles.checkItem}>
+                      <span style={{ ...styles.checkIcon, color: 'var(--success)' }}>{'\u2713'}</span>
+                      <span><strong>Claude CLI</strong> {check.version ? `(${check.version})` : ''} {check.authed === true ? '— logged in' : ''}</span>
+                    </div>
+                  )
+                }
+
+                // Generic check (tmux, etc.)
+                return (
+                  <div key={check.name}>
+                    <div style={styles.checkItem}>
+                      <span style={{ ...styles.checkIcon, color: check.ok ? 'var(--success)' : 'var(--danger)' }}>
+                        {check.ok ? '\u2713' : '\u274C'}
+                      </span>
+                      <span><strong>{check.name}</strong> {check.ok ? '' : `— ${check.detail || 'not found'}`}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <div style={{ ...styles.buttonRow, justifyContent: 'space-between' }}>
+            <button style={styles.skipBtn} onClick={() => { loadPrereqs() }}>
+              Re-check
+            </button>
+            <button style={styles.primaryBtn} onClick={() => setStep(1)}>
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Step 1: Password + Contributor
+  if (step === 1) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
@@ -426,8 +551,8 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 1: SOUL.md — pre-filled with defaults
-  if (step === 1) {
+  // Step 2: SOUL.md — pre-filled with defaults
+  if (step === 2) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
@@ -475,8 +600,8 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 2: INFRASTRUCTURE.md — pre-filled with defaults + scan paste
-  if (step === 2) {
+  // Step 3: INFRASTRUCTURE.md — pre-filled with defaults + scan paste
+  if (step === 3) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
@@ -544,7 +669,7 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 3: Done
+  // Step 4: Done
   const handleApplyGlobal = async (type) => {
     setApplyError(null)
     try {

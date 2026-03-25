@@ -361,7 +361,21 @@ export default function SpawnDialog({ onClose, onSpawned, isMobile }) {
             </select>
           </div>
 
-          {error && <div style={styles.error}>{error}</div>}
+          {error && (
+            <div>
+              <div style={styles.error}>{error}</div>
+              {(error.toLowerCase().includes('command not found') ||
+                error.toLowerCase().includes('not authenticated') ||
+                error.toLowerCase().includes('claude')) && (
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.5', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '6px', padding: '10px 12px' }}>
+                  <div style={{ marginBottom: '4px' }}>Make sure Claude Code is installed:</div>
+                  <code style={{ fontSize: '11px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>npm install -g @anthropic-ai/claude-code</code>
+                  <div style={{ marginTop: '6px', marginBottom: '4px' }}>Then log in by running:</div>
+                  <code style={{ fontSize: '11px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>claude</code>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={styles.buttons}>
             <button type="button" style={styles.cancelButton} onClick={onClose}>

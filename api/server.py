@@ -243,7 +243,8 @@ app.register_blueprint(project_sync.bp)
 
 _AUTH_EXEMPT = {'/api/login', '/api/logout', '/api/auth/status',
                 '/api/hooks/stop', '/api/hooks/prompt',
-                '/api/setup/status', '/api/setup', '/api/setup/apply-global'}
+                '/api/setup/status', '/api/setup', '/api/setup/apply-global',
+                '/api/prerequisites'}
 
 
 @app.before_request
@@ -410,6 +411,62 @@ def apply_global_config():
             f.write('\n'.join(lines_to_add) + '\n')
 
     return jsonify({"status": "ok", "applied": applied})
+
+
+@app.route('/api/prerequisites')
+def check_prerequisites():
+    """Check system prerequisites: Claude CLI installed and auth status."""
+    env = {**os.environ, 'PATH': os.environ.get('PATH', '')}
+    checks = []
+
+    # Check Claude CLI
+    claude_ok = False
+    claude_version = None
+    try:
+        result = subprocess.run(
+            ['claude', '--version'], capture_output=True, text=True, timeout=5, env=env
+        )
+        claude_ok = result.returncode == 0
+        claude_version = result.stdout.strip() if claude_ok else None
+    except Exception:
+        pass
+
+    # Try to check auth status (best-effort)
+    claude_authed = None  # null = couldn't determine
+    if claude_ok:
+        try:
+            auth_result = subprocess.run(
+                ['claude', 'auth', 'status'],
+                capture_output=True, text=True, timeout=5, env=env
+            )
+            claude_authed = auth_result.returncode == 0
+        except Exception:
+            pass
+
+    checks.append({
+        "name": "Claude CLI",
+        "ok": claude_ok,
+        "version": claude_version,
+        "authed": claude_authed,
+        "detail": None if claude_ok else "not found",
+    })
+
+    # Check tmux
+    tmux_ok = False
+    try:
+        result = subprocess.run(
+            ['tmux', '-V'], capture_output=True, text=True, timeout=5
+        )
+        tmux_ok = result.returncode == 0
+    except Exception:
+        pass
+    checks.append({
+        "name": "tmux",
+        "ok": tmux_ok,
+        "detail": None if tmux_ok else "not found — install with: sudo apt install tmux",
+    })
+
+    return jsonify({"checks": checks})
 
 
 # Terminal subscriptions: {sid: set of worker names}
