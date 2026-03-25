@@ -17,14 +17,14 @@ Spawn and monitor multiple Claude Code workers, browse files, track usage and co
 <details>
 <summary>More screenshots</summary>
 
-**File Preview & Syntax Highlighting**
-<p align="center">
-  <img src="docs/screenshots/dashboard-2.png" alt="File Preview" width="800">
-</p>
-
 **System Monitor**
 <p align="center">
-  <img src="docs/screenshots/dashboard-3.png" alt="System Monitor" width="800">
+  <img src="docs/screenshots/dashboard-2.png" alt="System Monitor" width="800">
+</p>
+
+**Usage Analytics**
+<p align="center">
+  <img src="docs/screenshots/dashboard-3.png" alt="Usage Analytics" width="800">
 </p>
 
 **Setup Wizard**
