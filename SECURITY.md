@@ -6,7 +6,7 @@ Switchboard is designed for **localhost and trusted network use**. It assumes:
 
 - The API and web UI (port 5001) are on a trusted network
 - Only trusted users have access to the host machine
-- Optional single-password auth is available via `SWITCHBOARD_PASSWORD` env var
+- Optional single-password auth is available via setup wizard or `SWITCHBOARD_PASSWORD` env var
 
 **Optional auth is a convenience layer, not a hardened security boundary.** It uses Flask session cookies and is suitable for keeping casual access out on a home network. It is not a substitute for proper network isolation if Switchboard is exposed to untrusted networks.
 
@@ -44,7 +44,9 @@ If you find a security issue, please open a GitHub issue. Since this tool is des
 - System update package names are validated against allowed characters (system updates require `sudo` access)
 - The `CLAUDECODE` environment variable is stripped to prevent nested session issues
 - Optional auth: session cookies, WebSocket auth on connect, HTTP Basic Auth fallback
+- Setup wizard password stored as SHA-256 hash in `state/auth.json` (gitignored)
 - Auth secret key auto-generated and persisted to `state/secret.key` (gitignored) to survive restarts
+- Setup endpoints (`/api/setup/status`, `/api/setup`) are auth-exempt
 - Worker log filenames validated against strict patterns before filesystem access
 
 ## What We Don't Do (by design)

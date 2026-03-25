@@ -78,6 +78,28 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ## Completed
 
+### First-Run Setup Wizard (Mar 25, 2026)
+
+- [x] 3-step onboarding wizard: password, working style (SOUL.md), launch
+- [x] Password stored as SHA-256 hash in `state/auth.json`, works alongside `SWITCHBOARD_PASSWORD` env var
+- [x] SOUL.md written to project root with copy-pasteable Claude Code prompt tips
+- [x] Setup endpoints auth-exempt (`/api/setup/status`, `/api/setup`)
+- [x] Existing installations auto-skip via `start.sh` migration
+- [x] `SetupWizard` component with step indicators, mobile-responsive
+
+### Scoped File Access (Mar 25, 2026)
+
+- [x] `project_root` defaults to parent of switchboard install (not `~`)
+- [x] File read/write API validates against `project_root`
+- [x] File tree scans from `project_root`
+
+### PWA + Auto-Start (Mar 24, 2026)
+
+- [x] Progressive Web App: manifest.json, service worker, app icons (SVG + PNG)
+- [x] PWA meta tags in index.html, installable on desktop and mobile
+- [x] `scripts/setup-autostart.sh` — macOS LaunchAgent + Linux systemd user service
+- [x] `--remove` flag to uninstall auto-start
+
 ### Programmatic Idle Detection (Mar 19, 2026)
 
 - [x] HTTP hooks (Stop + UserPromptSubmit) for instant idle/active detection
@@ -177,4 +199,4 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ---
 
-*Last updated: March 19, 2026*
+*Last updated: March 25, 2026*

@@ -1,5 +1,47 @@
 # Switchboard Changelog
 
+## 2026-03-25
+
+### PWA Support + Cross-Platform Auto-Start (Mar 24)
+
+**Progressive Web App:**
+- `manifest.json` with app name, icons (SVG + PNG at 192px/512px), standalone display mode
+- Service worker (`sw.js`) for offline-capable install prompt
+- Apple touch icon and PWA meta tags in `index.html`
+- Installable as a native-feeling app on desktop and mobile
+
+**Auto-start on login:**
+- `scripts/setup-autostart.sh` — Installs Switchboard to start automatically on login
+- macOS: LaunchAgent plist (`~/Library/LaunchAgents/com.switchboard.server.plist`)
+- Linux: systemd user service (`systemctl --user`)
+- `--remove` flag to uninstall
+
+### Scoped File Access to Project Root
+
+Changed `project_root` default from `~` (home directory) to the parent of the Switchboard install directory. File read/write API and file tree now validate against and scan from `project_root` instead of home. Renamed `get_home_tree_data` → `get_root_tree_data`. Override with `project_root` in `config.yaml`.
+
+### First-Run Setup Wizard
+
+New users see a 3-step onboarding wizard before the main UI:
+
+1. **Welcome + Password** — Set a dashboard password (optional, skippable). Password stored as SHA-256 hash in `state/auth.json`.
+2. **Working Style (SOUL.md)** — Write or paste a working style document. Includes a copy-pasteable Claude Code prompt to help generate one. Written to project root as `SOUL.md`.
+3. **Done** — Summary of what was configured, with a command to apply SOUL.md globally across all Claude Code sessions.
+
+**Backend:**
+- `GET /api/setup/status` — Returns `{complete, auth_enabled}` (auth-exempt)
+- `POST /api/setup` — Accepts `{password, soul}`, writes `state/auth.json` and `SOUL.md`, marks setup complete
+- Auth system now checks both `SWITCHBOARD_PASSWORD` env var and `state/auth.json` (env var takes precedence)
+- `project_sync.get_soul_md_path()` helper for SOUL.md location
+
+**Migration:** Existing installations (with `state/workers.json` or `state/usage-stats.json`) auto-skip the wizard via `start.sh` detection.
+
+**Frontend:**
+- `SetupWizard` component with step indicators, inline styles consistent with dark theme
+- All steps skippable — wizard completable in 3 clicks
+- Copy button with "Copied!" confirmation on Claude Code prompts
+- Mobile-responsive layout
+
 ## 2026-03-20
 
 ### Refactored server.py into Modules

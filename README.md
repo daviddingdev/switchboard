@@ -17,11 +17,14 @@ Spawn and manage multiple Claude Code workers from one web UI. Monitor system me
 - **Worker persistence** — Uptime tracking, model/spawn state survives API restarts
 - **Historical logs** — View rotated worker log files from the UI
 - **Browser notifications** — Get notified when workers go idle or are spawned/killed
-- **Optional auth** — Single-password protection via `SWITCHBOARD_PASSWORD` env var
+- **Setup wizard** — First-run onboarding: set password, define working style (SOUL.md)
+- **Optional auth** — Password via setup wizard or `SWITCHBOARD_PASSWORD` env var
 - **Terminal search** — Search terminal output with match highlighting and navigation
 - **Keyboard shortcuts** — `n` spawn, `m` monitor, `u` usage, `?` help
 - **Dark/light theme** — Toggle with persistence, including terminal colors
 - **Mobile responsive** — Desktop 3-panel layout, mobile bottom nav
+- **PWA installable** — Install as a native app on desktop or mobile
+- **Auto-start** — Optional login auto-start via macOS LaunchAgent or Linux systemd
 
 ## How It Works
 
@@ -82,13 +85,15 @@ See `config.yaml.example` for all options with inline documentation.
 
 ## Authentication
 
-By default, Switchboard has no authentication (same as always). To enable single-password auth:
+On first run, the **Setup Wizard** lets you set a dashboard password (stored as a SHA-256 hash in `state/auth.json`). This is optional and can be skipped.
+
+You can also set a password via environment variable (takes precedence over `state/auth.json`):
 
 ```bash
 SWITCHBOARD_PASSWORD=your-password ./start.sh
 ```
 
-This protects all API endpoints and WebSocket connections with session cookies. Unset the variable to disable auth. A persistent secret key is auto-generated in `state/secret.key` so sessions survive API restarts.
+Both methods protect all API endpoints and WebSocket connections with session cookies. A persistent secret key is auto-generated in `state/secret.key` so sessions survive API restarts.
 
 ## Development
 

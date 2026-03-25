@@ -45,9 +45,19 @@ Browser (any device)
 ```
 
 start.sh sequence:
-1. Launch API → `logs/api.log`, PID → `logs/api.pid`
-2. Frontend served as static build from `web/dist/`
-3. tmux session created lazily on first worker spawn
+1. Auto-skip setup wizard for existing installations
+2. Launch API → `logs/api.log`, PID → `logs/api.pid`
+3. Frontend served as static build from `web/dist/`
+4. tmux session created lazily on first worker spawn
+
+Optional auto-start on login:
+```bash
+./scripts/setup-autostart.sh      # macOS LaunchAgent or Linux systemd
+./scripts/setup-autostart.sh --remove
+```
+
+The web UI is a PWA (Progressive Web App) — installable
+as a standalone app via browser install prompt.
 
 For development with auto-reload:
 ```bash
@@ -99,18 +109,22 @@ query param (up to 1000).
 Both auth-exempt. Receive JSON with `session_id`, `cwd`,
 `transcript_path`. Return 204.
 
-### Auth
+### Auth & Setup
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/auth/status` | Check if auth is enabled + logged in |
 | POST | `/login` | Login with password |
 | POST | `/logout` | Logout (clear session) |
+| GET | `/setup/status` | Check if first-run setup is complete |
+| POST | `/setup` | Complete setup (set password, create SOUL.md) |
 
-Auth is optional. Enabled when `SWITCHBOARD_PASSWORD`
-env var is set. Uses Flask session cookies. WebSocket
-connections are authenticated on connect. A persistent
-secret key is stored in `state/secret.key`.
+Auth is optional. Enabled via `SWITCHBOARD_PASSWORD`
+env var or `state/auth.json` (created by setup wizard).
+Env var takes precedence. Uses Flask session cookies.
+WebSocket connections are authenticated on connect.
+A persistent secret key is stored in `state/secret.key`.
+Setup endpoints are auth-exempt.
 
 ### Proposals
 
@@ -399,6 +413,7 @@ splice callback), visual feedback in TabBar.
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
 | LogViewer | Historical worker log viewer with text filter |
 | LoginPage | Password login when auth is enabled |
+| SetupWizard | First-run onboarding (password, SOUL.md, launch) |
 | ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts, CSV export |
@@ -450,6 +465,8 @@ state/
 ├── proposals/*.yaml       # proposals
 ├── workers.json           # persisted worker metadata (models, spawn times)
 ├── secret.key             # auth secret key (auto-generated, gitignored)
+├── auth.json              # password hash from setup wizard (gitignored)
+├── setup-complete          # marker file: setup wizard completed (gitignored)
 └── usage-archive.json     # persistent daily usage data
 
 logs/
@@ -484,7 +501,7 @@ Worker submits POST /api/proposals
   REST for actions and initial data
 - **Hash-based deduplication** — server only pushes when data changes
 - **threading async mode** — no monkey-patching, subprocess-safe
-- **Optional auth** — single-password via `SWITCHBOARD_PASSWORD` env var
+- **Optional auth** — password via setup wizard (`state/auth.json`) or `SWITCHBOARD_PASSWORD` env var
 - **File-based state** — YAML/JSON, git-friendly
 - **tmux named socket** — `-L switchboard`
 - **Lazy session creation** — tmux session created

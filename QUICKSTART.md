@@ -13,6 +13,16 @@
 - [ ] Open http://localhost:5001 in browser
 - [ ] At least one project has a `CLAUDE.md` file
 
+## First Run — Setup Wizard
+
+On first launch, Switchboard shows a guided setup wizard:
+
+1. **Password** — Optionally set a dashboard password (skippable if you're on a private network)
+2. **Working Style** — Optionally write a SOUL.md to shape how Claude Code sessions behave. The wizard includes a copy-pasteable prompt you can give to Claude Code to help you write one.
+3. **Done** — Summary and next steps, including how to apply SOUL.md globally
+
+All steps are skippable — you can complete the wizard in 3 clicks.
+
 ## Your First Session
 
 1. **Open the UI** — http://localhost:5001 (or `http://<machine-ip>:5001` from another device)
@@ -106,13 +116,31 @@ Press `u` to see token usage across all sessions. Features:
 
 ## Authentication
 
-To protect the UI with a password:
+Set a password during the **Setup Wizard** on first run, or via environment variable:
 
 ```bash
 SWITCHBOARD_PASSWORD=your-password ./start.sh
 ```
 
-Logout button appears in the header when auth is enabled.
+The env var takes precedence over the wizard-configured password. Logout button appears in the header when auth is enabled.
+
+## Auto-Start on Login
+
+To have Switchboard start automatically when you log in:
+
+```bash
+./scripts/setup-autostart.sh
+```
+
+This installs a LaunchAgent (macOS) or systemd user service (Linux). To remove:
+
+```bash
+./scripts/setup-autostart.sh --remove
+```
+
+## Install as App (PWA)
+
+Switchboard is a Progressive Web App. In Chrome or Edge, click the install icon in the address bar to add it as a standalone app on your desktop or phone.
 
 ## Tips
 
@@ -136,9 +164,9 @@ Logout button appears in the header when auth is enabled.
 
 ### Working Style (SOUL.md)
 
-You can create a `SOUL.md` file next to Switchboard (in the project root directory) to define your working style and preferences for Claude Code sessions. This is entirely optional and personal — Switchboard doesn't create or manage this file.
+The **Setup Wizard** offers to create a `SOUL.md` file in the project root directory to define your working style and preferences for Claude Code sessions. You can also create or edit it manually at any time.
 
-If you want all Claude Code sessions to use it, reference it from `~/.claude/CLAUDE.md`.
+If you want all Claude Code sessions to use it, reference it from `~/.claude/CLAUDE.md`. The wizard's final screen provides the exact command to do this.
 
 ## CLI Helper
 

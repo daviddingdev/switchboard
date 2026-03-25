@@ -93,6 +93,19 @@ See `config.yaml.example` for all options with inline docs.
 
 API + Web UI port: edit `port` in `config.yaml` (default: 5001)
 
+## Auto-Start on Login
+
+To have Switchboard start automatically when you log in:
+
+```bash
+./scripts/setup-autostart.sh
+```
+
+- **macOS**: Installs a LaunchAgent plist to `~/Library/LaunchAgents/`
+- **Linux**: Creates a systemd user service
+
+To remove: `./scripts/setup-autostart.sh --remove`
+
 ## Stopping
 
 ```bash
@@ -104,7 +117,7 @@ tmux -L switchboard kill-session -t switchboard
 
 ## Project Discovery
 
-Switchboard auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file.
+Switchboard auto-discovers projects by scanning its parent directory (project root) for directories containing a `CLAUDE.md` file.
 
 To add a project: create a `CLAUDE.md` in its root.
 
