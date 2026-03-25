@@ -23,11 +23,28 @@ if [ ! -f state/setup-complete ]; then
     fi
 fi
 
-# Check if already running
+# Check if already running via PID file
 if [ -f logs/api.pid ] && kill -0 $(cat logs/api.pid) 2>/dev/null; then
     echo "Switchboard already running (PID $(cat logs/api.pid))"
     echo "  URL: http://localhost:${PORT}"
     exit 0
+fi
+
+# Clean up stale PID file
+rm -f logs/api.pid
+
+# Check if port is occupied by an orphaned process
+EXISTING=$(lsof -ti:$PORT 2>/dev/null || true)
+if [ -n "$EXISTING" ]; then
+    echo "Port $PORT in use by PID(s): $EXISTING — stopping them first"
+    echo "$EXISTING" | xargs kill 2>/dev/null || true
+    sleep 2
+    STILL=$(lsof -ti:$PORT 2>/dev/null || true)
+    if [ -n "$STILL" ]; then
+        echo "  Force-killing: $STILL"
+        echo "$STILL" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
 fi
 
 # Build frontend if needed
