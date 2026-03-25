@@ -309,9 +309,24 @@ def complete_setup():
     password = data.get('password')
     soul = data.get('soul')
     infrastructure = data.get('infrastructure')
+    contributor = data.get('contributor', False)
     result = {"status": "ok"}
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Write show_self: true to config.yaml if contributor mode requested
+    if contributor:
+        config_path = PROJECT_ROOT / 'config.yaml'
+        try:
+            existing = {}
+            if config_path.exists():
+                with open(config_path) as f:
+                    existing = yaml.safe_load(f) or {}
+            existing['show_self'] = True
+            with open(config_path, 'w') as f:
+                yaml.dump(existing, f, default_flow_style=False)
+        except Exception:
+            pass
 
     # Set password if provided
     if password:

@@ -181,6 +181,32 @@ const styles = {
     color: 'var(--text-secondary)',
     lineHeight: '1.5',
   },
+  checkboxRow: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    marginTop: '24px',
+    padding: '14px 16px',
+    background: 'var(--bg-tertiary)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+  },
+  checkbox: {
+    marginTop: '2px',
+    flexShrink: 0,
+    accentColor: 'var(--accent)',
+  },
+  checkboxLabel: {
+    fontSize: '13px',
+    color: 'var(--text-primary)',
+    lineHeight: '1.5',
+  },
+  checkboxHint: {
+    fontSize: '12px',
+    color: 'var(--text-secondary)',
+    marginTop: '4px',
+    lineHeight: '1.4',
+  },
 }
 
 const TOTAL_STEPS = 4
@@ -189,29 +215,25 @@ const CLAUDE_PROMPT = `Help me write a SOUL.md working style document. Ask me 5-
 
 const PORTS_CMD = `lsof -iTCP -sTCP:LISTEN -nP | awk '{print $9, $1}' | sort -u`
 
-const SOUL_PLACEHOLDER = `## Session Naming
+const SOUL_DEFAULT = `## Session Naming
 First message is always the session name in format \`repo_name session_number\`
 (e.g., "switchboard 2"). This is just a label \u2014 not a command or question.
 Ignore it as content.
 
 ## Working Style
-(Example: Be concise and direct. Prefer Python. Push back when I'm
-overcomplicating things. Default to simple solutions. When I ask for
-architecture, give me the tradeoffs honestly \u2014 don't just agree with
-my first idea.)`
+Be concise and direct. Push back when I'm overcomplicating things. Default to
+simple solutions. When I ask for architecture, give me the tradeoffs honestly
+\u2014 don't just agree with my first idea.`
 
-const INFRA_PLACEHOLDER = `## Ports
+const INFRA_DEFAULT = `## Ports
 - 5001: Switchboard
 - 3000: Switchboard dev server (when running npm run dev)
-- 11434: Ollama (if running)
 
 ## Services
 - Switchboard: manages Claude Code sessions
-- (add your services: databases, dev servers, APIs, etc.)
 
 ## Machine
-- OS: (e.g., macOS Sequoia / Ubuntu 24.04)
-- (add relevant details: GPU, memory, special hardware)`
+- OS: `
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
@@ -234,11 +256,15 @@ export default function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(0)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [soul, setSoul] = useState('')
-  const [infrastructure, setInfrastructure] = useState('')
+  const [contributor, setContributor] = useState(false)
+  const [soul, setSoul] = useState(SOUL_DEFAULT)
+  const [infrastructure, setInfrastructure] = useState(INFRA_DEFAULT)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
+  // Track whether user explicitly skipped (vs Continue with content)
+  const [soulSkipped, setSoulSkipped] = useState(false)
+  const [infraSkipped, setInfraSkipped] = useState(false)
 
   const renderStepIndicator = () => (
     <div style={styles.stepIndicator}>
@@ -263,39 +289,43 @@ export default function SetupWizard({ onComplete }) {
     setStep(1)
   }
 
-  // Step 1: SOUL.md
+  // Step 1: SOUL.md — Continue saves content, Skip creates nothing
   const handleSoulContinue = () => {
+    setSoulSkipped(false)
     setError(null)
     setStep(2)
   }
 
   const handleSoulSkip = () => {
-    setSoul('')
+    setSoulSkipped(true)
     setError(null)
     setStep(2)
   }
 
-  // Step 2: INFRASTRUCTURE.md
+  // Step 2: INFRASTRUCTURE.md — Continue saves content, Skip creates nothing
   const handleInfraContinue = () => {
+    setInfraSkipped(false)
     setError(null)
-    submitSetup()
+    submitSetup(false)
   }
 
   const handleInfraSkip = () => {
-    setInfrastructure('')
+    setInfraSkipped(true)
     setError(null)
-    submitSetup()
+    submitSetup(true)
   }
 
-  const submitSetup = async () => {
+  const submitSetup = async (skipInfra) => {
     setLoading(true)
     setError(null)
+    const sendSoul = soulSkipped ? '' : soul
+    const sendInfra = skipInfra ? '' : infrastructure
     try {
-      const res = await completeSetup(password, soul, infrastructure)
+      const res = await completeSetup(password, sendSoul, sendInfra, contributor)
       setResult({
         hasPassword: !!password,
-        hasSoul: !!soul,
-        hasInfra: !!infrastructure,
+        hasSoul: !!sendSoul,
+        hasInfra: !!sendInfra,
         soulPath: res.soul_path || null,
         infrastructurePath: res.infrastructure_path || null,
         projectRoot: res.project_root || null,
@@ -308,7 +338,7 @@ export default function SetupWizard({ onComplete }) {
     }
   }
 
-  // Step 0: Password
+  // Step 0: Password + Contributor
   if (step === 0) {
     return (
       <div style={styles.container}>
@@ -343,7 +373,26 @@ export default function SetupWizard({ onComplete }) {
             onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordContinue() }}
           />
 
-          {error && <div style={styles.error}>{error}</div>}
+          <div style={styles.checkboxRow}>
+            <input
+              type="checkbox"
+              style={styles.checkbox}
+              checked={contributor}
+              onChange={(e) => setContributor(e.target.checked)}
+              id="contributor-check"
+            />
+            <label htmlFor="contributor-check" style={{ cursor: 'pointer' }}>
+              <div style={styles.checkboxLabel}>
+                Yes, I'm a contributor to Switchboard
+              </div>
+              <div style={styles.checkboxHint}>
+                Shows Switchboard in the project list so you can spawn Claude Code sessions
+                to work on its codebase. Most users should leave this unchecked.
+              </div>
+            </label>
+          </div>
+
+          {error && <div style={{ ...styles.error, marginTop: '12px' }}>{error}</div>}
 
           <div style={styles.buttonRow}>
             <button style={styles.skipBtn} onClick={handlePasswordSkip}>
@@ -358,7 +407,7 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 1: SOUL.md
+  // Step 1: SOUL.md — pre-filled with defaults
   if (step === 1) {
     return (
       <div style={styles.container}>
@@ -375,14 +424,13 @@ export default function SetupWizard({ onComplete }) {
             style={styles.textarea}
             value={soul}
             onChange={(e) => setSoul(e.target.value)}
-            placeholder={SOUL_PLACEHOLDER}
             autoFocus
           />
 
           <div style={styles.tipBox}>
             <div style={styles.tipLabel}>Tip</div>
             <div style={styles.tipText}>
-              Not sure what to write? Start a Claude Code session and paste this prompt:
+              Edit the defaults above, or start fresh. Want help? Start a Claude Code session and paste this prompt:
             </div>
             <div style={styles.codeBlock}>
               <CopyButton text={CLAUDE_PROMPT} />
@@ -397,7 +445,7 @@ export default function SetupWizard({ onComplete }) {
 
           <div style={styles.buttonRow}>
             <button style={styles.skipBtn} onClick={handleSoulSkip}>
-              Skip for now
+              Skip — don't create SOUL.md
             </button>
             <button style={styles.primaryBtn} onClick={handleSoulContinue}>
               Continue
@@ -408,7 +456,7 @@ export default function SetupWizard({ onComplete }) {
     )
   }
 
-  // Step 2: INFRASTRUCTURE.md
+  // Step 2: INFRASTRUCTURE.md — pre-filled with defaults
   if (step === 2) {
     return (
       <div style={styles.container}>
@@ -425,14 +473,13 @@ export default function SetupWizard({ onComplete }) {
             style={styles.textarea}
             value={infrastructure}
             onChange={(e) => setInfrastructure(e.target.value)}
-            placeholder={INFRA_PLACEHOLDER}
             autoFocus
           />
 
           <div style={styles.tipBox}>
             <div style={styles.tipLabel}>Tip</div>
             <div style={styles.tipText}>
-              Not sure what ports are in use? Run this in your terminal:
+              Edit the defaults above. Not sure what ports are in use? Run this in your terminal:
             </div>
             <div style={styles.codeBlock}>
               <CopyButton text={PORTS_CMD} />
@@ -452,7 +499,7 @@ export default function SetupWizard({ onComplete }) {
               onClick={handleInfraSkip}
               disabled={loading}
             >
-              Skip for now
+              Skip — don't create file
             </button>
             <button
               style={{ ...styles.primaryBtn, opacity: loading ? 0.5 : 1 }}
@@ -466,28 +513,6 @@ export default function SetupWizard({ onComplete }) {
       </div>
     )
   }
-
-  // Step 3: Done (displayed as step 4 visually but we show step 4 of 5... wait, steps are 0-3, but TOTAL_STEPS=5)
-  // Actually step indices: 0=password, 1=soul, 2=infra, 3=done. But we said 5 steps.
-  // The spec says: Prerequisites, Password, SOUL, Infrastructure, Done = 5 steps
-  // But we don't have a separate prerequisites step in the current code. Let me re-read...
-  // "Step order summary: Prerequisites — Password — SOUL — Infrastructure — Done"
-  // But the spec doesn't define a prerequisites step content. The password step IS the welcome/prerequisites.
-  // Let me just make the Done step show as "Step 5 of 5" since steps 0-3 map to steps 1-4.
-  // Actually wait - the total is supposed to be 5, but we only have 4 screens (0,1,2,3).
-  // The spec says "Prerequisites" is step 1 which is our password/welcome screen. So it IS 4 screens shown as "Step N of 4"
-  // ... but spec says 5. Let me re-read: "The wizard flow is now 5 steps"
-  // OK the spec explicitly says 5 steps with Prerequisites as its own. But there's no content defined for it.
-  // I think the welcome screen (step 0) is "Prerequisites" and Password is step 1.
-  // Actually re-reading: "Prerequisites — environment checks, Claude Code login reminder, /rc explanation"
-  // "Password — dashboard password (skippable)"
-  // So Prerequisites is a separate step. But the spec doesn't give detailed UI for it. Let me just fold it
-  // into the welcome step since it's the first thing users see. The title can be "Welcome to Switchboard"
-  // with some prereq info. That makes it 4 actual screens but labeled 1-4.
-  //
-  // Actually the simplest reading: the spec lists 5 conceptual steps but the password screen doubles as
-  // welcome/prerequisites. I'll keep 4 screens but label them "Step 1 of 4".
-  // ... no wait, TOTAL_STEPS is 5 at the top. Let me just add a quick prerequisites screen.
 
   // Step 3: Done
   const soulCmd = result?.soulPath

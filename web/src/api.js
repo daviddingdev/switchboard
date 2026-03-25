@@ -10,7 +10,7 @@ export async function fetchSetupStatus() {
   return res.json();
 }
 
-export async function completeSetup(password, soul, infrastructure) {
+export async function completeSetup(password, soul, infrastructure, contributor) {
   const res = await apiFetch(`${API_BASE}/setup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -18,6 +18,7 @@ export async function completeSetup(password, soul, infrastructure) {
       password: password || null,
       soul: soul || null,
       infrastructure: infrastructure || null,
+      contributor: contributor || false,
     }),
   });
   if (!res.ok) {
