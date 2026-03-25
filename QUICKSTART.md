@@ -118,7 +118,7 @@ Logout button appears in the header when auth is enabled.
 
 - **Multiple workers per project** — You can spawn multiple workers in the same project. They get auto-incremented names (e.g., `myproject`, `myproject-2`).
 
-- **Project discovery** — Switchboard finds projects by scanning `~` for `CLAUDE.md` files (configurable depth). Create a `CLAUDE.md` in any directory to make it appear in the spawn dialog.
+- **Project discovery** — Switchboard finds projects by scanning its parent directory for `CLAUDE.md` files (configurable depth). Create a `CLAUDE.md` in any directory to make it appear in the spawn dialog. Override with `project_root` in `config.yaml`.
 
 - **Mobile access** — Open `http://<machine-ip>:5001` on your phone. The UI adapts with a bottom navigation bar, including terminal search and log viewing.
 
@@ -133,6 +133,12 @@ Logout button appears in the header when auth is enabled.
 - **API costs** — The Usage tab estimates what your usage would cost on API billing. Useful for evaluating Max subscription vs pay-per-use. Configure rates in `config.yaml`.
 
 - **Dark/light theme** — Toggle in the header. Persisted to localStorage.
+
+### Working Style (SOUL.md)
+
+You can create a `SOUL.md` file next to Switchboard (in the project root directory) to define your working style and preferences for Claude Code sessions. This is entirely optional and personal — Switchboard doesn't create or manage this file.
+
+If you want all Claude Code sessions to use it, reference it from `~/.claude/CLAUDE.md`.
 
 ## CLI Helper
 

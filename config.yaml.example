@@ -7,7 +7,9 @@ port: 5001
 host: "0.0.0.0"
 
 # Project discovery — scans this directory for folders containing CLAUDE.md
-project_root: "~"
+# Default: parent directory of the switchboard install (auto-detected).
+# Override to scan a different root:
+# project_root: "~/projects"
 scan_depth: 3
 
 # tmux session settings

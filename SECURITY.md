@@ -36,7 +36,7 @@ If you find a security issue, please open a GitHub issue. Since this tool is des
 ## What We Do
 
 - Directory paths are expanded and validated before use
-- File read/write confined to home directory via realpath validation
+- File read/write confined to project root directory (parent of Switchboard install) via realpath validation. Override with `project_root` in `config.yaml`
 - File editing uses last-write-wins (acceptable for personal tool, no concurrent edit protection)
 - Proposal IDs are validated with regex before filesystem operations
 - Log viewer validates worker names and filenames against strict patterns

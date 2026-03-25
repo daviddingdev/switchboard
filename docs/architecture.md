@@ -142,12 +142,13 @@ Workers submit via curl to POST endpoint.
 **`/projects`** returns project list with name +
 directory.
 
-**`/home`** auto-discovers projects by scanning `~`
-for directories with `CLAUDE.md` files (max depth 3).
+**`/home`** auto-discovers projects by scanning the
+project root (parent of Switchboard install) for
+directories with `CLAUDE.md` files (max depth 3).
 Returns tree with git status per file (M/U/A/D).
 
 **`PUT /file`** saves file content (last-write-wins).
-Path validated against home directory.
+Path validated against project root directory.
 
 **`/activity`** aggregates: uncommitted changes
 and unpushed commits (with file lists per commit)
@@ -459,10 +460,12 @@ logs/
 ### Project Discovery
 
 No manual registration needed.
-`discover_projects()` scans `~` for directories
+`discover_projects()` scans the project root directory
+(parent of Switchboard install) for directories
 containing `CLAUDE.md` (max depth 3).
 
-`/api/home` also shows root-level `~/*.md` files.
+`/api/home` also shows root-level `.md` files from
+the project root.
 
 ### Proposal Lifecycle
 

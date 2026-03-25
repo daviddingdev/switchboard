@@ -244,22 +244,23 @@ def get_unpushed_commits(directory):
         return None
 
 
-def get_home_tree_data():
-    """Get home directory tree data (used by REST endpoint and socket monitor)."""
-    home_dir = os.path.expanduser('~')
+def get_root_tree_data():
+    """Get project root directory tree data (used by REST endpoint and socket monitor)."""
+    from pathlib import Path
+    root_dir = os.path.expanduser(_ctx.config.get('project_root', str(Path(__file__).parent.parent.parent)))
     projects = discover_projects()
 
     result = []
 
     try:
-        entries = sorted(os.listdir(home_dir))
+        entries = sorted(os.listdir(root_dir))
     except (PermissionError, FileNotFoundError):
-        return {'directory': home_dir, 'files': []}
+        return {'directory': root_dir, 'files': []}
 
     # Add root-level .md files
     for name in entries:
         if name.endswith('.md') and not name.startswith('.'):
-            path = os.path.join(home_dir, name)
+            path = os.path.join(root_dir, name)
             if os.path.isfile(path):
                 result.append({
                     'name': name,
@@ -279,12 +280,12 @@ def get_home_tree_data():
         children = build_file_tree(proj_dir, git_status=git_status, base_dir=proj_dir)
         has_changes = any(c.get('status') or c.get('has_changes') for c in children)
 
-        # Get relative path from home (e.g., "projects/my-app" or just "my-project")
-        rel_path = os.path.relpath(proj_dir, home_dir)
+        # Get relative path from root (e.g., "subdir/my-app" or just "my-project")
+        rel_path = os.path.relpath(proj_dir, root_dir)
         parts = rel_path.split(os.sep)
 
         if len(parts) == 1:
-            # Direct child of home (e.g., ~/switchboard)
+            # Direct child of root
             result.append({
                 'name': proj_name,
                 'path': proj_dir,
@@ -294,12 +295,12 @@ def get_home_tree_data():
                 'children': children
             })
         else:
-            # Nested (e.g., ~/projects/my-app)
+            # Nested (e.g., subdir/my-app)
             parent_name = parts[0]
             existing_parent = next((r for r in result if r['name'] == parent_name and r['type'] == 'dir'), None)
 
             if not existing_parent:
-                parent_path = os.path.join(home_dir, parent_name)
+                parent_path = os.path.join(root_dir, parent_name)
                 existing_parent = {
                     'name': parent_name,
                     'path': parent_path,
@@ -324,7 +325,7 @@ def get_home_tree_data():
 
     result.sort(key=lambda x: (0 if x['type'] == 'file' else 1, x['name'].lower()))
 
-    return {'directory': home_dir, 'files': result}
+    return {'directory': root_dir, 'files': result}
 
 
 def detect_language(filepath):
@@ -483,7 +484,7 @@ def list_projects():
 @bp.route('/api/home')
 def get_home_tree():
     """Get home directory tree."""
-    return jsonify(get_home_tree_data())
+    return jsonify(get_root_tree_data())
 
 
 @bp.route('/api/file')
@@ -500,10 +501,11 @@ def get_file_content():
     # Expand ~ if present
     filepath = os.path.expanduser(filepath)
 
-    # Security: only allow files under home directory
-    home_dir = os.path.expanduser('~')
+    # Security: only allow files under project root
+    from pathlib import Path
+    root_dir = os.path.expanduser(_ctx.config.get('project_root', str(Path(__file__).parent.parent.parent)))
     real_path = os.path.realpath(filepath)
-    if not real_path.startswith(os.path.realpath(home_dir)):
+    if not real_path.startswith(os.path.realpath(root_dir)):
         return {"error": "Access denied"}, 403
 
     if not os.path.exists(filepath):
@@ -550,10 +552,11 @@ def save_file_content():
 
     filepath = os.path.expanduser(filepath)
 
-    # Security: only allow files under home directory
-    home_dir = os.path.expanduser('~')
+    # Security: only allow files under project root
+    from pathlib import Path
+    root_dir = os.path.expanduser(_ctx.config.get('project_root', str(Path(__file__).parent.parent.parent)))
     real_path = os.path.realpath(filepath)
-    if not real_path.startswith(os.path.realpath(home_dir)):
+    if not real_path.startswith(os.path.realpath(root_dir)):
         return {"error": "Access denied"}, 403
 
     if os.path.isdir(filepath):

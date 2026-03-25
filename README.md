@@ -64,7 +64,7 @@ See [QUICKSTART.md](QUICKSTART.md) for a full walkthrough including first sessio
 
 ## How Projects Are Discovered
 
-Switchboard auto-discovers projects by scanning `~` for directories containing a `CLAUDE.md` file. No manual configuration needed.
+Switchboard auto-discovers projects by scanning its parent directory for directories containing a `CLAUDE.md` file. No manual configuration needed. Override with `project_root` in `config.yaml`.
 
 To add a project: create a `CLAUDE.md` file in its root directory.
 

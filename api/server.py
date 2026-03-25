@@ -39,7 +39,7 @@ def load_config():
     defaults = {
         'port': 5001,
         'host': '0.0.0.0',
-        'project_root': '~',
+        'project_root': str(PROJECT_ROOT.parent),
         'scan_depth': 3,
         'tmux_socket': 'switchboard',
         'tmux_session': 'switchboard',
@@ -926,7 +926,7 @@ def _bg_activity_monitor():
             except Exception:
                 pass
             try:
-                data = project_sync.get_home_tree_data()
+                data = project_sync.get_root_tree_data()
                 h = data_hash(data)
                 if h != prev_files:
                     prev_files = h
