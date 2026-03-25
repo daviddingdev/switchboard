@@ -16,12 +16,13 @@
 
 On first launch, Switchboard shows a guided setup wizard:
 
-1. **Password + Contributor** — Optionally set a dashboard password (skippable if you're on a private network). Contributor checkbox includes Switchboard in the project list.
-2. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code tips. Continue saves, Skip bypasses file creation.
-3. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field for `lsof` output. Continue saves, Skip bypasses file creation.
-4. **Done** — Summary, "Apply to Global Config" buttons to add references to `~/.claude/CLAUDE.md`, next steps.
+1. **Prerequisites** — Checks for Claude CLI and tmux. If Claude CLI is missing, shows expanded guidance (account signup, Max subscription, install command, login). If installed but not logged in, shows a login prompt. Re-check button to retry after installing.
+2. **Password + Contributor** — Optionally set a dashboard password (skippable if you're on a private network). Contributor checkbox includes Switchboard in the project list.
+3. **Working Style (SOUL.md)** — Pre-filled with a default template including session naming convention and Claude Code tips. Continue saves, Skip bypasses file creation.
+4. **Infrastructure (INFRASTRUCTURE.md)** — Pre-filled with port/service template. Optional "Quick Scan" paste field for `lsof` output. Continue saves, Skip bypasses file creation.
+5. **Done** — Summary, "Apply to Global Config" buttons to add references to `~/.claude/CLAUDE.md`, next steps.
 
-All steps are skippable — you can complete the wizard in 4 clicks. Textareas contain real defaults you can edit before saving.
+All steps are skippable — you can complete the wizard in 5 clicks. Textareas contain real defaults you can edit before saving.
 
 ## Your First Session
 

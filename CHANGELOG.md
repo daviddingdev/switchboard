@@ -5,6 +5,10 @@
 ### New User Experience Polish
 
 **Onboarding & Setup:**
+- Prerequisites check step in setup wizard — detects Claude CLI (installed + auth status) and tmux
+- Expanded guidance when Claude CLI missing: account signup, Max subscription, install steps, login flow
+- Auth status detection: warns when Claude CLI is installed but not logged in
+- Helpful error hints in spawn dialog when spawn fails (install + login commands)
 - `scripts/update.sh` — One-command update (stop, pull, setup, start) preserving all config
 - Setup wizard now auto-configures Claude Code hooks for instant idle detection
 - Platform-aware config defaults — macOS gets GPU monitoring disabled automatically
