@@ -117,7 +117,7 @@ Both auth-exempt. Receive JSON with `session_id`, `cwd`,
 | POST | `/login` | Login with password |
 | POST | `/logout` | Logout (clear session) |
 | GET | `/setup/status` | Check if first-run setup is complete |
-| POST | `/setup` | Complete setup (set password, create SOUL.md) |
+| POST | `/setup` | Complete setup (password, SOUL.md, INFRASTRUCTURE.md) |
 
 Auth is optional. Enabled via `SWITCHBOARD_PASSWORD`
 env var or `state/auth.json` (created by setup wizard).
@@ -413,7 +413,7 @@ splice callback), visual feedback in TabBar.
 | TerminalView | Real-time terminal streaming via WebSocket, quick command buttons (y/n/1-3/Enter/Esc/Ctrl+C), text input, search, load more |
 | LogViewer | Historical worker log viewer with text filter |
 | LoginPage | Password login when auth is enabled |
-| SetupWizard | First-run onboarding (password, SOUL.md, launch) |
+| SetupWizard | First-run onboarding (password, SOUL.md, INFRASTRUCTURE.md, launch) |
 | ConfirmDialog | Reusable confirmation modal (danger/normal) |
 | Monitor | System metrics (GPU, CPU, memory, services, disk health, updates) |
 | Usage | Usage analytics with time range selector, adaptive charts, CSV export |
@@ -480,6 +480,11 @@ No manual registration needed.
 `discover_projects()` scans the project root directory
 (parent of Switchboard install) for directories
 containing `CLAUDE.md` (max depth 3).
+
+Switchboard excludes itself from discovery by default
+(`show_self: false` in config). Set to `true` if
+developing Switchboard itself. Returns `relative_dir`
+alongside `directory` for shorter UI display.
 
 `/api/home` also shows root-level `.md` files from
 the project root.

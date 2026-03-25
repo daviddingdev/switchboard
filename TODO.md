@@ -78,14 +78,19 @@ Support spawning workers that run Codex CLI or Ollama models alongside Claude Co
 
 ## Completed
 
-### First-Run Setup Wizard (Mar 25, 2026)
+### Setup Wizard v2 + Config + SpawnDialog (Mar 25, 2026)
 
-- [x] 3-step onboarding wizard: password, working style (SOUL.md), launch
+- [x] 4-step onboarding wizard: password, SOUL.md, INFRASTRUCTURE.md, launch
 - [x] Password stored as SHA-256 hash in `state/auth.json`, works alongside `SWITCHBOARD_PASSWORD` env var
-- [x] SOUL.md written to project root with copy-pasteable Claude Code prompt tips
+- [x] SOUL.md with session naming convention in placeholder, Claude Code prompt tips
+- [x] INFRASTRUCTURE.md step with port/service template, `lsof` command, Switchboard header auto-prepended
+- [x] Done step with git/GitHub context note, copy-pasteable global apply commands
 - [x] Setup endpoints auth-exempt (`/api/setup/status`, `/api/setup`)
 - [x] Existing installations auto-skip via `start.sh` migration
-- [x] `SetupWizard` component with step indicators, mobile-responsive
+- [x] `show_self` config option (default false) for self-exclusion from project discovery
+- [x] `/api/projects` returns `relative_dir` field
+- [x] SpawnDialog shows relative paths, truncates long directories with RTL ellipsis
+- [x] `setup.sh` resets package-lock.json after npm install to prevent platform drift
 
 ### Scoped File Access (Mar 25, 2026)
 

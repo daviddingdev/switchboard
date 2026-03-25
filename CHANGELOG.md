@@ -22,25 +22,40 @@ Changed `project_root` default from `~` (home directory) to the parent of the Sw
 
 ### First-Run Setup Wizard
 
-New users see a 3-step onboarding wizard before the main UI:
+New users see a 4-step onboarding wizard before the main UI:
 
-1. **Welcome + Password** — Set a dashboard password (optional, skippable). Password stored as SHA-256 hash in `state/auth.json`.
-2. **Working Style (SOUL.md)** — Write or paste a working style document. Includes a copy-pasteable Claude Code prompt to help generate one. Written to project root as `SOUL.md`.
-3. **Done** — Summary of what was configured, with a command to apply SOUL.md globally across all Claude Code sessions.
+1. **Password** — Set a dashboard password (optional, skippable). Stored as SHA-256 hash in `state/auth.json`.
+2. **Working Style (SOUL.md)** — Write or paste a working style document. Includes a copy-pasteable Claude Code prompt to help generate one. Placeholder includes session naming convention. Written to project root.
+3. **Infrastructure (INFRASTRUCTURE.md)** — Document ports, services, and machine details. Includes copy-pasteable `lsof` command. Switchboard header auto-prepended. Written to project root.
+4. **Done** — Summary of what was configured, commands to apply SOUL.md and INFRASTRUCTURE.md globally, git/GitHub context note.
 
 **Backend:**
 - `GET /api/setup/status` — Returns `{complete, auth_enabled}` (auth-exempt)
-- `POST /api/setup` — Accepts `{password, soul}`, writes `state/auth.json` and `SOUL.md`, marks setup complete
+- `POST /api/setup` — Accepts `{password, soul, infrastructure}`, writes `state/auth.json`, `SOUL.md`, and `INFRASTRUCTURE.md`, returns `{soul_path, infrastructure_path, project_root}`, marks setup complete
 - Auth system now checks both `SWITCHBOARD_PASSWORD` env var and `state/auth.json` (env var takes precedence)
-- `project_sync.get_soul_md_path()` helper for SOUL.md location
+- `project_sync.get_soul_md_path()` and `get_infrastructure_md_path()` helpers
 
 **Migration:** Existing installations (with `state/workers.json` or `state/usage-stats.json`) auto-skip the wizard via `start.sh` detection.
 
 **Frontend:**
-- `SetupWizard` component with step indicators, inline styles consistent with dark theme
-- All steps skippable — wizard completable in 3 clicks
-- Copy button with "Copied!" confirmation on Claude Code prompts
+- `SetupWizard` component with "Step N of 4" indicators, inline styles consistent with dark theme
+- All steps skippable — wizard completable in 4 clicks
+- Copy button with "Copied!" confirmation on Claude Code prompts and terminal commands
 - Mobile-responsive layout
+
+### Configurable Self-Exclusion from Project Discovery
+
+New `show_self` config option (default: `false`). When false, Switchboard's own directory is hidden from project discovery and the activity panel. Set to `true` in `config.yaml` if you develop Switchboard itself.
+
+### SpawnDialog Improvements
+
+- Project buttons show relative paths from project root instead of absolute paths
+- Long directory paths truncate with ellipsis (RTL direction shows the most relevant end)
+- Buttons have `overflow: hidden` to prevent grid blowout
+
+### Package-Lock Platform Drift Fix
+
+`setup.sh` now resets `web/package-lock.json` after `npm install` to prevent platform-specific changes from showing as dirty git status.
 
 ## 2026-03-20
 

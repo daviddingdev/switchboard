@@ -18,10 +18,11 @@
 On first launch, Switchboard shows a guided setup wizard:
 
 1. **Password** — Optionally set a dashboard password (skippable if you're on a private network)
-2. **Working Style** — Optionally write a SOUL.md to shape how Claude Code sessions behave. The wizard includes a copy-pasteable prompt you can give to Claude Code to help you write one.
-3. **Done** — Summary and next steps, including how to apply SOUL.md globally
+2. **Working Style** — Optionally write a SOUL.md to shape how Claude Code sessions behave. Includes a copy-pasteable prompt you can give to Claude Code to help you write one.
+3. **Infrastructure** — Optionally create an INFRASTRUCTURE.md documenting your ports, services, and machine details. Includes a terminal command to discover listening ports.
+4. **Done** — Summary, next steps, and copy-pasteable commands to apply SOUL.md and INFRASTRUCTURE.md globally
 
-All steps are skippable — you can complete the wizard in 3 clicks.
+All steps are skippable — you can complete the wizard in 4 clicks.
 
 ## Your First Session
 
@@ -162,11 +163,14 @@ Switchboard is a Progressive Web App. In Chrome or Edge, click the install icon 
 
 - **Dark/light theme** — Toggle in the header. Persisted to localStorage.
 
-### Working Style (SOUL.md)
+### Working Style (SOUL.md) & Infrastructure Map
 
-The **Setup Wizard** offers to create a `SOUL.md` file in the project root directory to define your working style and preferences for Claude Code sessions. You can also create or edit it manually at any time.
+The **Setup Wizard** offers to create two optional files in the project root directory:
 
-If you want all Claude Code sessions to use it, reference it from `~/.claude/CLAUDE.md`. The wizard's final screen provides the exact command to do this.
+- **SOUL.md** — Your working style and preferences for Claude Code sessions (tone, detail level, coding style)
+- **INFRASTRUCTURE.md** — Your development environment (ports, services, machine details) so Claude Code avoids conflicts
+
+You can also create or edit these manually at any time. If you want all Claude Code sessions to use them, reference them from `~/.claude/CLAUDE.md`. The wizard's final screen provides the exact commands.
 
 ## CLI Helper
 
