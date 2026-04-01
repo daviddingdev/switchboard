@@ -1,8 +1,15 @@
 {
   "name": "switchboard-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "Web frontend for Switchboard — AI session management dashboard",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daviddingdev/switchboard.git",
+    "directory": "web"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

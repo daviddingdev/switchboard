@@ -27,7 +27,7 @@ def state_dir(tmp_path):
 @pytest.fixture
 def client(state_dir):
     """Create a Flask test client with mocked tmux and temp state."""
-    with patch.dict(os.environ, {'CLAUDECODE': ''}):
+    with patch.dict(os.environ, {'CLAUDECODE': '', 'SWITCHBOARD_PASSWORD': ''}):
         # Mock tmux before importing server
         with patch('tmux_manager.configure'), \
              patch('tmux_manager.ensure_session', return_value='inactive'), \
@@ -41,8 +41,9 @@ def client(state_dir):
              patch('tmux_manager.capture_output', return_value='> hello'):
 
             import server
-            # Point proposals to temp dir
+            # Point proposals and auth to temp dir (no auth.json = auth disabled)
             server.PROPOSALS_DIR = state_dir / 'state' / 'proposals'
+            server.AUTH_JSON_FILE = state_dir / 'state' / 'auth.json'
             server.app.config['TESTING'] = True
 
             with server.app.test_client() as c:

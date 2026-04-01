@@ -1,0 +1,14 @@
+node_modules
+web/node_modules
+web/dist
+.git
+state
+logs
+config.yaml
+__pycache__
+*.pyc
+.venv
+venv
+.DS_Store
+.vscode
+.idea
