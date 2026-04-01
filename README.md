@@ -70,13 +70,15 @@ Spawn and monitor multiple Claude Code workers, browse files, track usage and co
 ## Quick Start
 
 ```bash
-git clone <your-repo-url>/switchboard.git
+git clone https://github.com/daviddingdev/switchboard.git
 cd switchboard
 ./setup.sh    # Install deps, build frontend, configure hooks
 ./start.sh    # Start the server
 ```
 
 Open **http://localhost:5001** (or `http://<your-machine-ip>:5001` from another device).
+
+> **Windows:** Switchboard runs in [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) (Windows Subsystem for Linux). If you have WSL, open your Ubuntu terminal and follow the steps above.
 
 The **Setup Wizard** walks you through initial configuration on first launch — password, working style, infrastructure map. All steps are optional and skippable.
 
